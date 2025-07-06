@@ -33,6 +33,11 @@ def get_user_location():
     return send_command(params)
 
 
+def set_user_location(lat, lon):
+    params = {'method': 'set_user_location', 'params': {'lat': lat, 'lon': lon, 'force': True}}
+    return send_command(params)
+
+
 def get_device_state():
     params = {"method": "get_device_state"}
     return send_command(params)
