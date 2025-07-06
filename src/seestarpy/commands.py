@@ -1,6 +1,12 @@
 from datetime import datetime
+from time import sleep
 
 from src.seestarpy.connection import send_command
+
+
+def test_connection():
+    params = {'method': 'test_connection'}
+    return send_command(params)
 
 
 def set_time():
@@ -22,13 +28,51 @@ def get_time():
     return send_command(params)
 
 
-def set_eq_mode():
-    params = {"method": "scope_park", "params": {"equ_mode": True}}
+def get_user_location():
+    params = {'method': 'get_user_location'}
     return send_command(params)
 
 
 def get_device_state():
     params = {"method": "get_device_state"}
+    return send_command(params)
+
+
+def get_mount_state():
+    params = {"method": "get_device_state", "params": {"keys":["mount"]}}
+    payload = send_command(params)
+    return payload["result"]["mount"]
+
+
+def is_eq_mode():
+    return get_mount_state()["equ_mode"]
+
+
+def is_tracking():
+    return get_mount_state()["tracking"]
+
+
+def is_parked():
+    return get_mount_state()["close"]
+
+
+def get_app_state():
+    params = {"method": "iscope_get_app_state"}
+    return send_command(params)
+
+
+def get_camera_state():
+    params = {"method": "get_camera_state"}
+    return send_command(params)
+
+
+def get_view_state():
+    params = {"method": "get_view_state"}
+    return send_command(params)
+
+
+def set_eq_mode():
+    params = {"method": "scope_park", "params": {"equ_mode": True}}
     return send_command(params)
 
 
@@ -51,13 +95,16 @@ def goto(ra, dec):
     return send_command(params)
 
 
-def goto_target(target_name, ra, dec):
+def goto_target(target_name, ra, dec, use_lp_filter=False):
     """
     ra : decimal hour angle [0, 24]
     dec : decimal declination [-90, 90]
     """
     # params = {'method': 'scope_goto', 'params': [ra, dec]}
-    params = {'method': 'iscope_start_view', 'params': {'mode': 'star', 'target_ra_dec': [ra, dec], 'target_name': target_name, 'lp_filter': False}}
+    params = {'method': 'iscope_start_view', 'params': {'mode': 'star',
+                                                        'target_ra_dec': [ra, dec],
+                                                        'target_name': target_name,
+                                                        'lp_filter': use_lp_filter}}
     return send_command(params)
 
 
@@ -81,8 +128,14 @@ def get_coords():
     params = {'method': 'scope_get_horiz_coord'}
     altaz_dict = send_command(params)
 
-    return {"ra": eq_dict[0], "dec": eq_dict[1],
-            "alt": altaz_dict[0], "az": altaz_dict[1]}
+    if (isinstance(eq_dict.get("result"), list) and
+            isinstance(altaz_dict.get("result"), list)):
+        return {"ra": eq_dict["result"][0],
+                "dec": eq_dict["result"][1],
+                "alt": altaz_dict["result"][0],
+                "az": altaz_dict["result"][1]}
+    else:
+        raise ValueError(f"Could not get coordinates: {eq_dict}, {altaz_dict}")
 
 
 def get_track_state():
@@ -110,10 +163,11 @@ def set_exposure(exptime, which="stack_l"):
     return send_command(params)
 
 
-def get_exposure():
-    params = {"method": "get_setting"}
-    json_dict = send_command(params)
-    return json_dict.get("exp_ms")
+def get_exposure(which="stack_l"):
+    """which : [stack_l, continuous]"""
+    params = {"method": "get_setting", "params": {"keys": ["exp_ms"]}}
+    payload = send_command(params)
+    return payload["result"]["exp_ms"][which]
 
 
 def exposure(exptime=None, stack_l=True):
@@ -160,6 +214,83 @@ def set_target_name(name):
     return send_command(params)
 
 
-def get_target_name(name):
+def get_target_name():
     params = {"method": "get_sequence_setting"}
     return send_command(params).get("group_name")
+
+
+def get_target_name2():
+    params = {"method": "get_img_name_field"}
+    return send_command(params)
+
+
+
+def start_auto_focus():
+    params = {"method": "start_auto_focuse"}
+    return send_command(params)
+
+
+def stop_auto_focus():
+    params = {"method": "stop_auto_focuse"}
+    return send_command(params)
+
+
+def get_focuser_position():
+    params = {"method": "get_focuser_position"}
+    return send_command(params)
+
+
+def set_focuser_position(pos):
+    params = {"method": "move_focuser", "params": {"step": pos, "ret_step": True}}
+    return send_command(params)
+
+
+def focuser(pos=None):
+    if pos is None:
+        return get_focuser_position()
+    elif isinstance(pos, int):
+        return set_focuser_position(pos)
+    elif isinstance(pos, str) and pos.lower() =="auto":
+        return start_auto_focus()
+    else:
+        raise ValueError(f"pos must be one of [None, int, 'auto']: {pos}")
+
+
+def start_view():
+    params = {"method": "iscope_start_view"}
+    return send_command(params)
+
+
+def stop_view():
+    params = {"method": "iscope_stop_view"}
+    return send_command(params)
+
+
+def start_stack():
+    params = {"method": "iscope_start_stack"}
+    return send_command(params)
+
+
+def start_plate_solve():
+    params = {"method": "start_solve"}
+    return send_command(params)
+
+
+def get_plate_solve_result():
+    params = {"method": "get_solve_result"}
+    return send_command(params)
+
+
+def start_polar_align():
+    params = {"method": "start_polar_align"}
+    return send_command(params)
+
+
+def stop_polar_align():
+    params = {"method": "stop_polar_align"}
+    return send_command(params)
+
+
+def random_command(cmd, params=None):
+    params = {"method": cmd, "params": params}
+    return send_command(params)

@@ -1,8 +1,12 @@
 import json
 import socket
 
+DEFAULT_PORT = 4700
+DEFAULT_IP = "192.168.1.243"
+VERBOSE_LEVEL = 0
 
-def send_command(params, verbose=True):
+
+def send_command(params):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((DEFAULT_IP, DEFAULT_PORT))
 
@@ -11,7 +15,7 @@ def send_command(params, verbose=True):
     cmd.update(params)
 
     message = json.dumps(cmd) + "\r\n"
-    print(f"\nSending: {message.strip()}")
+    if VERBOSE_LEVEL >= 1: print(f"\nSending: {message.strip()}")
     s.sendall(message.encode())
 
     # Read until we get a complete message (ends with \r\n)
@@ -22,27 +26,26 @@ def send_command(params, verbose=True):
             break
         response += chunk
 
+    if VERBOSE_LEVEL >= 1: print(f"\nRecieved: {response}")
     s.close()
 
-    if verbose:
-        try:
-            parsed = json.loads(response.split("\r\n")[0])
-            method = parsed.get("method")
-            result = parsed.get("result")
-            code = parsed.get("code")
-            error = parsed.get("error")
+    try:
+        parsed = json.loads(response.split("\r\n")[0])
+        method = parsed.get("method")
+        result = parsed.get("result")
+        code = parsed.get("code")
+        error = parsed.get("error")
 
+        if VERBOSE_LEVEL >= 2:
             print("\n✅ Response:")
             print(f"  method: {method}")
             print(f"  result: {json.dumps(result, indent=2)}")
             print(f"  code  : {code}")
             print(f"  error : {error}")
-        except json.JSONDecodeError:
-            print("⚠️ Could not parse response as JSON.")
-            print("Raw response:\n", response)
+        return parsed
 
-    return response
+    except json.JSONDecodeError:
+        print("⚠️ Could not parse response as JSON.")
+        print("Raw response:\n", response)
 
-
-DEFAULT_PORT = 4700
-DEFAULT_IP = "10.42.0.236"
+        return response
