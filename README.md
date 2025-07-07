@@ -1,4 +1,4 @@
-# SeeStar-Py
+![SeeStar-Py](docs/logos/seestar_py_logo_banner.png)
 A python module to drive the Seestar smart telescopes
 
 # IP Addresses to check
