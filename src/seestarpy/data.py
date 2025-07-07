@@ -1,7 +1,7 @@
 import os
 from smb.SMBConnection import SMBConnection
 
-from connection import DEFAULT_IP
+from connection import DEFAULT_IP, VERBOSE_LEVEL
 
 
 def list_contents(folder=None, ip_override=None):
@@ -11,16 +11,25 @@ def list_contents(folder=None, ip_override=None):
     connected = conn.connect(ip, 139)
     if not connected:
         print(f"❌ Could not connect to Seestar at {ip}")
-        return
+        return {}
 
-    # Always start by listing top-level of MyWorks
+    summary = {}
+
     entries = conn.listPath('EMMC Images', 'MyWorks')
 
     if not folder:
         print("📂 Folders in MyWorks:")
         for entry in entries:
             if entry.isDirectory and entry.filename not in ['.', '..']:
-                print(f" - {entry.filename}")
+                folder_name = entry.filename
+                # Count files inside this folder
+                count = sum(
+                    1 for f in
+                    conn.listPath('EMMC Images', f"MyWorks/{folder_name}")
+                    if not f.isDirectory and f.filename not in ['.', '..']
+                )
+                summary[folder_name] = count
+                if VERBOSE_LEVEL >= 1: print(f" - {folder_name} ({count} files)")
     else:
         # Look for folder match
         found = False
@@ -30,14 +39,15 @@ def list_contents(folder=None, ip_override=None):
                 print(f"📁 Files in MyWorks/{folder}:")
                 sub_entries = conn.listPath('EMMC Images', f"MyWorks/{folder}")
                 for sub in sub_entries:
-                    if sub.filename not in ['.', '..']:
-                        print(
-                            f"{'DIR' if sub.isDirectory else 'FILE'}  {sub.filename}  ({sub.file_size} bytes)")
+                    if sub.filename not in ['.', '..'] and not sub.isDirectory:
+                        summary[sub.filename] = sub.file_size
+                        if VERBOSE_LEVEL >= 1: print(f" - {sub.filename} ({sub.file_size} bytes)")
                 break
         if not found:
-            print(f"🚫 Folder '{folder}' not found in MyWorks.")
+            if VERBOSE_LEVEL >= 1: print(f"🚫 Folder '{folder}' not found in MyWorks.")
 
     conn.close()
+    return summary
 
 
 def download_contents(folder=None, local_base=None, file_types=None, ip_override=None):
@@ -108,10 +118,7 @@ def should_download(filename, file_types):
     return False
 
 
-from smb.SMBConnection import SMBConnection
-
-
-def delete_seestar_folder(folder=None, ip_override=None):
+def delete_contents(folder=None, ip_override=None):
     ip = DEFAULT_IP if ip_override is None else ip_override
     if not folder:
         print("🚫 Please specify a folder name to delete.")
@@ -158,14 +165,12 @@ def delete_seestar_folder(folder=None, ip_override=None):
 
 
 # Usage examples:
-DEFAULT_IP = "192.168.1.243"
-
-list_contents()  # list folders only
-# list_contents(folder="Mizar_sub")  # list files inside MyWorks/M42 if exists
+# print(list_contents())  # list folders only
+print(list_contents(folder="M 81"))  # list files inside MyWorks/M42 if exists
 
 # Usage examples:
-# download_contents()               # downloads all folders under MyWorks
-# download_contents(folder="Mizar_sub", local_base="E:/", file_types=["thn.jpg"])   # only downloads missing files under MyWorks/M42
+# download_contents(local_base="E:/seestar_downloads")               # downloads all folders under MyWorks
+# download_contents(folder="Mizar_sub", local_base="E:/seestar_downloads", file_types=["thn.jpg"])   # only downloads missing files under MyWorks/M42
 
 # Usage example:
-# delete_seestar_folder(folder="Mizar_sub")
+# delete_contents(folder="Mizar_sub")
