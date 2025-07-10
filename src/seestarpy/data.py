@@ -1,7 +1,7 @@
 import os
 from smb.SMBConnection import SMBConnection
 
-from connection import DEFAULT_IP, VERBOSE_LEVEL
+from .connection import DEFAULT_IP, VERBOSE_LEVEL
 
 
 def list_contents(folder=None, ip_override=None):
@@ -166,7 +166,7 @@ def delete_contents(folder=None, ip_override=None):
 
 # Usage examples:
 # print(list_contents())  # list folders only
-print(list_contents(folder="M 81"))  # list files inside MyWorks/M42 if exists
+# print(list_contents(folder="M 81"))  # list files inside MyWorks/M42 if exists
 
 # Usage examples:
 # download_contents(local_base="E:/seestar_downloads")               # downloads all folders under MyWorks

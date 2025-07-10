@@ -1,11 +1,6 @@
 from src.seestarpy.connection import send_command
 
 
-def get_device_state():
-    params = {"method": "get_device_state"}
-    return send_command(params)
-
-
 def get_mount_state():
     params = {"method": "get_device_state", "params": {"keys":["mount"]}}
     payload = send_command(params)
@@ -24,21 +19,6 @@ def is_parked():
     return get_mount_state()["close"]
 
 
-def get_app_state():
-    params = {"method": "iscope_get_app_state"}
-    return send_command(params)
-
-
-def get_camera_state():
-    params = {"method": "get_camera_state"}
-    return send_command(params)
-
-
-def get_view_state():
-    params = {"method": "get_view_state"}
-    return send_command(params)
-
-
 def get_coords():
     # params = {'method': 'scope_get_equ_coord'}
     params = {'method': 'scope_get_ra_dec'}
@@ -54,11 +34,6 @@ def get_coords():
                 "az": altaz_dict["result"][1]}
     else:
         raise ValueError(f"Could not get coordinates: {eq_dict}, {altaz_dict}")
-
-
-def get_track_state():
-    params = {'method': 'scope_get_track_state'}
-    return send_command(params)
 
 
 def get_exposure(which="stack_l"):
