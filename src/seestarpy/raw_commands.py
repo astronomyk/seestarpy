@@ -426,8 +426,10 @@ def move_focuser(pos, retry=True):
         >>> raw.move_focuser(1605)
 
     """
-    params = {"method": "move_focuser", "params": {"step": pos,
-                                                   "ret_step": retry}}
+    params = {"method": "move_focuser",
+              "params": {"step": pos,
+                         "ret_step": retry}
+              }
     return send_command(params)
 
 
@@ -681,7 +683,23 @@ def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
 
 
 def set_user_location(lat, lon):
-    params = {'method': 'set_user_location', 'params': {'lat': lat, 'lon': lon, 'force': True}}
+    """
+    Set the location on earth of the user
+
+    Parameters
+    ----------
+    lat, lon: float
+        Decimal degrees, positive for North and East.
+
+    Returns
+    -------
+    dict
+
+    """
+    params = {'method': 'set_user_location',
+              'params': {'lat': lat,
+                         'lon': lon,
+                         'force': True}}
     return send_command(params)
 
 
@@ -701,7 +719,8 @@ def set_wheel_position(pos):
 
 
 def set_sequence_setting(name):
-    params = {"method": "set_sequence_setting", "params": [{"group_name": name}]}
+    params = {"method": "set_sequence_setting",
+              "params": [{"group_name": name}]}
     return send_command(params)
 
 
@@ -774,11 +793,18 @@ def scope_move_to_horizon():
     return send_command(params)
 
 
-def scope_park():
+def scope_park(set_eq_mode=False):
     """
     Moves the scope arm to the park position.
 
     This essentially turns the Seestar off.
+    To put the Seestar into EQ mode, you first need to move_to_horizon and then
+    scope_park(True).
+
+    Parameters
+    ----------
+    set_eq_mode: bool
+        Default: False. Set the equatorial mode.
 
     Returns
     -------
@@ -789,9 +815,11 @@ def scope_park():
     ::
         >>> from seestarpy import raw
         >>> raw.scope_park()
+        >>> raw.scope_park(set_eq_mode=True)
 
     """
-    params = {'method': 'scope_park'}
+    params = {'method': 'scope_park',
+              "params": {"equ_mode": set_eq_mode}}
     return send_command(params)
 
 
@@ -851,8 +879,8 @@ def scope_get_equ_coord():
     return send_command(params)
 
 
-def scope_get_equ_coord():
-    params = {'method': 'scope_get_equ_coord'}
+def scope_get_horiz_coord():
+    params = {'method': 'scope_get_horiz_coord'}
     return send_command(params)
 
 
@@ -881,17 +909,27 @@ def scope_sync(in_ra, in_dec):
 
 def scope_speed_move(speed=4000, angle=270, dur_sec=10):
     """
-    Moving slew angle
+    Moving the scope arm with a given speed and angle for a given duration.
+    TODO: What do the values actually mean? Is this just the Dec-arm?
 
     Parameters
     ----------
-    speed
-    angle
-    dur_sec
+    speed: int
+        TODO: Is this in arcsec/sec?
+    angle: int
+        TODO: How does this relate to the Dec-arm?
+    dur_sec: int
+        TODO: Does this mean the time to complete the move?
 
     Returns
     -------
     dict
+
+    Examples
+    --------
+    ::
+    from seestarpy import raw
+    raw.scope_speed_move(speed=5000, angle=270, dur_sec=2)
 
     """
     params = {"method": "scope_speed_move",
@@ -914,8 +952,26 @@ def start_solve():
     return send_command(params)
 
 
-def start_polar_align():
-    params = {"method": "start_polar_align"}
+def start_polar_align(restart=True, dec_pos_index=3):
+    """
+    Run the polar alignment sequence
+
+    Parameters
+    ----------
+    restart : bool
+        Default: True.
+    dec_pos_index: int
+        TODO: Find out what this means
+
+    Returns
+    -------
+    dict
+
+    """
+    params = {"method": "start_polar_align",
+              "params": {"restart": restart,
+                         "dec_pos_index": dec_pos_index}
+              }
     return send_command(params)
 
 
