@@ -1,10 +1,14 @@
 from datetime import datetime
 
-from holoviews.examples.user_guide.Linked_Brushing import params
-
 from src.seestarpy.connection import send_command
 
 """
+To imeplement:
+start_scan_planet
+begin_streaming
+stop_streaming
+get_stacked_img
+
 
 iscope_start_stack
 iscope_start_view
@@ -346,10 +350,10 @@ def iscope_start_view(in_ra, in_dec, target_name="Unknown", lp_filter=False, mod
     target_name : str
         Default: "Unknown", Name of the target, which also defines the directory
         name on the emmc drive
-    lp_filter : boool
+    lp_filter : bool
         Default: False, use the light pollution filter
     mode : str
-        Default "star"
+        Default: "star", ["star", "sun", ]
 
     Returns
     -------
@@ -907,19 +911,42 @@ def scope_sync(in_ra, in_dec):
     return send_command(params)
 
 
-def scope_speed_move(speed=4000, angle=270, dur_sec=10):
+def scope_speed_move(angle, speed, dur_sec):
     """
-    Moving the scope arm with a given speed and angle for a given duration.
-    TODO: What do the values actually mean? Is this just the Dec-arm?
+    Moves the scope as if using a joy-stick to control the movement.
+
+    This method moves both Base- and Arm-motors as if the user is controlling
+    the seestar with a joystick.
+
+    Notes regarding the angle argument:
+    - 0: Move right (Base motor) relative to where the Seestar is pointing.
+    - 90: Move up (Arm motor)
+    - 180: Move left (Base motor)
+    - 270: Move down (Arm motor)
+    Any other angle between the cardinal points engages both Base- and Arm-motors,
+    with the speed of each individual motor throttled by the sin and cos of
+    the angle.
+
+    Notes regarding the speed argument:
+    Max 1500. Step-size: 15 arcseconds.
+    Speed = 240 delivers 1 deg/sec
+    NOTE: This is the absolute speed of both motors. The individual speed
+    of each of the Base and Arm motors is `speed * cos/sin(angle)`.
+    This step-size translates to:
+    - Base motor: RA (Hour Angle)  RA=00h00m01s per step
+    - Arm motor: Dec (Declination) Dec=00d00m15s per step
 
     Parameters
     ----------
-    speed: int
-        TODO: Is this in arcsec/sec?
     angle: int
-        TODO: How does this relate to the Dec-arm?
+        [deg] Angle on a circle of a joystick for controlling the two motors
+
+    speed: int
+        [Steps per second] Combined speed of the two motors. Max = 1500.
+        1 step = 15 arcseconds.
+
     dur_sec: int
-        TODO: Does this mean the time to complete the move?
+        [sec] Time for moving the scope arm. Max = 10 sec
 
     Returns
     -------
@@ -928,8 +955,14 @@ def scope_speed_move(speed=4000, angle=270, dur_sec=10):
     Examples
     --------
     ::
-    from seestarpy import raw
-    raw.scope_speed_move(speed=5000, angle=270, dur_sec=2)
+        >>> from seestarpy import raw
+        # Move left at full speed for 10 seconds
+        >>> raw.scope_speed_move(speed=1500, angle=180, dur_sec=10)
+        # Move up at 1 deg/sec for 2 seconds = 2 deg up
+        >>> raw.scope_speed_move(speed=240, angle=270, dur_sec=2)   # Move down
+        # Move up and right at 2 deg/sec for 5 seconds.
+        # Az (Base-motor) speed is 1.72 deg/sec and Alt (Arm-motor) speed is 1 deg/sec
+        >>> raw.scope_speed_move(speed=480, angle=30, dur_sec=5)   # Move down
 
     """
     params = {"method": "scope_speed_move",
@@ -1003,3 +1036,7 @@ def stop_plate_solve_loop():
 def test_connection():
     params = {'method': 'test_connection'}
     return send_command(params)
+
+
+def random_command(method, params=None):
+    return send_command({"method": method, "params": params})
