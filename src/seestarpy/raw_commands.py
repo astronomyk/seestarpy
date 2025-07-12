@@ -4,37 +4,38 @@ from src.seestarpy.connection import send_command
 
 """
 To imeplement:
-start_scan_planet
-begin_streaming
-stop_streaming
-get_stacked_img
 
-
-iscope_start_stack
-iscope_start_view
-iscope_stop_view
-move_focuser
-pi_is_verified
-pi_output_set2
-pi_reboot
-pi_shutdown
-play_sound
-scan_iscope
-scope_goto
-scope_park
-scope_speed_move
-scope_sync
-set_control_value
-set_sensor_calibration
-set_sequence_setting
-set_setting
-set_stack_setting
-start_auto_focuse
-start_create_dark
-start_polar_align
-start_solve
-stop_polar_align
 """
+
+def begin_streaming():
+    """
+    ERROR
+
+    'error': 'method not found',
+    'code': 103,
+
+    Returns
+    -------
+
+    """
+    params = {'method': 'begin_streaming'}
+    return send_command(params)
+
+
+def stop_streaming():
+    """
+        ERROR
+
+    'error': 'method not found',
+    'code': 103,
+
+    Returns
+    -------
+
+    """
+    params = {'method': 'stop_streaming'}
+    return send_command(params)
+
 
 def get_albums():
     """
@@ -85,9 +86,73 @@ def get_albums():
     return send_command(params)
 
 
+def get_annotated_result():
+    """
+    ERROR
+
+    'error': 'method not found',
+    'code': 103,
+
+    Returns
+    -------
+
+    """
+    params = {"method": "get_annotated_result"}
+    return send_command(params)
+
+
+def get_camera_info():
+    """
+
+    Returns
+    -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '3210.498389760',
+         'method': 'get_camera_info',
+         'result': {'chip_size': [1080, 1920],
+          'bins': [1, 2],
+          'pixel_size_um': 2.9,
+          'unity_gain': 0,
+          'has_cooler': False,
+          'is_color': True,
+          'is_usb3_host': False,
+          'has_hpc': False,
+          'debayer_pattern': 'GR'},
+         'code': 0,
+         'id': 1}
+    """
+    params = {"method": "get_camera_info"}
+    return send_command(params)
+
+
+def get_camera_state():
+    """
+
+    Returns
+    -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '3340.447572824',
+         'method': 'get_camera_state',
+         'result': {'state': 'idle',
+          'name': 'Seestar S50',
+          'path': 'on-board-Seestar S50'},
+         'code': 0,
+         'id': 1}
+    """
+    params = {"method": "get_camera_state"}
+    return send_command(params)
+
+
 def get_device_state(keys=None):
     """
     Returns a massive dictionary of device parameters
+
+    Parameters
+    ----------
+    keys: list of str | None
+        If not None, then only top-level keys can be specificed. See examples.
 
     Returns
     -------
@@ -97,7 +162,22 @@ def get_device_state(keys=None):
     --------
     ::
         >>> from seestarpy import raw
-        >>> raw.get_device_state(["location_lon_lat"])
+        >>> raw.get_device_state(["location_lon_lat", "mount"])
+        {'jsonrpc': '2.0',
+         'Timestamp': '3523.643992366',
+         'method': 'get_device_state',
+         'result': {
+             'location_lon_lat': [14.7908, 47.9539],
+             'mount': {
+                 'move_type': 'none',
+                 'close': False,
+                 'tracking': False,
+                 'equ_mode': False
+             }
+         },
+         'code': 0,
+         'id': 1}
+
         >>> raw.get_device_state()
         {'jsonrpc': '2.0',
          'Timestamp': '5286.347784540',
@@ -251,18 +331,42 @@ def get_device_state(keys=None):
     return send_command(params)
 
 
-def get_camera_state():
-    params = {"method": "get_camera_state"}
+def get_disk_volume():
+    """
+    Returns the information on the internal emmc drive: totalMB and freeMB
+
+    Returns
+    -------
+    dict
+
+    Examples
+    --------
+    ::
+        >>> from seestarpy import raw
+        >>> raw.get_disk_volume()
+        {'jsonrpc': '2.0',
+         'Timestamp': '3792.755156509',
+         'method': 'get_disk_volume',
+         'result': {'totalMB': 51854, 'freeMB': 36549},
+         'code': 0,
+         'id': 1}
+    """
+    params = {"method": "get_disk_volume"}
     return send_command(params)
 
 
 def get_event_state():
+    """
+    ERROR
+
+    'error': 'method not found',
+    'code': 103,
+
+    Returns
+    -------
+
+    """
     params = {"method": "get_event_state"}
-    return send_command(params)
-
-
-def get_view_state():
-    params = {"method": "get_view_state"}
     return send_command(params)
 
 
@@ -279,19 +383,95 @@ def get_focuser_position():
     ::
         >>> from seestarpy import raw
         >>> raw.get_focuser_position()
+        {'jsonrpc': '2.0',
+         'Timestamp': '3929.576517861',
+         'method': 'get_focuser_position',
+         'result': 1605,
+         'code': 0,
+         'id': 1}
 
     """
     params = {"method": "get_focuser_position"}
     return send_command(params)
 
 
-def get_user_location():
-    params = {'method': 'get_user_location'}
+def get_last_solve_result():
+    """
+    ERROR: no solve data
+
+    Returns
+    -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '3957.619006162',
+         'method': 'get_last_solve_result',
+         'error': 'no solve data',
+         'code': 215,
+         'id': 1}
+    """
+    params = {"method": "get_last_solve_result"}
     return send_command(params)
 
 
 def get_solve_result():
+    """
+    ERROR: no solve data
+
+    Returns
+    -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '3957.619006162',
+         'method': 'get_last_solve_result',
+         'error': 'no solve data',
+         'code': 215,
+         'id': 1}
+    """
     params = {"method": "get_solve_result"}
+    return send_command(params)
+
+
+def get_stacked_img():
+    params = {"method": "get_stacked_img"}
+    return send_command(params)
+
+
+def get_stack_setting():
+    """
+    Find out whether the seestar is saving all sub-frames, good and bad
+
+    Returns
+    -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '4074.257331529',
+         'method': 'get_stack_setting',
+         'result': {
+            'save_discrete_frame': False,
+            'save_discrete_ok_frame': True,
+            'light_duration_min': -1
+            },
+         'code': 0,
+         'id': 1}
+    """
+    params = {"method": "get_stack_setting"}
+    return send_command(params)
+
+
+def get_stack_info():
+    """
+
+    Returns
+    -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '4034.734550212',
+         'method': 'get_stack_info',
+         'result': {'width': 0, 'height': 0},
+         'code': 0,
+         'id': 1}
+    """
+    params = {"method": "get_stack_info"}
     return send_command(params)
 
 
@@ -301,19 +481,35 @@ def get_sensor_calibration():
 
     Returns
     -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '4183.724277609',
+         'method': 'get_sensor_calibration',
+         'result': {'balanceSensor': {'x': -0.016068,
+           'y': 0.024697,
+           'z': 0.007157,
+           'exist': True},
+          'compassSensor': {'x': 75.3092,
+           'y': 1.72128,
+           'z': 0.0,
+           'x11': 1.44953,
+           'x12': -0.068635,
+           'y11': -0.068635,
+           'y12': 1.48135,
+           'exist': True}},
+         'code': 0,
+         'id': 1}
 
     """
     params = {"method": "get_sensor_calibration"}
     return send_command(params)
 
 
-def get_setting(which=None):
+def get_setting():
     """
-    Gets the settings dict
+    Gets the settings dict. No option to select individual keys.
 
-    Parameters
-    ----------
-    which : list or None
+    This is basically the equivalent to `get_device_state(["setting"])`
 
     Returns
     -------
@@ -324,11 +520,106 @@ def get_setting(which=None):
     ::
         >>> from seestarpy import raw
         >>> raw.get_setting()
+        {'jsonrpc': '2.0',
+         'Timestamp': '4454.169432785',
+         'method': 'get_setting',
+         'result': {'temp_unit': 'C',
+          'beep_volume': 'close',
+          'lang': 'en',
+          'center_xy': [540, 960],
+          'stack_lenhance': False,
+          'heater_enable': False,
+          'expt_heater_enable': False,
+          'focal_pos': 1580,
+          'factory_focal_pos': 1580,
+          'exp_ms': {'stack_l': 10000, 'continuous': 500},
+          'auto_power_off': True,
+          'stack_dither': {'pix': 50, 'interval': 5, 'enable': True},
+          'auto_3ppa_calib': True,
+          'auto_af': False,
+          'frame_calib': True,
+          'calib_location': 2,
+          'wide_cam': False,
+          'stack_after_goto': True,
+          'guest_mode': False,
+          'user_stack_sim': False,
+          'mosaic': {'scale': 1.0,
+           'angle': 0.0,
+           'estimated_hours': 0.258333,
+           'star_map_angle': 361.0,
+           'star_map_ratio': 1.0},
+          'stack': {'dbe': True, 'star_correction': True, 'cont_capt': False},
+          'ae_bri_percent': 50.0,
+          'manual_exp': False,
+          'isp_exp_ms': -999000.0,
+          'isp_gain': -9990.0,
+          'isp_range_gain': [0, 400],
+          'isp_range_exp_us': [30, 1000000],
+          'isp_range_exp_us_scenery': [30, 1000000]},
+         'code': 0,
+         'id': 1}
+    """
+    params = {"method": "get_setting"}
+    return send_command(params)
+
+
+def get_user_location():
+    """
+    Get the Lat, Long coords of the Seestar
+
+    Returns
+    -------
+    ::
+        {'jsonrpc': '2.0',
+         'Timestamp': '4508.028353247',
+         'method': 'get_user_location',
+         'result': [14.7908, 47.9539],
+         'code': 0,
+         'id': 1}
+    """
+    params = {'method': 'get_user_location'}
+    return send_command(params)
+
+
+def get_view_state():
+    params = {"method": "get_view_state"}
+    return send_command(params)
+
+
+def get_wheel_position():
+    params = {"method": "get_wheel_position"}
+    return send_command(params)
+
+
+def get_wheel_setting():
+    params = {"method": "get_wheel_setting"}
+    return send_command(params)
+
+
+def goto_target(ra, dec, name="Unknown", is_j2000=False):
+    """
+    Move to ra, dec coords and set the destination folder for fits files (name)
+
+    Parameters
+    ----------
+    ra, dec: float
+        Decimal hour angle, Decimal degrees
+    name : str
+    is_j2000 : bool
+        Default: False, If RA and Dec coords are in the J2000 system.
+
+    Returns
+    -------
+    dict
 
     """
-    if which is None:
-        which = []
-    params = {"method": "get_setting", "params": {"keys": which}}
+    params = {"method": "goto_target",
+              "params": {"target_name": name,
+                         "is_j2000": is_j2000,
+                         "ra": ra,
+                         "dec": dec
+                         }
+              }
     return send_command(params)
 
 
@@ -337,7 +628,8 @@ def iscope_get_app_state():
     return send_command(params)
 
 
-def iscope_start_view(in_ra, in_dec, target_name="Unknown", lp_filter=False, mode="star"):
+def iscope_start_view(in_ra=None, in_dec=None,
+                      target_name="Unknown", lp_filter=False, mode="star"):
     """
     Start viewing a target, but not stacking the incoming frames.
 
@@ -377,12 +669,13 @@ def iscope_start_view(in_ra, in_dec, target_name="Unknown", lp_filter=False, mod
 
 
 def iscope_stop_view(stage="AutoGoto"):
-    """TODO: What does stage do?
+    """
+    TODO: What does stage do?
 
     Parameters
     ----------
     stage : str
-        ["AutoGoto", "Stack", ]
+        ["DarkLibrary", "AutoGoto", ]
 
     """
 
@@ -391,7 +684,7 @@ def iscope_stop_view(stage="AutoGoto"):
     return send_command(params)
 
 
-def iscope_start_stack(restart=True):
+def iscope_start_stack(restart=False):
     """
 
     Parameters
@@ -495,6 +788,11 @@ def pi_output_set2(is_dew_on=False, dew_heater_power=0):
     return send_command(params)
 
 
+def scan_iscope():
+    params = {"method": "scan_iscope"}
+    return send_command(params)
+
+
 def play_sound(sound_id):
     """
     Plays a sound from the internal soundboard.
@@ -516,6 +814,24 @@ def play_sound(sound_id):
 
     """
     params = {'method': 'play_sound', 'params': {"num": sound_id}}
+    return send_command(params)
+
+
+def set_control_value(gain=80):
+    """
+    Used for setting gain parameter at the moment
+
+    Parameters
+    ----------
+    gain: int
+        Default: 80
+
+    Returns
+    -------
+    dict
+
+    """
+    params = {"method": "set_control_value", "params": ["gain", gain]}
     return send_command(params)
 
 
@@ -630,11 +946,11 @@ def set_setting(**kwargs):
             "enable": False             # Use dithering function
         },
         "auto_3ppa_calib": True,        # Automatic 3-point polar-alignment calibration
-        "auto_af": False,  # Autofocus after goto
+        "auto_af": False,               # Autofocus after goto
         "frame_calib": True,
         "calib_location": 2,
         "wide_cam": False,
-        "stack_after_goto": True,  # In 2.1+ firmware
+        "stack_after_goto": True,       # In 2.1+ firmware
         "guest_mode": False,
         "user_stack_sim": False,
         "mosaic": {
@@ -686,6 +1002,41 @@ def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
     return send_command(params)
 
 
+def set_sequence_setting(name):
+    params = {"method": "set_sequence_setting",
+              "params": [{"group_name": name}]}
+    return send_command(params)
+
+
+def set_sensor_calibration(x, y, z, x11, x12, y11, y12):
+    """
+    Override device's compass bearing to account for the magnetic declination 
+    at device's position.
+    
+    Parameters
+    ----------
+    x, y, z : float
+
+    x11, x12, y11, y12 : float
+        Rotation matrix coefficients.
+
+    Returns
+    -------
+
+    """
+    params = {"method": "set_sensor_calibration",
+              "params": {"compassSensor": {"x": x,
+                                           "y": y,
+                                           "z": z,
+                                           "x11": x11,
+                                           "x12": x12,
+                                           "y11": y11,
+                                           "y12": y12,}
+                         }
+              }
+    return send_command(params)
+
+
 def set_user_location(lat, lon):
     """
     Set the location on earth of the user
@@ -722,56 +1073,46 @@ def set_wheel_position(pos):
     return send_command(params)
 
 
-def set_sequence_setting(name):
-    params = {"method": "set_sequence_setting",
-              "params": [{"group_name": name}]}
+def scope_get_equ_coord():
+    params = {'method': 'scope_get_equ_coord'}
     return send_command(params)
 
 
-def set_control_value(gain=80):
-    """
-    Used for setting gain parameter at the moment
-
-    Parameters
-    ----------
-    gain: int
-        Default: 80
-
-    Returns
-    -------
-    dict
-
-    """
-    params = {"method": "set_control_value", "params": ["gain", gain]}
+def scope_get_horiz_coord():
+    params = {'method': 'scope_get_horiz_coord'}
     return send_command(params)
 
 
-def set_sensor_calibration(x, y, z, x11, x12, y11, y12):
+def scope_get_ra_dec():
+    params = {'method': 'scope_get_ra_dec'}
+    return send_command(params)
+
+
+def scope_get_track_state():
+    params = {'method': 'scope_get_track_state'}
+    return send_command(params)
+
+
+def scope_goto(ra, dec):
     """
-    Override device's compass bearing to account for the magnetic declination 
-    at device's position.
-    
+    Move the scope arm to the given ra, dec coordinates.
+
     Parameters
     ----------
-    x, y, z : float
+    ra, dec : float
+        Decimal hour angle [0, 24] and declination [-90, 90]
 
-    x11, x12, y11, y12 : float
-        Rotation matrix coefficients.
-
-    Returns
-    -------
+    Examples
+    --------
+    ::
+        >>> from seestarpy import raw
+        >>> raw.scope_goto(13.4, 54.8)          # Mizar
+        >>> raw.scope_goto(18.082, -24.3)       # M8 Lagoon Nebula
+        >>> raw.scope_goto(5.63, -69.4)         # 30 Dor in LMC (Tarantula Nebula)
+        >>> raw.scope_goto(0.398, -72.2)        # 47 Tuc globular cluster (SMC)
 
     """
-    params = {"method": "set_sensor_calibration",
-              "params": {"compassSensor": {"x": x,
-                                           "y": y,
-                                           "z": z,
-                                           "x11": x11,
-                                           "x12": x12,
-                                           "y11": y11,
-                                           "y12": y12,}
-                         }
-              }
+    params = {'method': 'scope_goto', 'params': [ra, dec]}
     return send_command(params)
 
 
@@ -827,29 +1168,6 @@ def scope_park(set_eq_mode=False):
     return send_command(params)
 
 
-def scope_goto(ra, dec):
-    """
-    Move the scope arm to the given ra, dec coordinates.
-
-    Parameters
-    ----------
-    ra, dec : float
-        Decimal hour angle [0, 24] and declination [-90, 90]
-
-    Examples
-    --------
-    ::
-        >>> from seestarpy import raw
-        >>> raw.scope_goto(13.4, 54.8)          # Mizar
-        >>> raw.scope_goto(18.082, -24.3)       # M8 Lagoon Nebula
-        >>> raw.scope_goto(5.63, -69.4)         # 30 Dor in LMC (Tarantula Nebula)
-        >>> raw.scope_goto(0.398, -72.2)        # 47 Tuc globular cluster (SMC)
-
-    """
-    params = {'method': 'scope_goto', 'params': [ra, dec]}
-    return send_command(params)
-
-
 def scope_set_track_state(flag):
     """
     Turns the Seestar tracking state on/off.
@@ -870,21 +1188,6 @@ def scope_set_track_state(flag):
 
     """
     params = {'method': 'scope_set_track_state', "params": flag}
-    return send_command(params)
-
-
-def scope_get_track_state():
-    params = {'method': 'scope_get_track_state'}
-    return send_command(params)
-
-
-def scope_get_equ_coord():
-    params = {'method': 'scope_get_equ_coord'}
-    return send_command(params)
-
-
-def scope_get_horiz_coord():
-    params = {'method': 'scope_get_horiz_coord'}
     return send_command(params)
 
 
@@ -970,18 +1273,13 @@ def scope_speed_move(angle, speed, dur_sec):
     return send_command(params)
 
 
-def start_create_dark():
-    params = {"method": "start_create_dark"}
-    return send_command(params)
-
-
 def start_auto_focuse():
     params = {"method": "start_auto_focuse"}
     return send_command(params)
 
 
-def start_solve():
-    params = {"method": "start_solve"}
+def start_create_dark():
+    params = {"method": "start_create_dark"}
     return send_command(params)
 
 
@@ -1008,18 +1306,18 @@ def start_polar_align(restart=True, dec_pos_index=3):
     return send_command(params)
 
 
+def start_scan_planet():
+    params = {"method": "start_scan_planet"}
+    return send_command(params)
+
+
+def start_solve():
+    params = {"method": "start_solve"}
+    return send_command(params)
+
+
 def stop_auto_focuse():
     params = {"method": "stop_auto_focuse"}
-    return send_command(params)
-
-
-def stop_polar_align():
-    params = {"method": "stop_polar_align"}
-    return send_command(params)
-
-
-def stop_scheduler():
-    params = {"method": "stop_scheduler"}
     return send_command(params)
 
 
@@ -1028,8 +1326,18 @@ def stop_goto_target():
     return send_command(params)
 
 
+def stop_polar_align():
+    params = {"method": "stop_polar_align"}
+    return send_command(params)
+
+
 def stop_plate_solve_loop():
     params = {"method": "stop_plate_solve_loop"}
+    return send_command(params)
+
+
+def stop_scheduler():
+    params = {"method": "stop_scheduler"}
     return send_command(params)
 
 
