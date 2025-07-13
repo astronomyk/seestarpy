@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from src.seestarpy.connection import send_command
+from .connection import send_command
 
 """
 To imeplement:
@@ -103,24 +103,32 @@ def get_annotated_result():
 
 def get_camera_info():
     """
+    Returns info on the cameras
 
     Returns
     -------
-    ::
-        {'jsonrpc': '2.0',
-         'Timestamp': '3210.498389760',
-         'method': 'get_camera_info',
-         'result': {'chip_size': [1080, 1920],
-          'bins': [1, 2],
-          'pixel_size_um': 2.9,
-          'unity_gain': 0,
-          'has_cooler': False,
-          'is_color': True,
-          'is_usb3_host': False,
-          'has_hpc': False,
-          'debayer_pattern': 'GR'},
-         'code': 0,
-         'id': 1}
+    dict
+
+    Examples
+    --------
+
+    >>> from seestarpy import raw
+    >>> raw.get_camera_info()
+    {'jsonrpc': '2.0',
+     'Timestamp': '3210.498389760',
+     'method': 'get_camera_info',
+     'result': {'chip_size': [1080, 1920],
+      'bins': [1, 2],
+      'pixel_size_um': 2.9,
+      'unity_gain': 0,
+      'has_cooler': False,
+      'is_color': True,
+      'is_usb3_host': False,
+      'has_hpc': False,
+      'debayer_pattern': 'GR'},
+     'code': 0,
+     'id': 1}
+
     """
     params = {"method": "get_camera_info"}
     return send_command(params)

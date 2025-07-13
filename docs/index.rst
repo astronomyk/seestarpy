@@ -1,4 +1,4 @@
-.. image:: docs/logos/seestar_py_logo_banner.png
+.. image:: _static/seestar_py_logo_banner.png
    :alt: SeeStar-Py
    :align: center
 
@@ -37,12 +37,10 @@ Usage example:
 .. code-block:: python
 
    from seestarpy import connection as conn
-   from seestarpy import commands as cmds
+   from seestarpy import raw
 
    >>> conn.DEFAULT_IP = "192.168.1.243
-   >>> cmds.test_connection()
-
-
+   >>> raw.test_connection()
 
 
 Contents
@@ -51,22 +49,8 @@ Contents
    :maxdepth: 2
    :caption: Main Contents
 
-   installation
-   usage
-   api_reference
-   changelog
-
-
-API Documentation
-=================
-
-.. toctree::
-  :maxdepth: 2
-
-.. automodule:: your_module_name
-  :members:
-  :undoc-members:
-  :show-inheritance:
+   api/connection
+   api/raw_commands
 
 
 

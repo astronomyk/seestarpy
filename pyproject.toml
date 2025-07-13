@@ -22,9 +22,18 @@ dependencies = [
     "pysmb>=1.2.9"   # For SMB file operations
 ]
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["seestarpy"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0"  # For testing
+]
+docs = [
+    "sphinx",
+    "sphinx_rtd_theme",
+    "sphinx_autodoc_typehints",
 ]
 
 [project.urls]

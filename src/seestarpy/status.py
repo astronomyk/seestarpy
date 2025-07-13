@@ -1,4 +1,4 @@
-from src.seestarpy.connection import send_command
+from .connection import send_command
 
 
 def get_mount_state():

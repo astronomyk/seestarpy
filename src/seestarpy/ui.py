@@ -1,9 +1,9 @@
-from src.seestarpy.connection import send_command
-from src.seestarpy.observe import set_exposure
-from src.seestarpy.raw_commands import scope_move_to_horizon, scope_park, \
+from .connection import send_command
+from .observe import set_exposure
+from .raw_commands import scope_move_to_horizon, scope_park, \
     scope_set_track_state, get_focuser_position, move_focuser, \
     start_auto_focuse, scope_get_track_state, set_wheel_position, scope_goto
-from src.seestarpy.status import get_exposure, get_filter
+from .status import get_exposure, get_filter
 
 
 def move(ra_dec=()):
