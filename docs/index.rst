@@ -10,23 +10,18 @@ Welcome to SeeStar-Py's Documentation!
    :alt: PyPI Version
    :target: https://pypi.org/project/seestarpy/
 
-.. image:: https://img.shields.io/pypi/pyversions/seestarpy
-   :alt: Supported Python Versions
-   :target: https://pypi.org/project/seestarpy/
 
 Description
 -----------
-**SeeStar-Py** is a Python interface designed for controlling the SeeStar telescope system. It provides utilities for managing connections, data processing, and more — ideal for astronomers and researchers involved with the SeeStar telescope.
+**SeeStar-Py** is a light-weight Python interface designed for controlling the
+SeeStar telescope system.
 
-Features
---------
-- **Connect to SeeStar**: Seamless integration with SeeStar telescope systems.
-- **Data Handling**: Tools for processing and transferring observation data.
-- **Customizable**: Easily extendable and integrable with other astronomy tools.
+.. warning:: 2025-07-13 :
+   This is the first push of seestar-py to pypi and rtd. Things could change rapidly, bigly, and without warning.
 
 Quickstart
 ----------
-Install `seestarpy` using pip:
+Install ``seestarpy`` using pip:
 
 .. code-block:: bash
 
@@ -39,8 +34,9 @@ Usage example:
    from seestarpy import connection as conn
    from seestarpy import raw
 
-   >>> conn.DEFAULT_IP = "192.168.1.243
-   >>> raw.test_connection()
+   # replace this with the IP of your Seestar
+   conn.DEFAULT_IP = "192.168.1.243"
+   raw.test_connection()
 
 
 Contents
@@ -49,13 +45,15 @@ Contents
    :maxdepth: 2
    :caption: Main Contents
 
-   api/connection
-   api/raw_commands
-
+   examples/basic_connection
+   examples/basic_observing
+   examples/changing_seestar_settings
+   api/api_index
 
 
 Feedback
 --------
-Found an issue or have a feature request? Please visit our `GitHub Issues page <https://github.com/yourusername/seestarpy/issues>`_.
+Found an issue or have a feature request?
+`GitHub Issues page <https://github.com/yourusername/seestarpy/issues>`_.
 
-Enjoy using **seestarpy**!
+Enjoy (good luck) using **seestarpy**!

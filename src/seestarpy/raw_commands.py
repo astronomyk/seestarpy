@@ -1,4 +1,5 @@
 from datetime import datetime
+from tzlocal import get_localzone_name  # pip install tzlocal
 
 from .connection import send_command
 
@@ -7,34 +8,34 @@ To imeplement:
 
 """
 
-def begin_streaming():
-    """
-    ERROR
+# def begin_streaming():
+#     """
+#     TODO: Is this to begin streaming the video feed
+#
+#     Notes
+#     -----
+#     v4.27 ::
+#         'error': 'method not found',
+#         'code': 103,
+#
+#     """
+#     params = {'method': 'begin_streaming'}
+#     return send_command(params)
 
-    'error': 'method not found',
-    'code': 103,
 
-    Returns
-    -------
-
-    """
-    params = {'method': 'begin_streaming'}
-    return send_command(params)
-
-
-def stop_streaming():
-    """
-        ERROR
-
-    'error': 'method not found',
-    'code': 103,
-
-    Returns
-    -------
-
-    """
-    params = {'method': 'stop_streaming'}
-    return send_command(params)
+# def stop_streaming():
+#     """
+#     TODO: Is this to begin streaming the video feed
+#
+#     Notes
+#     -----
+#     v4.27 ::
+#         'error': 'method not found',
+#         'code': 103,
+#
+#     """
+#     params = {'method': 'stop_streaming'}
+#     return send_command(params)
 
 
 def get_albums():
@@ -86,19 +87,19 @@ def get_albums():
     return send_command(params)
 
 
-def get_annotated_result():
-    """
-    ERROR
-
-    'error': 'method not found',
-    'code': 103,
-
-    Returns
-    -------
-
-    """
-    params = {"method": "get_annotated_result"}
-    return send_command(params)
+# def get_annotated_result():
+#     """
+#     TODO: Is this to begin streaming the video feed
+#
+#     Notes
+#     -----
+#     v4.27 ::
+#         'error': 'method not found',
+#         'code': 103,
+#
+#     """
+#     params = {"method": "get_annotated_result"}
+#     return send_command(params)
 
 
 def get_camera_info():
@@ -136,18 +137,23 @@ def get_camera_info():
 
 def get_camera_state():
     """
+    Returns name and state of the camera ("idle"
 
-    Returns
+
+    Examples
     -------
-    ::
-        {'jsonrpc': '2.0',
-         'Timestamp': '3340.447572824',
-         'method': 'get_camera_state',
-         'result': {'state': 'idle',
-          'name': 'Seestar S50',
-          'path': 'on-board-Seestar S50'},
-         'code': 0,
-         'id': 1}
+
+    >>> from seestarpy import raw
+    >>> raw.get_camera_info()
+    {'jsonrpc': '2.0',
+     'Timestamp': '3340.447572824',
+     'method': 'get_camera_state',
+     'result': {'state': 'idle',
+      'name': 'Seestar S50',
+      'path': 'on-board-Seestar S50'},
+     'code': 0,
+     'id': 1}
+
     """
     params = {"method": "get_camera_state"}
     return send_command(params)
@@ -363,19 +369,19 @@ def get_disk_volume():
     return send_command(params)
 
 
-def get_event_state():
-    """
-    ERROR
-
-    'error': 'method not found',
-    'code': 103,
-
-    Returns
-    -------
-
-    """
-    params = {"method": "get_event_state"}
-    return send_command(params)
+# def get_event_state():
+#     """
+#     ERROR
+#
+#     'error': 'method not found',
+#     'code': 103,
+#
+#     Returns
+#     -------
+#
+#     """
+#     params = {"method": "get_event_state"}
+#     return send_command(params)
 
 
 def get_focuser_position():
@@ -608,6 +614,8 @@ def goto_target(ra, dec, name="Unknown", is_j2000=False):
     """
     Move to ra, dec coords and set the destination folder for fits files (name)
 
+    .. note:: v4.27 does NOT recognise this method
+
     Parameters
     ----------
     ra, dec: float
@@ -676,14 +684,14 @@ def iscope_start_view(in_ra=None, in_dec=None,
     return send_command(params)
 
 
-def iscope_stop_view(stage="AutoGoto"):
+def iscope_stop_view(stage="ContinuousExposure"):
     """
-    TODO: What does stage do?
+    This
 
     Parameters
     ----------
     stage : str
-        ["DarkLibrary", "AutoGoto", ]
+        ["DarkLibrary", "AutoGoto", "ContinuousExposure", "Stack"]
 
     """
 
@@ -739,22 +747,71 @@ def move_focuser(pos, retry=True):
 
 
 def pi_get_time():
+    """
+    Get the internal system time from the device.
+
+    .. note:: This is not always the current time, as sometimes the Seestar
+       resets its internal clock on shutdown.
+
+    Returns
+    -------
+    dict
+        The response dictionary containing the current system time.
+
+    Examples
+    --------
+    ::
+        >>> from seestarpy import raw
+        >>> raw.pi_get_time()
+    """
     params = {'method': 'pi_get_time'}
     return send_command(params)
 
 
-def pi_set_time():
+def pi_set_time(time_zone=None):
+    """
+    Set the internal system time on the device to the current local time.
+
+    This function captures the current system time from the host machine and sends it to the device,
+    including timezone information.
+
+    Parameters
+    ----------
+    time_zone : str, optional
+        The timezone to use (e.g., "Australia/Melbourne"). If not provided, it uses the
+        system's local timezone.
+
+    Returns
+    -------
+    dict
+        The response dictionary indicating the result of the time-setting operation.
+
+    Examples
+    --------
+    ::
+        >>> from seestarpy import raw
+        >>> raw.pi_set_time()
+        >>> raw.pi_set_time("UTC")
+        >>> raw.pi_set_time("Australia/Melbourne")
+    """
+    if time_zone is None:
+        time_zone = get_localzone_name()
+
     now = datetime.now()
     print(now)
-    date_json = {"year": now.year,
-                 "mon": now.month,
-                 "day": now.day,
-                 "hour": now.hour,
-                 "min": now.minute,
-                 "sec": now.second,
-                 "time_zone": "Australia/Melbourne"}
-    params = {'method': 'pi_set_time', 'params': [date_json]}
+    date_json = {
+        "year": now.year,
+        "mon": now.month,
+        "day": now.day,
+        "hour": now.hour,
+        "min": now.minute,
+        "sec": now.second,
+        "time_zone": time_zone
+    }
+    params = {'method': 'pi_set_time',
+              'params': [date_json]}
     return send_command(params)
+
 
 
 def pi_reboot():

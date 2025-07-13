@@ -3,7 +3,7 @@ import json
 import time
 
 from .connection import DEFAULT_IP, DEFAULT_PORT
-HEARTBEAT_INTERVAL = 3
+HEARTBEAT_INTERVAL = 5
 
 
 async def heartbeat(writer):

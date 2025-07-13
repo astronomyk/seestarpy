@@ -1,10 +1,22 @@
-![SeeStar-Py](docs/logos/seestar_py_logo_banner.png)
-A python module to drive the Seestar smart telescopes
+![SeeStar-Py](docs/_static/seestar_py_logo_banner.png)
+A light-weight python module to drive the Seestar smart telescopes
 
-# IP Addresses to check
-- http://<seestar_alp-ip>>:7556/1/live/status
-- http://<seestar_alp-ip>>:7556/1/vid
-- http://<seestar_alp-ip>>:7556/1/events
+This package is on ReadTheDocs. See [seestarpy.readthedocs.io](https://seestarpy.readthedocs.io/en/latest/)
+
+
+Quickstart
+----------
+Install `seestarpy` using pip:
+
+    $ pip install seestarpy
+
+Usage example:
+
+    from seestarpy import connection as conn
+    from seestarpy import raw
+
+    conn.DEFAULT_IP = "192.168.1.243"
+    raw.test_connection()
 
 
 

@@ -19,7 +19,8 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
-    "pysmb>=1.2.9"   # For SMB file operations
+    "pysmb>=1.2.9",     # For SMB file operations
+    "tzlocal"           # For getting the local timezone
 ]
 
 [tool.setuptools]
