@@ -20,8 +20,6 @@ Basic commands to start stacking exposures
     raw.scope_goto(12, 88)
     raw.scope_get_equ_coord()
 
-    raw.start_polar_align()
-
     raw.iscope_start_view()
     raw.get_view_state()
 

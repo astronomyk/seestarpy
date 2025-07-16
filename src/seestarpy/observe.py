@@ -8,8 +8,8 @@ def set_eq_mode(equ_mode=True):
 
 def goto_target(target_name, ra, dec, use_lp_filter=False):
     """
-    ra : decimal hour angle [0, 24]
-    dec : decimal declination [-90, 90]
+    ra, dec : float
+        decimal hour angle [0, 24], decimal declination [-90, 90]
     """
     # params = {'method': 'scope_goto', 'params': [ra, dec]}
     params = {'method': 'iscope_start_view', 'params': {'mode': 'star',

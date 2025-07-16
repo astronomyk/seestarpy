@@ -579,11 +579,17 @@ def get_setting():
 
 def get_user_location():
     """
-    Get the Lat, Long coords of the Seestar
+    Get the Lat, Long coords of the Seestar on Earth
 
     Returns
     -------
+    dict
+
+    Examples
+    --------
     ::
+        >>> from seestarpy import raw
+        >>> raw.get_user_location()
         {'jsonrpc': '2.0',
          'Timestamp': '4508.028353247',
          'method': 'get_user_location',
@@ -596,6 +602,37 @@ def get_user_location():
 
 
 def get_view_state():
+    """
+    Return the ``View`` dictionary from the ``iscope_get_app_state`` command
+
+    Returns
+    -------
+    dict
+
+    Examples
+    --------
+    ::
+        >>> from seestarpy import raw
+        >>> raw.get_view_state()
+        {'jsonrpc': '2.0',
+         'Timestamp': '7501.254000847',
+         'method': 'get_view_state',
+         'result': {'View': {'state': 'cancel',
+           'lapse_ms': 282203,
+           'mode': 'none',
+           'cam_id': 0,
+           'target_ra_dec': [9.0, 80.0],
+           'target_name': 'Unknown',
+           'lp_filter': False,
+           'gain': 80,
+           'ContinuousExposure': {'state': 'cancel',
+            'lapse_ms': 116133,
+            'fps': 2.024705},
+           'stage': 'ContinuousExposure'}},
+         'code': 0,
+         'id': 1}
+
+    """
     params = {"method": "get_view_state"}
     return send_command(params)
 
@@ -610,50 +647,27 @@ def get_wheel_setting():
     return send_command(params)
 
 
-def goto_target(ra, dec, name="Unknown", is_j2000=False):
-    """
-    Move to ra, dec coords and set the destination folder for fits files (name)
-
-    .. note:: v4.27 does NOT recognise this method
-
-    Parameters
-    ----------
-    ra, dec: float
-        Decimal hour angle, Decimal degrees
-    name : str
-    is_j2000 : bool
-        Default: False, If RA and Dec coords are in the J2000 system.
-
-    Returns
-    -------
-    dict
-
-    """
-    params = {"method": "goto_target",
-              "params": {"target_name": name,
-                         "is_j2000": is_j2000,
-                         "ra": ra,
-                         "dec": dec
-                         }
-              }
-    return send_command(params)
-
-
 def iscope_get_app_state():
     params = {"method": "iscope_get_app_state"}
     return send_command(params)
 
 
-def iscope_start_view(in_ra=None, in_dec=None,
+def iscope_start_view(ra=None, dec=None,
                       target_name="Unknown", lp_filter=False, mode="star"):
     """
     Start viewing a target, but not stacking the incoming frames.
 
-    This involves doing a goto to the target and selecting the LP filter
+    If ``ra`` and ``dec`` are ``None``, this turns on the camera in the
+    ``ContinuousExposure`` state.
+
+    If ``ra`` and ``dec`` are defined, this triggers an ``AutoGoto`` state,
+    which slews the telescope to these coordinates and then starts a plate-solve
+    loop. The plate-solve loop, if successful will tell the Seestar how much
+    it needs to compensate for your alignment.
 
     Parameters
     ----------
-    in_ra, in_dec: float
+    ra, dec: float
         Decimal hour angle, Decimal degrees
     target_name : str
         Default: "Unknown", Name of the target, which also defines the directory
@@ -671,12 +685,15 @@ def iscope_start_view(in_ra=None, in_dec=None,
     --------
     ::
         >>> from seestarpy import raw
-        >>> raw.get_setting()
+        # Put the camera into "ContinuousExposure" mode. No frames are saved.
+        >>> raw.iscope_start_view()
+        # Slew to a target, trigger a plate-solve, then turn the camera on.
+        >>> raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar")
 
     """
     params = {"method": "iscope_start_view",
               "params": {"mode": mode,
-                         "target_ra_dec": [in_ra, in_dec],
+                         "target_ra_dec": [ra, dec],
                          "target_name": target_name,
                          "lp_filter": lp_filter
                          }
@@ -684,17 +701,46 @@ def iscope_start_view(in_ra=None, in_dec=None,
     return send_command(params)
 
 
-def iscope_stop_view(stage="ContinuousExposure"):
+def iscope_stop_view(stage=None):
     """
-    This
+    This stops whatever is happening with the Seestar.
 
     Parameters
     ----------
-    stage : str
-        ["DarkLibrary", "AutoGoto", "ContinuousExposure", "Stack"]
+    stage : str or None
+        Default: None. This works for ``ContinuousExposure``
+        If the Seestar is stacking images, use ``stage="Stack"``
+
+    Potential stage names include: ``["DarkLibrary", "AutoGoto", "AutoFocus",
+    "PlateSolve", "ContinuousExposure", "Stack", "ScopeGoto"]``
+    TODO: Test when/if these need to be used.
+
+    Returns
+    -------
+    dict:
+
+    Examples
+    --------
+    If the camera is in ContinuousExposure mode, this dictionary is returned.::
+        >>> from seestarpy import raw
+        >>> raw.iscope_stop_view()
+        {'Event': 'ContinuousExposure',
+         'Timestamp': '4706.054896251',
+         'state': 'cancel',
+         'lapse_ms': 69217,
+         'fps': 2.024333,
+         'route': ['View']}
+
+    If the camera is in Stack mode, this dictionary is returned.::
+        >>> raw.iscope_stop_view("Stack")
+        {'Event': 'Exposure',
+         'Timestamp': '5761.848427853',
+         'page': 'stack',
+         'state': 'fail',
+         'error': 'interrupt',
+         'code': 514}
 
     """
-
     params = {"method": "iscope_stop_view",
               "params": {"stage": stage}}
     return send_command(params)
@@ -1175,6 +1221,10 @@ def scope_goto(ra, dec):
         >>> raw.scope_goto(18.082, -24.3)       # M8 Lagoon Nebula
         >>> raw.scope_goto(5.63, -69.4)         # 30 Dor in LMC (Tarantula Nebula)
         >>> raw.scope_goto(0.398, -72.2)        # 47 Tuc globular cluster (SMC)
+        {'Event': 'ScopeGoto',
+         'Timestamp': '6880.953156944',
+         'state': 'working',
+         'lapse_ms': 0}
 
     """
     params = {'method': 'scope_goto', 'params': [ra, dec]}
@@ -1383,6 +1433,11 @@ def start_solve():
 
 def stop_auto_focuse():
     params = {"method": "stop_auto_focuse"}
+    return send_command(params)
+
+
+def stop_create_dark():
+    params = {"method": "stop_create_dark"}
     return send_command(params)
 
 
