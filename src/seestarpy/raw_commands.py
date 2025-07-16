@@ -708,8 +708,11 @@ def iscope_stop_view(stage=None):
     Parameters
     ----------
     stage : str or None
-        Default: None. This works for ``ContinuousExposure``
-        If the Seestar is stacking images, use ``stage="Stack"``
+        - ``stage=None`` (default) will set the camera mode to "none"
+        - ``stage="ContinuousExposure"`` will turn off the camera, but leave the
+          camera mode in "star" (or whatever)
+        - ``stage="Stack"`` will stop stacking sub-frames but still leave the
+          camera in the ``ContinuousExposure`` View stage
 
     Potential stage names include: ``["DarkLibrary", "AutoGoto", "AutoFocus",
     "PlateSolve", "ContinuousExposure", "Stack", "ScopeGoto"]``
@@ -721,9 +724,9 @@ def iscope_stop_view(stage=None):
 
     Examples
     --------
-    If the camera is in ContinuousExposure mode, this dictionary is returned.::
+    ::
         >>> from seestarpy import raw
-        >>> raw.iscope_stop_view()
+        >>> raw.iscope_stop_view("ContinuousExposure")
         {'Event': 'ContinuousExposure',
          'Timestamp': '4706.054896251',
          'state': 'cancel',
@@ -731,7 +734,6 @@ def iscope_stop_view(stage=None):
          'fps': 2.024333,
          'route': ['View']}
 
-    If the camera is in Stack mode, this dictionary is returned.::
         >>> raw.iscope_stop_view("Stack")
         {'Event': 'Exposure',
          'Timestamp': '5761.848427853',
@@ -739,6 +741,20 @@ def iscope_stop_view(stage=None):
          'state': 'fail',
          'error': 'interrupt',
          'code': 514}
+
+        >>> raw.iscope_stop_view(None)
+        {'Event': 'View',
+         'Timestamp': '721.589563996',
+         'state': 'complete',
+         'lapse_ms': 196484,
+         'mode': 'none',
+         'cam_id': 0,
+         'target_ra_dec': [13.4, 54.900002],
+         'target_name': 'Mizar',
+         'lp_filter': False,
+         'gain': 80,
+         'route': []}
+
 
     """
     params = {"method": "iscope_stop_view",
@@ -1451,8 +1467,8 @@ def stop_polar_align():
     return send_command(params)
 
 
-def stop_plate_solve_loop():
-    params = {"method": "stop_plate_solve_loop"}
+def stop_solve():
+    params = {"method": "stop_solve"}
     return send_command(params)
 
 
