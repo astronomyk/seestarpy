@@ -24,6 +24,7 @@ To stop imaging you will need:
 
     raw.iscope_stop_view("Stack")
     raw.iscope_stop_view(None)
+    raw.pi_shutdown(True)       # force=True, to avoid mistakenly calling this
 
 Note:
 - ``iscope_stop_view("Stack")`` will gracefully stop the stacking process and
