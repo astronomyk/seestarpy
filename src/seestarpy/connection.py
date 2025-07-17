@@ -3,7 +3,7 @@ import socket
 
 DEFAULT_PORT = 4700
 DEFAULT_IP = "192.168.1.243"
-VERBOSE_LEVEL = 0
+VERBOSE_LEVEL = 1
 
 
 def send_command(params):

@@ -1,0 +1,418 @@
+
+raw.raw.scope_move_to_horizon()
+raw.iscope_get_app_state()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '798.890936921',
+ 'method': 'iscope_get_app_state',
+ 'result': {'FocuserMove': {'state': 'complete',
+   'lapse_ms': 2372,
+   'position': 1580}},
+ 'code': 0,
+ 'id': 1}
+
+raw.get_device_state(["mount", "balance_sensor"])
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '1054.828103234',
+ 'method': 'get_device_state',
+ 'result': {'balance_sensor': {'code': 0,
+   'data': {'x': 0.008102, 'y': -0.013389, 'z': 1.005265, 'angle': 0.891971}},
+  'mount': {'move_type': 'none',
+   'close': False,
+   'tracking': False,
+   'equ_mode': True}},
+ 'code': 0,
+ 'id': 1}
+
+[event] {'Event': 'BalanceSensor', 'Timestamp': '4643.045541974', 'code': 0, 'data': {'x': -0.060074, 'y': 0.014931, 'z': 1.000444, 'angle': 3.540718}}
+
+
+
+raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar")
+
+[event] {'Event': 'View', 'Timestamp': '1159.917862295', 'state': 'working', 'lapse_ms': 0, 'mode': 'star', 'cam_id': 0, 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar', 'lp_filter': False, 'gain': 0, 'route': []}
+[event] {'Event': 'ScopeTrack', 'Timestamp': '1160.048023233', 'state': 'on', 'tracking': True, 'manual': True, 'route': []}
+[event] {'Event': 'AutoGoto', 'Timestamp': '1160.059593599', 'state': 'working', 'lapse_ms': 0, 'count': 0, 'hint': False, 'route': ['View']}
+[event] {'Event': 'AutoGoto', 'Timestamp': '1160.065722073', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'start', 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar'}
+[event] {'Event': 'AutoGoto', 'Timestamp': '1162.597442725', 'state': 'working', 'lapse_ms': 2538, 'count': 1, 'hint': False, 'route': ['View']}
+[event] {'Event': 'AutoGoto', 'Timestamp': '1162.598791386', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'working', 'count': 1}
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1162.789215939', 'state': 'working', 'lapse_ms': 0, 'cur_ra_dec': [21.100833, 4.908333], 'dist_deg': 100.180442, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1163.146721812', 'state': 'working', 'lapse_ms': 0}
+[event] {'Event': 'ScopeTrack', 'Timestamp': '1163.448956424', 'state': 'off', 'tracking': False, 'manual': False, 'route': []}
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1163.455361980', 'state': 'working', 'lapse_ms': 666, 'cur_ra_dec': [21.098333, 4.989167], 'dist_deg': 100.092058, 'route': ['View', 'AutoGoto']}
+...
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1182.521504744', 'state': 'working', 'lapse_ms': 19732, 'cur_ra_dec': [13.645278, 54.9], 'dist_deg': 2.115302, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'ScopeTrack', 'Timestamp': '1183.747816491', 'state': 'on', 'tracking': True, 'manual': False, 'route': []}
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1183.751927223', 'state': 'working', 'lapse_ms': 20962, 'cur_ra_dec': [13.405556, 54.9], 'dist_deg': 0.047924, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1184.047963320', 'state': 'complete', 'lapse_ms': 20901}
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1184.245905091', 'state': 'working', 'lapse_ms': 21456, 'cur_ra_dec': [13.405556, 54.9], 'dist_deg': 0.047924, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'ScopeGoto', 'Timestamp': '1184.247168877', 'state': 'complete', 'lapse_ms': 21457, 'cur_ra_dec': [13.405556, 54.9], 'dist_deg': 0.047924, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'Exposure', 'Timestamp': '1184.248203706', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 2000.0, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'Exposure', 'Timestamp': '1184.249127118', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'start', 'exp_us': 2000000, 'gain': 80}
+[event] {'Event': 'Exposure', 'Timestamp': '1187.743665114', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'downloading'}
+[event] {'Event': 'Exposure', 'Timestamp': '1187.970931966', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'complete'}
+[event] {'Event': 'Exposure', 'Timestamp': '1187.971463672', 'state': 'complete', 'lapse_ms': 3723, 'exp_ms': 2000.0, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1187.972447751', 'state': 'working', 'lapse_ms': 0, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1187.973269956', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'start'}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1201.565737770', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'solving', 'star_number': 14026}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1218.921533794', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'error': 'solve failed', 'code': 251, 'state': 'fail', 'result': {'star_number': 14026, 'duration_ms': 30948}}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1218.922044500', 'state': 'fail', 'error': 'solve failed', 'code': 251, 'lapse_ms': 30949, 'route': ['View', 'AutoGoto']}
+
+
+raw.iscope_stop_view("AutoGoto")
+
+{'Event': 'PlateSolve',
+ 'Timestamp': '1311.239811581',
+ 'page': 'preview',
+ 'tag': 'Exposure-AutoGoto',
+ 'ac_count': 4,
+ 'error': 'aborted',
+ 'code': 253,
+ 'state': 'fail',
+ 'result': {'duration_ms': 7968}}
+
+[event] {'Event': 'PlateSolve', 'Timestamp': '1311.239811581', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 4, 'error': 'aborted', 'code': 253, 'state': 'fail', 'result': {'duration_ms': 7968}}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1311.240844951', 'state': 'cancel', 'lapse_ms': 7970, 'route': ['View', 'AutoGoto']}
+[event] {'Event': 'AutoGoto', 'Timestamp': '1311.438762388', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'fail', 'error': 'aborted', 'code': 253}
+[event] {'Event': 'AutoGoto', 'Timestamp': '1311.439385969', 'state': 'cancel', 'lapse_ms': 151380, 'count': 5, 'hint': True, 'route': ['View']}
+[event] {'Event': 'ContinuousExposure', 'Timestamp': '1311.533817311', 'state': 'working', 'lapse_ms': 0, 'fps': 0.0, 'route': ['View']}
+
+
+raw.iscope_get_app_state()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '1521.270772679',
+ 'method': 'iscope_get_app_state',
+ 'result': {'FocuserMove': {'state': 'complete',
+   'lapse_ms': 2372,
+   'position': 1580},
+  'View': {'state': 'working',
+   'lapse_ms': 361353,
+   'mode': 'star',
+   'cam_id': 0,
+   'target_ra_dec': [13.4, 54.900002],
+   'target_name': 'Mizar',
+   'lp_filter': False,
+   'gain': 80,
+   'ContinuousExposure': {'state': 'working',
+    'lapse_ms': 209738,
+    'fps': 2.024913},
+   'stage': 'ContinuousExposure'}},
+ 'code': 0,
+ 'id': 1}
+
+
+
+raw.iscope_start_stack(True)
+
+{'Event': 'ContinuousExposure',
+ 'Timestamp': '1604.964081079',
+ 'state': 'cancel',
+ 'lapse_ms': 293430,
+ 'fps': 2.024623,
+ 'route': ['View']}
+
+[event] {'Event': 'ContinuousExposure', 'Timestamp': '1604.964081079', 'state': 'cancel', 'lapse_ms': 293430, 'fps': 2.024623, 'route': ['View']}
+[event] {'Event': 'View', 'Timestamp': '1604.967306315', 'state': 'working', 'lapse_ms': 0, 'mode': 'star', 'cam_id': 0, 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar', 'lp_filter': False, 'gain': 80, 'route': []}
+
+[event] {'Event': 'Initialise', 'Timestamp': '1604.975377280', 'state': 'working', 'lapse_ms': 0, 'route': ['View']}
+
+[event] {'Event': 'DarkLibrary', 'Timestamp': '1604.976126569', 'state': 'working', 'lapse_ms': 0, 'percent': 0.0, 'route': ['View', 'Initialise']}
+[event] {'Event': 'WheelMove', 'Timestamp': '1604.976576900', 'state': 'start'}
+[event] {'Event': 'PiStatus', 'Timestamp': '1605.280617171', 'temp': 55.799999}
+[event] {'Event': 'WheelMove', 'Timestamp': '1605.379077579', 'state': 'complete', 'position': 0}
+[event] {'Event': 'DarkLibrary', 'Timestamp': '1608.710010197', 'state': 'working', 'lapse_ms': 3734, 'percent': 1.004, 'route': ['View', 'Initialise']}
+...
+[event] {'Event': 'DarkLibrary', 'Timestamp': '1662.048470073', 'state': 'working', 'lapse_ms': 57072, 'percent': 100.0, 'route': ['View', 'Initialise']}
+[event] {'Event': 'WheelMove', 'Timestamp': '1663.411955770', 'state': 'start'}
+[event] {'Event': 'WheelMove', 'Timestamp': '1664.215782257', 'state': 'complete', 'position': 1}
+[event] {'Event': 'DarkLibrary', 'Timestamp': '1664.217128585', 'state': 'complete', 'lapse_ms': 59240, 'percent': 100.0, 'route': ['View', 'Initialise']}
+
+[event] {'Event': 'AutoFocus', 'Timestamp': '1664.218571162', 'state': 'working', 'lapse_ms': 0, 'route': ['View', 'Initialise']}
+[event] {'Event': 'AutoFocus', 'Timestamp': '1664.220038531', 'state': 'start'}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1666.626116142', 'state': 'working', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1666.626988805', 'state': 'complete', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1666.627358637', 'state': 'working', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1666.929799373', 'state': 'complete', 'lapse_ms': 302, 'position': 1780, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1666.930688369', 'state': 'working', 'lapse_ms': 0, 'position': 1780, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1667.055190415', 'state': 'complete', 'lapse_ms': 125, 'position': 1700, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '1668.174329208', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 1000.0, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '1669.288490897', 'state': 'complete', 'lapse_ms': 1114, 'exp_ms': 1000.0, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'AutoFocus', 'Timestamp': '1670.332497098', 'state': 'working', 'result': {'x_scale': [1690, 1710], 'y_scale': [-5.0, 5.0], 'points': [[1700, 0.0]], 'status_flag': 1}}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1670.332954138', 'state': 'working', 'lapse_ms': 0, 'position': 1700, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1670.365970079', 'state': 'complete', 'lapse_ms': 33, 'position': 1680, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '1671.391842566', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 1000.0, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '1672.232808810', 'state': 'complete', 'lapse_ms': 841, 'exp_ms': 1000.0, 'route': ['View', 'Initialise', 'AutoFocus']}
+...
+[event] {'Event': 'AutoFocus', 'Timestamp': '1685.122338701', 'state': 'working', 'result': {'x_scale': [1590, 1710], 'y_scale': [-5.0, 5.0], 'points': [[1700, 0.0], [1680, 0.0], [1660, 0.0], [1640, 0.0], [1620, 0.0], [1600, 0.0]], 'status_flag': 1}}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1685.122781157', 'state': 'working', 'lapse_ms': 0, 'position': 1600, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1685.154645603', 'state': 'complete', 'lapse_ms': 32, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1685.155658557', 'state': 'working', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '1685.157275842', 'state': 'complete', 'lapse_ms': 2, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+[event] {'Event': 'AutoFocus', 'Timestamp': '1686.030234531', 'state': 'fail', 'error': 'no star is detected', 'code': 279}
+[event] {'Event': 'AutoFocus', 'Timestamp': '1688.398567430', 'state': 'fail', 'error': 'no star is detected', 'code': 279, 'lapse_ms': 24180, 'route': ['View', 'Initialise']}
+
+[event] {'Event': 'Initialise', 'Timestamp': '1688.399089511', 'state': 'complete', 'lapse_ms': 83424, 'route': ['View']}
+
+[event] {'Event': 'Stack', 'Timestamp': '1688.689575174', 'state': 'working', 'lapse_ms': 0, 'frame_errcode': -1, 'stacked_frame': 0, 'dropped_frame': 0, 'can_annotate': False, 'route': ['View']}
+[event] {'Event': 'Stack', 'Timestamp': '1688.690485462', 'state': 'start'}
+[event] {'Event': 'DiskSpace', 'Timestamp': '1691.342453345', 'used_percent': 38}
+[event] {'Event': 'Exposure', 'Timestamp': '1691.342447512', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+[event] {'Event': 'Exposure', 'Timestamp': '1691.343388716', 'page': 'stack', 'state': 'start', 'exp_us': 10000000, 'gain': 80}
+[event] {'Event': 'Exposure', 'Timestamp': '1702.490657712', 'page': 'stack', 'state': 'downloading'}
+[event] {'Event': 'Exposure', 'Timestamp': '1702.719888056', 'page': 'stack', 'state': 'complete'}
+[event] {'Event': 'Exposure', 'Timestamp': '1702.720661844', 'state': 'complete', 'lapse_ms': 11378, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+[event] {'Event': 'Exposure', 'Timestamp': '1702.721323050', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+[event] {'Event': 'Exposure', 'Timestamp': '1702.721861464', 'page': 'stack', 'state': 'start', 'exp_us': 10000000, 'gain': 80}
+[event] {'Event': 'Annotate', 'Timestamp': '1705.257162893', 'state': 'working', 'lapse_ms': 0, 'route': ['View', 'Stack']}
+[event] {'Event': 'Annotate', 'Timestamp': '1705.258034972', 'page': 'stack', 'state': 'start'}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1705.258575428', 'page': 'stack', 'state': 'start'}
+[event] {'Event': 'Stack', 'Timestamp': '1705.888528083', 'state': 'working', 'lapse_ms': 17199, 'frame_errcode': 0, 'stacked_frame': 1, 'dropped_frame': 0, 'can_annotate': True, 'route': ['View']}
+[event] {'Event': 'Stack', 'Timestamp': '1705.889220789', 'state': 'frame_complete', 'frame_type': 'light', 'stacked_frame': 1, 'dropped_frame': 0, 'total_frame': 1, 'error': 'no error', 'lapse_ms': 3535, 'code': 0}
+[event] {'Event': 'Exposure', 'Timestamp': '1713.874052189', 'page': 'stack', 'state': 'downloading'}
+[event] {'Event': 'Exposure', 'Timestamp': '1714.100463586', 'page': 'stack', 'state': 'complete'}
+[event] {'Event': 'Exposure', 'Timestamp': '1714.101394291', 'state': 'complete', 'lapse_ms': 11380, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+[event] {'Event': 'Exposure', 'Timestamp': '1714.102214745', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+[event] {'Event': 'Exposure', 'Timestamp': '1714.103072242', 'page': 'stack', 'state': 'start', 'exp_us': 10000000, 'gain': 80}
+[event] {'Event': 'Stack', 'Timestamp': '1715.204784068', 'state': 'working', 'lapse_ms': 26515, 'frame_errcode': 264, 'stacked_frame': 1, 'dropped_frame': 1, 'can_annotate': True, 'route': ['View']}
+[event] {'Event': 'Stack', 'Timestamp': '1715.205413482', 'state': 'frame_complete', 'frame_type': 'light', 'stacked_frame': 1, 'dropped_frame': 1, 'total_frame': 2, 'error': 'stack error, transform failed', 'lapse_ms': 1309, 'code': 264}
+[event] {'Event': 'PlateSolve', 'Timestamp': '1733.892351092', 'page': 'stack', 'state': 'solving', 'star_number': 24782}
+
+
+raw.iscope_get_app_state()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '1788.688907964',
+ 'method': 'iscope_get_app_state',
+ 'result': {'FocuserMove': {'state': 'complete',
+   'lapse_ms': 2372,
+   'position': 1580},
+  'View': {'state': 'working',
+   'lapse_ms': 183721,
+   'mode': 'star',
+   'cam_id': 0,
+   'target_ra_dec': [13.4, 54.900002],
+   'target_name': 'Mizar',
+   'lp_filter': False,
+   'gain': 80,
+   'Stack': {'state': 'working',
+    'lapse_ms': 100000,
+    'frame_errcode': 264,
+    'stacked_frame': 1,
+    'dropped_frame': 6,
+    'can_annotate': True,
+    'PlateSolve': {'state': 'working', 'lapse_ms': 5547},
+    'stage': 'PlateSolve',
+    'Exposure': {'state': 'complete', 'lapse_ms': 11382, 'exp_ms': 10000.0},
+    'Annotate': {'state': 'fail',
+     'error': 'solve failed',
+     'code': 251,
+     'lapse_ms': 30990}},
+   'stage': 'Stack'}},
+ 'code': 0,
+ 'id': 1}
+
+
+ raw.iscope_stop_view("Stack")
+
+ {'Event': 'Exposure',
+ 'Timestamp': '1991.848860730',
+ 'page': 'stack',
+ 'state': 'fail',
+ 'error': 'interrupt',
+ 'code': 514}
+
+[event] {'Event': 'Exposure', 'Timestamp': '1991.848860730', 'page': 'stack', 'state': 'fail', 'error': 'interrupt', 'code': 514}
+[event] {'Event': 'Exposure', 'Timestamp': '1991.850858346', 'state': 'cancel', 'lapse_ms': 7671, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+[event] {'Event': 'SaveImage', 'Timestamp': '1992.842348065', 'state': 'complete', 'filename': 'Stacked_1_Mizar_10.0s_IRCUT_20250717-203726.fit', 'fullname': 'MyWorks/Mizar/Stacked_1_Mizar_10.0s_IRCUT_20250717-203726.fit'}
+[event] {'Event': 'Stack', 'Timestamp': '1992.850720612', 'state': 'cancel', 'lapse_ms': 304161, 'frame_errcode': 264, 'stacked_frame': 1, 'dropped_frame': 17, 'can_annotate': True, 'jpg_name': 'MyWorks/Mizar/Stacked_1_Mizar_10.0s_IRCUT_20250717-203726.jpg', 'route': ['View']}
+[event] {'Event': 'ContinuousExposure', 'Timestamp': '1992.958101315', 'state': 'working', 'lapse_ms': 0, 'fps': 2.024623, 'route': ['View']}
+
+
+raw.iscope_get_app_state()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '2069.429781478',
+ 'method': 'iscope_get_app_state',
+ 'result': {'FocuserMove': {'state': 'complete',
+   'lapse_ms': 2372,
+   'position': 1580},
+  'View': {'state': 'working',
+   'lapse_ms': 464462,
+   'mode': 'star',
+   'cam_id': 0,
+   'target_ra_dec': [13.4, 54.900002],
+   'target_name': 'Mizar',
+   'lp_filter': False,
+   'gain': 80,
+   'ContinuousExposure': {'state': 'working',
+    'lapse_ms': 76472,
+    'fps': 2.024664},
+   'stage': 'ContinuousExposure'}},
+ 'code': 0,
+ 'id': 1}
+
+
+ raw.iscope_stop_view(None)
+
+{'Event': 'ContinuousExposure',
+ 'Timestamp': '2128.846709108',
+ 'state': 'cancel',
+ 'lapse_ms': 135888,
+ 'fps': 2.024747,
+ 'route': ['View']}
+
+[event] {'Event': 'ContinuousExposure', 'Timestamp': '2128.846709108', 'state': 'cancel', 'lapse_ms': 135888, 'fps': 2.024747, 'route': ['View']}
+[event] {'Event': 'View', 'Timestamp': '2128.847894728', 'state': 'cancel', 'lapse_ms': 523880, 'mode': 'star', 'cam_id': 0, 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar', 'lp_filter': False, 'gain': 80, 'route': []}
+[event] {'Event': 'View', 'Timestamp': '2128.863615202', 'state': 'cancel', 'lapse_ms': 523880, 'mode': 'none', 'cam_id': 0, 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar', 'lp_filter': False, 'gain': 80, 'route': []}
+
+
+raw.iscope_get_app_state()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '2181.106635765',
+ 'method': 'iscope_get_app_state',
+ 'result': {'FocuserMove': {'state': 'complete',
+   'lapse_ms': 2372,
+   'position': 1580},
+  'View': {'state': 'cancel',
+   'lapse_ms': 523880,
+   'mode': 'none',
+   'cam_id': 0,
+   'target_ra_dec': [13.4, 54.900002],
+   'target_name': 'Mizar',
+   'lp_filter': False,
+   'gain': 80,
+   'ContinuousExposure': {'state': 'cancel',
+    'lapse_ms': 135888,
+    'fps': 2.024747},
+   'stage': 'ContinuousExposure'}},
+ 'code': 0,
+ 'id': 1}
+
+
+raw.start_create_dark()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '2300.674178152',
+ 'method': 'start_create_dark',
+ 'result': 0,
+ 'code': 0,
+ 'id': 1}
+
+[event] {'Event': 'DarkLibrary', 'Timestamp': '2300.674491692', 'state': 'working', 'lapse_ms': 0, 'percent': 0.0, 'route': []}
+[event] {'Event': 'WheelMove', 'Timestamp': '2300.675888186', 'state': 'start'}
+[event] {'Event': 'WheelMove', 'Timestamp': '2301.078063366', 'state': 'complete', 'position': 0}
+[event] {'Event': 'DarkLibrary', 'Timestamp': '2304.409303025', 'state': 'working', 'lapse_ms': 3735, 'percent': 1.004, 'route': []}
+...
+[event] {'Event': 'DarkLibrary', 'Timestamp': '2357.778998891', 'state': 'working', 'lapse_ms': 57105, 'percent': 100.0, 'route': []}
+[event] {'Event': 'WheelMove', 'Timestamp': '2359.156227945', 'state': 'start'}
+[event] {'Event': 'WheelMove', 'Timestamp': '2359.959132603', 'state': 'complete', 'position': 1}
+[event] {'Event': 'DarkLibrary', 'Timestamp': '2359.959617351', 'state': 'complete', 'lapse_ms': 59285, 'percent': 100.0, 'route': []}
+
+
+raw.iscope_get_app_state()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '2403.994360563',
+ 'method': 'iscope_get_app_state',
+ 'result': {'FocuserMove': {'state': 'complete',
+   'lapse_ms': 2372,
+   'position': 1580},
+  'DarkLibrary': {'state': 'complete', 'lapse_ms': 59285, 'percent': 100.0},
+  'View': {'state': 'cancel',
+   'lapse_ms': 523880,
+   'mode': 'none',
+   'cam_id': 0,
+   'target_ra_dec': [13.4, 54.900002],
+   'target_name': 'Mizar',
+   'lp_filter': False,
+   'gain': 80,
+   'ContinuousExposure': {'state': 'cancel',
+    'lapse_ms': 135888,
+    'fps': 2.024747},
+   'stage': 'ContinuousExposure'}},
+ 'code': 0,
+ 'id': 1}
+
+
+ raw.start_auto_focuse()
+
+ {'jsonrpc': '2.0',
+ 'Timestamp': '2457.418458860',
+ 'method': 'start_auto_focuse',
+ 'result': 0,
+ 'code': 0,
+ 'id': 1}
+
+[event] {'Event': 'View', 'Timestamp': '2457.422747508', 'state': 'working', 'lapse_ms': 0, 'mode': 'star', 'cam_id': 0, 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar', 'lp_filter': False, 'gain': 80, 'route': []}
+[event] {'Event': 'AutoFocus', 'Timestamp': '2457.555339560', 'state': 'working', 'lapse_ms': 0, 'route': ['View']}
+[event] {'Event': 'AutoFocus', 'Timestamp': '2457.556259473', 'state': 'start'}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2459.882120223', 'state': 'working', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2459.882592137', 'state': 'complete', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2459.882825470', 'state': 'working', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2460.187143364', 'state': 'complete', 'lapse_ms': 304, 'position': 1780, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2460.188597316', 'state': 'working', 'lapse_ms': 0, 'position': 1780, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2460.314105608', 'state': 'complete', 'lapse_ms': 125, 'position': 1700, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '2461.427517175', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 1000.0, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '2462.543742148', 'state': 'complete', 'lapse_ms': 1116, 'exp_ms': 1000.0, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'AutoFocus', 'Timestamp': '2463.570356007', 'state': 'working', 'result': {'x_scale': [1690, 1710], 'y_scale': [-5.0, 5.0], 'points': [[1700, 0.0]], 'status_flag': 1}}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2463.570928546', 'state': 'working', 'lapse_ms': 0, 'position': 1700, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2463.604174319', 'state': 'complete', 'lapse_ms': 33, 'position': 1680, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '2464.615458870', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 1000.0, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'Exposure', 'Timestamp': '2465.487074065', 'state': 'complete', 'lapse_ms': 871, 'exp_ms': 1000.0, 'route': ['View', 'AutoFocus']}
+...
+[event] {'Event': 'AutoFocus', 'Timestamp': '2478.365235379', 'state': 'working', 'result': {'x_scale': [1590, 1710], 'y_scale': [-5.0, 5.0], 'points': [[1700, 0.0], [1680, 0.0], [1660, 0.0], [1640, 0.0], [1620, 0.0], [1600, 0.0]], 'status_flag': 1}}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2478.365642836', 'state': 'working', 'lapse_ms': 0, 'position': 1600, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2478.397659240', 'state': 'complete', 'lapse_ms': 32, 'position': 1580, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2478.398955401', 'state': 'working', 'lapse_ms': 1, 'position': 1580, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'FocuserMove', 'Timestamp': '2478.400673310', 'state': 'complete', 'lapse_ms': 2, 'position': 1580, 'route': ['View', 'AutoFocus']}
+[event] {'Event': 'AutoFocus', 'Timestamp': '2479.286706734', 'state': 'fail', 'error': 'no star is detected', 'code': 279}
+[event] {'Event': 'AutoFocus', 'Timestamp': '2481.648610662', 'state': 'fail', 'error': 'no star is detected', 'code': 279, 'lapse_ms': 24093, 'route': ['View']}
+[event] {'Event': 'ContinuousExposure', 'Timestamp': '2481.752272048', 'state': 'working', 'lapse_ms': 0, 'fps': 2.024747, 'route': ['View']}
+
+
+raw.start_solve()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '2553.919317047',
+ 'method': 'start_solve',
+ 'result': 0,
+ 'code': 0,
+ 'id': 1}
+
+[event] {'Event': 'PlateSolve', 'Timestamp': '2553.919704087', 'state': 'working', 'lapse_ms': 0, 'route': []}
+[event] {'Event': 'PlateSolve', 'Timestamp': '2553.920963206', 'page': 'focus', 'state': 'start'}
+[event] {'Event': 'PlateSolve', 'Timestamp': '2555.519261056', 'page': 'focus', 'state': 'solving', 'star_number': 940}
+[event] {'Event': 'PlateSolve', 'Timestamp': '2584.920251198', 'page': 'focus', 'error': 'solve failed', 'code': 251, 'state': 'fail', 'result': {'star_number': 940, 'duration_ms': 30999}}
+[event] {'Event': 'PlateSolve', 'Timestamp': '2584.920977445', 'state': 'fail', 'error': 'solve failed', 'code': 251, 'lapse_ms': 31001, 'route': []}
+
+
+raw.iscope_get_app_state()
+
+{'jsonrpc': '2.0',
+ 'Timestamp': '2589.082482686',
+ 'method': 'iscope_get_app_state',
+ 'result': {'FocuserMove': {'state': 'complete',
+   'lapse_ms': 2372,
+   'position': 1580},
+  'DarkLibrary': {'state': 'complete', 'lapse_ms': 59285, 'percent': 100.0},
+  'PlateSolve': {'state': 'fail',
+   'error': 'solve failed',
+   'code': 251,
+   'lapse_ms': 31001},
+  'View': {'state': 'working',
+   'lapse_ms': 131660,
+   'mode': 'star',
+   'cam_id': 0,
+   'target_ra_dec': [13.4, 54.900002],
+   'target_name': 'Mizar',
+   'lp_filter': False,
+   'gain': 80,
+   'ContinuousExposure': {'state': 'working',
+    'lapse_ms': 107330,
+    'fps': 2.024664},
+   'stage': 'ContinuousExposure'}},
+ 'code': 0,
+ 'id': 1}
