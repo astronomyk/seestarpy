@@ -61,3 +61,7 @@ async def run():
             pass
 
         await asyncio.sleep(3)
+
+
+def start_listener():
+    asyncio.run(run())
