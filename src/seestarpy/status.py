@@ -44,34 +44,34 @@ def status_bar(return_type="str"):
     azalt = scope_get_horiz_coord().get("result", ["---", "---"])
     radec = scope_get_ra_dec().get("result", ["---", "---"])
 
-    t11 = f'{view.get("mode", "")}:^14'
-    t12 = f'{view.get("state", "")}:^14'
-    t13 = f'{view.get("error", "---")}:^14'
-    t14 = f'{view.get("target_name", "")}:^14'
+    t11 = f'{view.get("mode", ""):^14}'
+    t12 = f'{view.get("state", ""):^14}'
+    t13 = f'{view.get("error", "---"):^14}'
+    t14 = f'{view.get("target_name", ""):^14}'
 
-    t21a = f'{view.get("target_ra_dec", ["---", "---"])[0]}:<7'
-    t21b = f'{view.get("target_ra_dec", ["---", "---"])[1]}:<6'
-    t22a = f'{radec[0]}:<7'
-    t22b = f'{radec[1]}:<6'
-    t23a = f'{azalt[0]}:<7'
-    t23b = f'{azalt[0]}:<6'
-    t24 = f'{dev.get("balance_sensor", {}).get("data", {}).get("angle", "---")}:^6'
+    t21a = f'{view.get("target_ra_dec", ["---", "---"])[0]:<7}'
+    t21b = f'{view.get("target_ra_dec", ["---", "---"])[1]:<6}'
+    t22a = f'{radec[0]:<7}'
+    t22b = f'{radec[1]:<6}'
+    t23a = f'{azalt[0]:<7}'
+    t23b = f'{azalt[0]:<6}'
+    t24 = f'{dev.get("balance_sensor", {}).get("data", {}).get("angle", "---"):^14}'
 
-    t31 = f'{view.get("lp_filter", "---")}:^14'
-    t32 = f'{view.get("Stack", {}).get("Exposure", {}).get("exp_ms", 0)/1000}:^14'
-    t33a = f'{view.get("Stack", {}).get("stacked_frame", "---")}:<6'
-    t33b = f'{view.get("Stack", {}).get("dropped_frame", "---")}:<6'
-    t34 = f'{dev.get("mount", {}).get("tracking", "---")}:^14'
+    t31 = f'{view.get("lp_filter", "---"):^14}'
+    t32 = f'{view.get("Stack", {}).get("Exposure", {}).get("exp_ms", 0)/1000:^14}'
+    t33a = f'{view.get("Stack", {}).get("stacked_frame", "---"):<6}'
+    t33b = f'{view.get("Stack", {}).get("dropped_frame", "---"):<6}'
+    t34 = f'{dev.get("mount", {}).get("tracking", "---"):^14}'
 
-    t41 = f'{view.get("DarkLibrary", {}).get("percent", "---")}:^14'
-    t42 = f'{view.get("FocuserMove", {}).get("position", "---")}:^14'
-    t43 = f'{view.get("Stack", {}).get("PlateSolve", {}).get("state", "---")}:^14'
-    t44 = f'{view.get("Stack", {}).get("PlateSolve", {}).get("error", "---")}:^14'
+    t41 = f'{view.get("DarkLibrary", {}).get("percent", "---"):^14}'
+    t42 = f'{view.get("FocuserMove", {}).get("position", "---"):^14}'
+    t43 = f'{view.get("Stack", {}).get("PlateSolve", {}).get("state", "---"):^14}'
+    t44 = f'{view.get("Stack", {}).get("PlateSolve", {}).get("error", "---"):^14}'
 
-    t51 = f'{dev.get("pi_status", {}).get("battery_capacity", "---")+"%"}:^8'
-    t52 = f'{dev.get("storage", {}).get("storage_volume", [{}])[0].get("free_mb", "---")}:^8'
-    t53 = f'{dev.get("mount", {}).get("equ_mode", "---")}:^8'
-    t54 = f'{dt.now().strftime("%H:%M:%S")}^:8'
+    t51 = f'{dev.get("pi_status", {}).get("battery_capacity", "---")+"%":^8}'
+    t52 = f'{dev.get("storage", {}).get("storage_volume", [{}])[0].get("free_mb", "---"):^8}'
+    t53 = f'{dev.get("mount", {}).get("equ_mode", "---"):^8}'
+    t54 = f'{dt.now().strftime("%H:%M:%S"):^8}'
 
     return f"""
 |================|================|================|================|==========|
@@ -87,7 +87,7 @@ def status_bar(return_type="str"):
 | {t13         } | {t23a}  {t23b} | {t33a}   {t33b}| {t43         } | {t53   } |
 |----------------|----------------|----------------|----------------|----------|
 | TARGET NAME    | BALANCE ANGLE  | TRACKING       | SOLVE ERROR    | TIME     |
-| {t14         } | {t24         } | {t34:<13     } | {t44         } | {t54   } |
+| {t14         } | {t24         } | {t34         } | {t44         } | {t54   } |
 |================|================|================|================|==========|
 """
 
