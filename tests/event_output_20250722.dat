@@ -1,0 +1,152 @@
+{'event': '3PPA', 'state': 'complete', 'lapse_ms': 74605, 'percent': 99.0, 'calib_fail_autogoto': False, 'offset': [-0.986416, -0.450118], 'equ_offset': [-56.145756, 136.862207], 'route': ['View']}
+{'event': '3PPA', 'state': 'delay1', 'state_code': 6, 'auto_move': True, 'auto_update': False, 'paused': False, 'detail': {'lapse_ms': 1, 'total_ms': 4000}, 'lapse_ms': 16615, 'retry_cnt': 0}
+{'event': '3PPA', 'state': 'delay2', 'state_code': 11, 'auto_move': True, 'auto_update': False, 'paused': False, 'detail': {'lapse_ms': 0, 'total_ms': 4000}, 'lapse_ms': 29539, 'retry_cnt': 0}
+{'event': '3PPA', 'state': 'move1', 'state_code': 5, 'auto_move': True, 'auto_update': False, 'paused': False, 'detail': {}, 'lapse_ms': 12643, 'retry_cnt': 0}
+{'event': '3PPA', 'state': 'move2', 'state_code': 10, 'auto_move': True, 'auto_update': False, 'paused': False, 'detail': {}, 'lapse_ms': 25556, 'retry_cnt': 0}
+{'event': '3PPA', 'state': 'start', 'state_code': 1, 'auto_move': True, 'auto_update': False, 'paused': False, 'detail': {}, 'lapse_ms': 1, 'retry_cnt': 0}
+{'event': '3PPA', 'state': 'working', 'lapse_ms': 0, 'percent': 0.0, 'calib_fail_autogoto': False, 'route': ['View']}
+{'event': '3PPA', 'state': 'working', 'lapse_ms': 12644, 'percent': 60.0, 'calib_fail_autogoto': False, 'route': ['View']}
+{'event': '3PPA', 'state': 'working', 'lapse_ms': 43545, 'percent': 90.0, 'calib_fail_autogoto': False, 'offset': [-0.986416, -0.450118], 'equ_offset': [-56.145756, 136.862207], 'route': ['View']}
+{'event': '3PPA', 'state': 'working', 'lapse_ms': 949, 'percent': 40.0, 'calib_fail_autogoto': False, 'route': ['View']}
+{'event': 'AIProcess', 'state': 'working', 'lapse_ms': 0, 'route': []}
+{'event': 'AIProcess', 'state': 'complete', 'lapse_ms': 11786, 'ori_name': 'ori_path.jpg', 'dst_name': 'dst_path.jpg', 'route': []}
+{'event': 'Alert', 'error': 'below horizon', 'code': 270}
+{'event': 'Alert', 'error': 'stack error, too few stars', 'code': 263}
+{'event': 'Alert', 'error': 'stack error, transform failed', 'code': 264}
+{'event': 'Alert', 'error': 'star trails', 'code': 530}
+{'event': 'Annotate', 'page': 'stack', 'state': 'complete', 'result': {'image_size': [1080, 1920], 'annotations': [{'type': 'ngc', 'names': ['NGC 6341', 'M 92'], 'pixelx': 578.106, 'pixely': 991.061, 'radius': 182.05}], 'image_id': 1425}}
+{'event': 'Annotate', 'page': 'stack', 'state': 'complete', 'result': {'image_size': [1080, 1920], 'annotations': [{'type': 'star', 'pixelx': 532.997, 'pixely': 920.868, 'name': 'Polaris', 'names': ['Polaris']}], 'image_id': 1049}}
+{'event': 'Annotate', 'page': 'stack', 'state': 'start'}
+{'event': 'Annotate', 'state': 'complete', 'lapse_ms': 2803, 'result': {'image_size': [1080, 1920], 'annotations': [{'type': 'star', 'pixelx': 532.997, 'pixely': 920.868, 'name': 'Polaris', 'names': ['Polaris']}], 'image_id': 1049}, 'route': ['View', 'Stack']}
+{'event': 'Annotate', 'state': 'complete', 'lapse_ms': 3831, 'result': {'image_size': [1080, 1920], 'annotations': [{'type': 'ngc', 'names': ['NGC 6341', 'M 92'], 'pixelx': 578.106, 'pixely': 991.061, 'radius': 182.05}], 'image_id': 1425}, 'route': ['View', 'Stack']}
+{'event': 'Annotate', 'state': 'working', 'lapse_ms': 0, 'route': ['View', 'Stack']}
+{'event': 'AutoFocus', 'state': 'fail', 'error': 'no star is detected', 'code': 279, 'lapse_ms': 24182, 'route': ['View', 'Initialise']}
+{'event': 'AutoFocus', 'state': 'fail', 'error': 'no star is detected', 'code': 279, 'lapse_ms': 44870, 'route': ['View']}
+{'event': 'AutoFocus', 'state': 'fail', 'error': 'no star is detected', 'code': 279}
+{'event': 'AutoFocus', 'state': 'start'}
+{'event': 'AutoFocus', 'state': 'working', 'lapse_ms': 0, 'route': ['View', 'Initialise']}
+{'event': 'AutoFocus', 'state': 'working', 'lapse_ms': 0, 'route': ['View']}
+{'event': 'AutoFocus', 'state': 'working', 'result': {'x_scale': [1530, 1710], 'y_scale': [-5.0, 8.0], 'points': [[1700, 0.0], [1680, 0.0], [1660, 0.0], [1640, 0.0], [1620, 0.0], [1600, 3.360549], [1580, 2.445051], [1560, 0.0], [1540, 0.0]], 'status_flag': 1}}
+{'event': 'AutoGoto', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'complete'}
+{'event': 'AutoGoto', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'fail', 'error': 'mount goto failed', 'code': 501}
+{'event': 'AutoGoto', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'fail', 'error': 'solve failed', 'code': 251}
+{'event': 'AutoGoto', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'start', 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar'}
+{'event': 'AutoGoto', 'page': 'preview', 'tag': 'Exposure', 'func': 'goto_ra_dec', 'state': 'working', 'count': 1}
+{'event': 'AutoGoto', 'state': 'complete', 'lapse_ms': 103931, 'count': 2, 'hint': False, 'route': ['View']}
+{'event': 'AutoGoto', 'state': 'complete', 'lapse_ms': 31051, 'count': 2, 'hint': False, 'route': ['View', '3PPA']}
+{'event': 'AutoGoto', 'state': 'fail', 'error': 'mount goto failed', 'code': 501, 'lapse_ms': 20678, 'count': 7, 'hint': False, 'route': ['View']}
+{'event': 'AutoGoto', 'state': 'fail', 'error': 'solve failed', 'code': 251, 'lapse_ms': 250438, 'count': 7, 'hint': True, 'route': ['View']}
+{'event': 'AutoGoto', 'state': 'working', 'lapse_ms': 0, 'count': 0, 'hint': False, 'route': ['View', '3PPA']}
+{'event': 'AutoGoto', 'state': 'working', 'lapse_ms': 101361, 'count': 3, 'hint': True, 'route': ['View']}
+{'event': 'AutoGotoStep', 'tag': 'Exposure', 'page': 'preview', 'func': 'goto_ra_dec', 'state': 'fail', 'count': 6, 'error': 'mount goto failed', 'code': 501}
+{'event': 'BalanceSensor', 'code': 0, 'data': {'x': 0.316085, 'y': -0.515709, 'z': 1.104264, 'angle': 28.712015}}
+{'event': 'ContinuousExposure', 'state': 'cancel', 'lapse_ms': 166511, 'fps': 2.024457, 'route': ['View']}
+{'event': 'ContinuousExposure', 'state': 'working', 'lapse_ms': 1, 'fps': 2.024747, 'route': ['View']}
+{'event': 'DarkLibrary', 'state': 'complete', 'lapse_ms': 59202, 'percent': 100.0, 'route': ['View', 'Initialise']}
+{'event': 'DarkLibrary', 'state': 'complete', 'lapse_ms': 59374, 'percent': 100.0, 'route': []}
+{'event': 'DarkLibrary', 'state': 'working', 'lapse_ms': 57036, 'percent': 100.0, 'route': ['View', 'Initialise']}
+{'event': 'DarkLibrary', 'state': 'working', 'lapse_ms': 57166, 'percent': 100.0, 'route': []}
+{'event': 'DiskSpace', 'used_percent': 38}
+{'event': 'Exposure', 'page': 'preview', 'state': 'complete'}
+{'event': 'Exposure', 'page': 'preview', 'state': 'downloading'}
+{'event': 'Exposure', 'page': 'preview', 'state': 'start', 'exp_us': 2000000, 'gain': 80}
+{'event': 'Exposure', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'complete'}
+{'event': 'Exposure', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'downloading'}
+{'event': 'Exposure', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'start', 'exp_us': 2000000, 'gain': 80}
+{'event': 'Exposure', 'page': 'stack', 'state': 'complete'}
+{'event': 'Exposure', 'page': 'stack', 'state': 'downloading'}
+{'event': 'Exposure', 'page': 'stack', 'state': 'fail', 'error': 'interrupt', 'code': 514}
+{'event': 'Exposure', 'page': 'stack', 'state': 'start', 'exp_us': 10000000, 'gain': 80}
+{'event': 'Exposure', 'state': 'cancel', 'lapse_ms': 11387, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+{'event': 'Exposure', 'state': 'complete', 'lapse_ms': 1096, 'exp_ms': 1000.0, 'route': ['View', 'AutoFocus']}
+{'event': 'Exposure', 'state': 'complete', 'lapse_ms': 1097, 'exp_ms': 1000.0, 'route': ['View', 'Initialise', 'AutoFocus']}
+{'event': 'Exposure', 'state': 'complete', 'lapse_ms': 11341, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+{'event': 'Exposure', 'state': 'complete', 'lapse_ms': 3684, 'exp_ms': 2000.0, 'route': ['View', 'AutoGoto']}
+{'event': 'Exposure', 'state': 'complete', 'lapse_ms': 3685, 'exp_ms': 2000.0, 'route': ['View', '3PPA', 'AutoGoto']}
+{'event': 'Exposure', 'state': 'complete', 'lapse_ms': 3775, 'exp_ms': 2000.0, 'route': ['View', '3PPA']}
+{'event': 'Exposure', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 1000.0, 'route': ['View', 'AutoFocus']}
+{'event': 'Exposure', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 1000.0, 'route': ['View', 'Initialise', 'AutoFocus']}
+{'event': 'Exposure', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+{'event': 'Exposure', 'state': 'working', 'lapse_ms': 0, 'exp_ms': 2000.0, 'route': ['View', '3PPA', 'AutoGoto']}
+{'event': 'Exposure', 'state': 'working', 'lapse_ms': 1, 'exp_ms': 1000.0, 'route': ['View', 'AutoFocus']}
+{'event': 'Exposure', 'state': 'working', 'lapse_ms': 1, 'exp_ms': 10000.0, 'route': ['View', 'Stack']}
+{'event': 'Exposure', 'state': 'working', 'lapse_ms': 1, 'exp_ms': 2000.0, 'route': ['View', 'AutoGoto']}
+{'event': 'FocuserMove', 'state': 'complete', 'lapse_ms': 1, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+{'event': 'FocuserMove', 'state': 'complete', 'lapse_ms': 1554, 'position': 0, 'route': []}
+{'event': 'FocuserMove', 'state': 'complete', 'lapse_ms': 156, 'position': 1820, 'route': ['View', 'AutoFocus']}
+{'event': 'FocuserMove', 'state': 'working', 'lapse_ms': 0, 'position': 0, 'route': []}
+{'event': 'FocuserMove', 'state': 'working', 'lapse_ms': 0, 'position': 1540, 'route': ['View', 'AutoFocus']}
+{'event': 'FocuserMove', 'state': 'working', 'lapse_ms': 0, 'position': 1580, 'route': ['View', 'Initialise', 'AutoFocus']}
+{'event': 'GSensorMove', 'Timestamp': '2205.182986165'}
+{'event': 'Initialise', 'Timestamp': '718.139747786', 'state': 'working', 'lapse_ms': 0, 'route': ['View']}
+{'event': 'Initialise', 'Timestamp': '801.526440468', 'state': 'complete', 'lapse_ms': 83387, 'route': ['View']}
+{'event': 'MountMode', 'Timestamp': '1902.412544972', 'equ_mode': False}
+{'event': 'MountMode', 'Timestamp': '315.124138905', 'equ_mode': True}
+{'event': 'MoveByAngle', 'state': 'complete'}
+{'event': 'MoveByAngle', 'state': 'moving', 'value': 10.043414}
+{'event': 'MoveByAngle', 'state': 'start'}
+{'event': 'PiStatus', 'battery_capacity': 42}
+{'event': 'PiStatus', 'battery_temp': 27}
+{'event': 'PiStatus', 'temp': 46.5}
+{'event': 'PiStatus', 'temp': 47.799999, 'battery_temp': 24}
+{'event': 'PiStatus', 'temp': 48.700001, 'battery_capacity': 46}
+{'event': 'PiStatus', 'temp': 53.599998, 'charger_status': 'Discharging', 'battery_capacity': 62, 'battery_temp': 26}
+{'event': 'PlateSolve', 'page': 'preview', 'state': 'complete', 'result': {'ra_dec': [13.444577, 30.971373], 'fov': [0.711682, 1.265403], 'focal_len': 252.111633, 'angle': 308.333008, 'image_id': 852, 'star_number': 2148, 'duration_ms': 4167}}
+{'event': 'PlateSolve', 'page': 'preview', 'state': 'solving', 'star_number': 2148}
+{'event': 'PlateSolve', 'page': 'preview', 'state': 'start'}
+{'event': 'PlateSolve', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'error': 'solve failed', 'code': 251, 'state': 'fail', 'result': {'star_number': 429, 'duration_ms': 30946}}
+{'event': 'PlateSolve', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'complete', 'result': {'ra_dec': [2.048579, 89.373529], 'fov': [0.71169, 1.264095], 'focal_len': 252.372574, 'angle': 45.903, 'image_id': 1047, 'star_number': 12663, 'duration_ms': 13186}}
+{'event': 'PlateSolve', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'solving', 'star_number': 429}
+{'event': 'PlateSolve', 'page': 'preview', 'tag': 'Exposure-AutoGoto', 'ac_count': 1, 'state': 'start'}
+{'event': 'PlateSolve', 'page': 'stack', 'error': 'solve failed', 'code': 251, 'state': 'fail', 'result': {'star_number': 6802, 'duration_ms': 30935}}
+{'event': 'PlateSolve', 'page': 'stack', 'state': 'complete', 'result': {'ra_dec': [3.152345, 89.345837], 'fov': [0.711232, 1.26506], 'focal_len': 252.180054, 'angle': 45.306, 'image_id': 1049, 'star_number': 1856, 'duration_ms': 2685}}
+{'event': 'PlateSolve', 'page': 'stack', 'state': 'solving', 'star_number': 1113}
+{'event': 'PlateSolve', 'page': 'stack', 'state': 'start'}
+{'event': 'PlateSolve', 'state': 'complete', 'lapse_ms': 3169, 'ra_dec': [14.328956, 19.398779], 'route': ['View', '3PPA', 'AutoGoto']}
+{'event': 'PlateSolve', 'state': 'complete', 'lapse_ms': 3172, 'ra_dec': [14.252499, 19.071676], 'route': ['View', 'AutoGoto']}
+{'event': 'PlateSolve', 'state': 'complete', 'lapse_ms': 3184, 'ra_dec': [17.304501, 43.130531], 'route': ['View', 'Stack']}
+{'event': 'PlateSolve', 'state': 'complete', 'lapse_ms': 7171, 'ra_dec': [15.184488, 9.483007], 'route': ['View', '3PPA']}
+{'event': 'PlateSolve', 'state': 'fail', 'error': 'solve failed', 'code': 251, 'lapse_ms': 30961, 'route': ['View', 'Stack']}
+{'event': 'PlateSolve', 'state': 'fail', 'error': 'solve failed', 'code': 251, 'lapse_ms': 30964, 'route': ['View', 'AutoGoto']}
+{'event': 'PlateSolve', 'state': 'working', 'lapse_ms': 0, 'route': ['View', '3PPA', 'AutoGoto']}
+{'event': 'PlateSolve', 'state': 'working', 'lapse_ms': 0, 'route': ['View', '3PPA']}
+{'event': 'PlateSolve', 'state': 'working', 'lapse_ms': 0, 'route': ['View', 'AutoGoto']}
+{'event': 'PlateSolve', 'state': 'working', 'lapse_ms': 0, 'route': ['View', 'Stack']}
+{'event': 'SaveImage', 'state': 'complete', 'filename': 'Stacked_36_Polaris_10.0s_IRCUT_20250720-224643.fit', 'fullname': 'MyWorks/Polaris/Stacked_36_Polaris_10.0s_IRCUT_20250720-224643.fit'}
+{'event': 'SaveImage', 'state': 'complete', 'filename': 'Stacked_67_M92_10.0s_IRCUT_20250720-231221.fit', 'fullname': 'MyWorks/M92/Stacked_67_M92_10.0s_IRCUT_20250720-231221.fit'}
+{'event': 'SaveImage', 'state': 'complete', 'filename': 'Stacked_8_Arcturus_10.0s_IRCUT_20250720-223622.fit', 'fullname': 'MyWorks/Arcturus/Stacked_8_Arcturus_10.0s_IRCUT_20250720-223622.fit'}
+{'event': 'ScopeGoto', 'state': 'complete', 'lapse_ms': 1052, 'cur_ra_dec': [13.399722, 54.9], 'dist_deg': 0.002394, 'route': ['View', 'AutoGoto']}
+{'event': 'ScopeGoto', 'state': 'complete', 'lapse_ms': 7074}
+{'event': 'ScopeGoto', 'state': 'complete', 'lapse_ms': 7563, 'cur_ra_dec': [14.268889, 19.049444], 'dist_deg': 0.026786, 'route': ['View', '3PPA', 'AutoGoto']}
+{'event': 'ScopeGoto', 'state': 'complete', 'lapse_ms': 994, 'cur_ra_dec': [13.399722, 54.9], 'dist_deg': 0.002394, 'route': ['View', 'AutoGoto']}
+{'event': 'ScopeGoto', 'state': 'fail', 'error': 'mount goto failed', 'code': 501, 'lapse_ms': 596, 'cur_ra_dec': [2.264722, 0.856111], 'dist_deg': 123.233118, 'route': ['View', 'AutoGoto']}
+{'event': 'ScopeGoto', 'state': 'working', 'lapse_ms': 0, 'cur_ra_dec': [13.399722, 54.9], 'dist_deg': 0.002394, 'route': ['View', 'AutoGoto']}
+{'event': 'ScopeGoto', 'state': 'working', 'lapse_ms': 0}
+{'event': 'ScopeGoto', 'state': 'working', 'lapse_ms': 862, 'cur_ra_dec': [15.155278, 9.416667], 'dist_deg': 16.096173, 'route': ['View', '3PPA', 'AutoGoto']}
+{'event': 'ScopeHome', 'state': 'complete', 'lapse_ms': 18672, 'close': True, 'equ_mode': False}
+{'event': 'ScopeHome', 'state': 'complete', 'lapse_ms': 18672, 'close': True, 'equ_mode': True}
+{'event': 'ScopeHome', 'state': 'working', 'lapse_ms': 0, 'close': False}
+{'event': 'ScopeMoveToHorizon', 'state': 'complete', 'lapse_ms': 16826, 'close': False}
+{'event': 'ScopeMoveToHorizon', 'state': 'working', 'lapse_ms': 0, 'close': True}
+{'event': 'ScopeTrack', 'state': 'off', 'tracking': False, 'manual': False, 'error': 'below horizon', 'code': 270, 'route': []}
+{'event': 'ScopeTrack', 'state': 'off', 'tracking': False, 'manual': False, 'error': 'equipment is moving', 'code': 203, 'route': []}
+{'event': 'ScopeTrack', 'state': 'off', 'tracking': False, 'manual': False, 'error': 'fail to operate', 'code': 207, 'route': []}
+{'event': 'ScopeTrack', 'state': 'off', 'tracking': False, 'manual': False, 'error': 'mount sync failed', 'code': 502, 'route': []}
+{'event': 'ScopeTrack', 'state': 'off', 'tracking': False, 'manual': False, 'route': []}
+{'event': 'ScopeTrack', 'state': 'off', 'tracking': False, 'manual': True, 'route': []}
+{'event': 'ScopeTrack', 'state': 'on', 'tracking': True, 'manual': False, 'route': []}
+{'event': 'Stack', 'state': 'cancel', 'lapse_ms': 1267041, 'frame_errcode': 0, 'stacked_frame': 67, 'dropped_frame': 25, 'can_annotate': True, 'jpg_name': 'MyWorks/M92/Stacked_67_M92_10.0s_IRCUT_20250720-231221.jpg', 'route': ['View']}
+{'event': 'Stack', 'state': 'cancel', 'lapse_ms': 359793, 'frame_errcode': 263, 'stacked_frame': 0, 'dropped_frame': 19, 'can_annotate': False, 'route': ['View']}
+{'event': 'Stack', 'state': 'frame_complete', 'frame_type': 'light', 'stacked_frame': 0, 'dropped_frame': 1, 'total_frame': 1, 'error': 'stack error, too few stars', 'lapse_ms': 1743, 'code': 263}
+{'event': 'Stack', 'state': 'frame_complete', 'frame_type': 'light', 'stacked_frame': 62, 'dropped_frame': 25, 'total_frame': 87, 'error': 'star trails', 'lapse_ms': 1292, 'code': 530}
+{'event': 'Stack', 'state': 'frame_complete', 'frame_type': 'light', 'stacked_frame': 9, 'dropped_frame': 0, 'total_frame': 9, 'error': 'no error', 'lapse_ms': 4903, 'code': 0}
+{'event': 'Stack', 'state': 'start'}
+{'event': 'Stack', 'state': 'working', 'lapse_ms': 0, 'frame_errcode': -1, 'stacked_frame': 0, 'dropped_frame': 0, 'can_annotate': False, 'route': ['View']}
+{'event': 'Stack', 'state': 'working', 'lapse_ms': 983880, 'frame_errcode': 0, 'stacked_frame': 56, 'dropped_frame': 17, 'can_annotate': True, 'route': ['View']}
+{'event': 'Stack', 'state': 'working', 'lapse_ms': 992905, 'frame_errcode': 530, 'stacked_frame': 56, 'dropped_frame': 18, 'can_annotate': True, 'route': ['View']}
+{'event': 'Stack', 'state': 'working', 'lapse_ms': 99343, 'frame_errcode': 263, 'stacked_frame': 5, 'dropped_frame': 3, 'can_annotate': True, 'route': ['View']}
+{'event': 'View', 'state': 'cancel', 'lapse_ms': 56704, 'mode': 'star', 'cam_id': 0, 'target_ra_dec': [13.4, 54.900002], 'target_name': 'Mizar', 'lp_filter': False, 'gain': 80, 'route': []}
+{'event': 'View', 'state': 'working', 'lapse_ms': 0, 'mode': 'star', 'cam_id': 0, 'target_ra_dec': [12.0, 70.0], 'target_name': 'Servus', 'lp_filter': False, 'gain': 80, 'route': []}
+{'event': 'WheelMove', 'state': 'complete', 'position': 0}
+{'event': 'WheelMove', 'state': 'complete', 'position': 1}
+{'event': 'WheelMove', 'state': 'start'}

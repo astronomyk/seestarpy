@@ -7,8 +7,8 @@ VERBOSE_LEVEL = 1
 
 
 def send_command(params):
-    if not IS_SEESTAR_ONLINE:
-        return {"error": "Seestar is not online"}
+    # if not IS_SEESTAR_ONLINE:
+    #     return {"error": "Seestar is not online"}
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((DEFAULT_IP, DEFAULT_PORT))
@@ -53,15 +53,15 @@ def send_command(params):
 
         return response
 
-
-def is_port_open(ip=DEFAULT_IP, port=DEFAULT_PORT, timeout=2):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        try:
-            sock.connect((ip, port))
-            return True
-        except (socket.timeout, socket.error):
-            return False
-
-
-IS_SEESTAR_ONLINE = is_port_open()
+#
+# def is_port_open(ip=DEFAULT_IP, port=DEFAULT_PORT, timeout=2):
+#     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+#         sock.settimeout(timeout)
+#         try:
+#             sock.connect((ip, port))
+#             return True
+#         except (socket.timeout, socket.error):
+#             return False
+#
+#
+# IS_SEESTAR_ONLINE = is_port_open()

@@ -1,9 +1,21 @@
 import asyncio
+import threading
 import json
 import time
-
 from src.seestarpy.connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
+from .event_stream import handle_event
+
+
 HEARTBEAT_INTERVAL = 10
+_listener_running = False  # Prevent multiple starts
+
+
+def is_running_in_jupyter():
+    try:
+        from IPython import get_ipython
+        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"
+    except Exception:
+        return False
 
 
 async def heartbeat(writer):
@@ -15,24 +27,14 @@ async def heartbeat(writer):
             data = json.dumps(heartbeat_msg) + "\r\n"
             writer.write(data.encode())
             await writer.drain()
-            if VERBOSE_LEVEL >= 2: print("[heartbeat] Sent:", heartbeat_msg)
+            if VERBOSE_LEVEL >= 2:
+                print("[heartbeat] Sent:", heartbeat_msg)
 
 
 async def run():
     """
-    Watch for and print out parsed Event text
-
-    Examples
-    --------
-
-    code-block:: python
-
-        import asyncio
-        from seestarpy.event_watcher import run
-        asyncio.run(run())
-
+    Watch for and handle Seestar event messages.
     """
-
     while True:
         try:
             print(f"Connecting to {DEFAULT_IP}:{DEFAULT_PORT}...")
@@ -46,12 +48,16 @@ async def run():
                 message = line.decode().strip()
                 try:
                     data = json.loads(message)
-                    if VERBOSE_LEVEL >= 1: print("[event]", data)
+                    handle_event(data)
+                    if VERBOSE_LEVEL >= 1:
+                        print("[event]", data)
                 except json.JSONDecodeError:
-                    if VERBOSE_LEVEL >= 1: print("[non-json]", message)
+                    if VERBOSE_LEVEL >= 1:
+                        print("[non-json]", message)
 
         except (asyncio.IncompleteReadError, ConnectionResetError):
             print("Connection closed by Seestar. Will reconnect in 5 sec...")
+
         except Exception as e:
             print(f"Unexpected error: {e}")
 
@@ -64,4 +70,21 @@ async def run():
 
 
 def start_listener():
-    asyncio.run(run())
+    global _listener_running
+    if _listener_running:
+        print("[seestarpy] Listener already running.")
+        return
+
+    _listener_running = True
+
+    def launch():
+        asyncio.run(run())
+
+    try:
+        loop = asyncio.get_running_loop()
+        print("[seestarpy] Using running event loop with create_task().")
+        asyncio.create_task(run())
+    except RuntimeError:
+        print("[seestarpy] No running loop — starting background thread.")
+        t = threading.Thread(target=launch, daemon=True)
+        t.start()

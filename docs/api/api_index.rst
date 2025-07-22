@@ -6,3 +6,5 @@ Python API index
 
    connection
    raw_commands
+   data
+   status

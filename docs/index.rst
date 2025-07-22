@@ -48,6 +48,7 @@ Contents
    examples/basic_connection
    examples/basic_observing
    examples/changing_seestar_settings
+   info/errors
    api/api_index
 
 
@@ -56,4 +57,4 @@ Feedback
 Found an issue or have a feature request?
 `GitHub Issues page <https://github.com/yourusername/seestarpy/issues>`_.
 
-Enjoy (good luck) using **seestarpy**!
+Enjoy (good luck) using ``seestarpy``!
