@@ -45,7 +45,22 @@ async def run():
                 message = line.decode().strip()
                 try:
                     data = json.loads(message)
-                    handle_event(data)
+
+                    # Treat responses to heartbeat as events
+                    if "method" in data and data[
+                        "method"] == "scope_get_equ_coord":
+                        event_data = {
+                            "Event": "Heartbeat",
+                            "state": "update",
+                            "Timestamp": data.get("Timestamp"),
+                            "ra": data["result"]["ra"],
+                            "dec": data["result"]["dec"]
+                        }
+                        handle_event(event_data)
+
+                    else:
+                        handle_event(data)
+
                     if VERBOSE_LEVEL >= 1:
                         print("[event]", data)
                 except json.JSONDecodeError:
