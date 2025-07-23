@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Seestar Status</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #0f0; padding: 1em; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h2>Seestar Live Status</h2>
+  <pre id="state">Connecting...</pre>
+
+  <script>
+    const output = document.getElementById("state");
+    const socket = new WebSocket("ws://localhost:8765");
+
+    socket.onmessage = function(event) {
+      const json = JSON.parse(event.data);
+      output.textContent = JSON.stringify(json, null, 2);
+    };
+
+    socket.onopen = () => output.textContent = "Connected. Waiting for data...";
+    socket.onerror = (e) => output.textContent = "WebSocket error!";
+    socket.onclose = () => output.textContent = "Connection closed.";
+  </script>
+</body>
+</html>

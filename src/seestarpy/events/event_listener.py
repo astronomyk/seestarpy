@@ -1,26 +1,23 @@
 import asyncio
-import threading
 import json
 import time
-from src.seestarpy.connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
-from .event_stream import handle_event
+import websockets
+import threading
+from pathlib import Path
 
+from src.seestarpy.connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
+from .event_stream import handle_event, LATEST_STATE
 
 HEARTBEAT_INTERVAL = 10
 _listener_running = False  # Prevent multiple starts
+_shutdown_event = None
+_listener_thread = None
 
-
-def is_running_in_jupyter():
-    try:
-        from IPython import get_ipython
-        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"
-    except Exception:
-        return False
-
+connected_clients = set()
 
 async def heartbeat(writer):
     """Send periodic heartbeat messages to keep connection alive."""
-    while True:
+    while not _shutdown_event.is_set():
         await asyncio.sleep(HEARTBEAT_INTERVAL)
         if writer is not None:
             heartbeat_msg = {"id": int(time.time()), "method": "scope_get_equ_coord"}
@@ -30,12 +27,12 @@ async def heartbeat(writer):
             if VERBOSE_LEVEL >= 2:
                 print("[heartbeat] Sent:", heartbeat_msg)
 
-
 async def run():
     """
     Watch for and handle Seestar event messages.
     """
-    while True:
+    # This is not a graceful way to shut down the
+    while not _shutdown_event.is_set():
         try:
             print(f"Connecting to {DEFAULT_IP}:{DEFAULT_PORT}...")
             reader, writer = await asyncio.open_connection(DEFAULT_IP, DEFAULT_PORT)
@@ -43,7 +40,7 @@ async def run():
 
             hb_task = asyncio.create_task(heartbeat(writer))
 
-            while True:
+            while not _shutdown_event.is_set():
                 line = await reader.readuntil(separator=b"\r\n")
                 message = line.decode().strip()
                 try:
@@ -68,23 +65,64 @@ async def run():
 
         await asyncio.sleep(3)
 
+async def websocket_server():
+    async def handler(websocket):
+        connected_clients.add(websocket)
+        try:
+            while not _shutdown_event.is_set():
+                await asyncio.sleep(1)
+                await websocket.send(json.dumps(LATEST_STATE))
+        except:
+            pass
+        finally:
+            connected_clients.remove(websocket)
 
-def start_listener():
-    global _listener_running
+    server = await websockets.serve(handler, "0.0.0.0", 8765)
+    print("[websocket] Serving on ws://0.0.0.0:8765")
+    await server.wait_closed()
+
+def start_listener(with_websocket: bool = False):
+    global _listener_running, _listener_thread, _shutdown_event
     if _listener_running:
         print("[seestarpy] Listener already running.")
         return
 
     _listener_running = True
+    _shutdown_event = asyncio.Event()
 
-    def launch():
-        asyncio.run(run())
+    async def main():
+        tasks = [asyncio.create_task(run())]
+        if with_websocket:
+            tasks.append(asyncio.create_task(websocket_server()))
+        await asyncio.gather(*tasks)
 
-    try:
-        loop = asyncio.get_running_loop()
-        print("[seestarpy] Using running event loop with create_task().")
-        asyncio.create_task(run())
-    except RuntimeError:
-        print("[seestarpy] No running loop — starting background thread.")
-        t = threading.Thread(target=launch, daemon=True)
-        t.start()
+    def thread_entry():
+        asyncio.run(main())
+
+    print("[seestarpy] Starting background thread with asyncio loop.")
+    _listener_thread = threading.Thread(target=thread_entry, daemon=True)
+    _listener_thread.start()
+
+def stop_listener():
+    global _listener_running, _listener_thread, _shutdown_event
+    if not _listener_running:
+        return
+    print("[seestarpy] Stopping listener...")
+
+    # Dirty, dirty way to shut down the thread, but it works. Force an exception
+    _shutdown_event = None
+    _listener_running = False
+    _listener_thread = None
+
+
+def dashboard_url(which="basic"):
+    """
+    Open the basic dashboard HTML file in the default system browser.
+
+    Parameters
+    ----------
+    which : str
+        ["basic"]
+    """
+    path = Path(__file__).parent.parent / "dashboards" / f"{which}.html"
+    return f"file://{path.resolve()}"
