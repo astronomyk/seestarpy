@@ -1,5 +1,0 @@
-{
-  "PiStatus": ["battery_capacity"],
-  "ScopeGoto": ["cur_ra_dec", "dist_deg"],
-  "FocuserMove": ["position"]
-}

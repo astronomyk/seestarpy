@@ -17,6 +17,18 @@
       margin-bottom: 1em;
     }
 
+    .circles {
+      display: flex;
+      gap: 2em;
+      margin-bottom: 1em;
+    }
+
+    canvas {
+      background: #111;
+      border: 2px solid #fff;
+      border-radius: 50%;
+    }
+
     .dashboard {
       display: flex;
       flex-wrap: wrap;
@@ -39,7 +51,7 @@
       margin-top: 0;
       margin: 0;
       padding: 0;
-      font-size: 1em; /* optional: reduce font size if needed */
+      font-size: 1em;
       color: #0f0;
     }
 
@@ -54,48 +66,73 @@
     }
 
     .state.complete {
-      color: #4caf50; /* green */
+      color: #4caf50;
     }
 
     .state.working {
-      color: #ffc107; /* yellow */
+      color: #ffc107;
     }
 
     .state.fail {
-      color: #f44336; /* red */
+      color: #f44336;
     }
 
     .state.unknown {
-      color: #aaa; /* light grey */
+      color: #aaa;
     }
+
+    .status-indicator { font-size: 0.85em; color: #ccc; margin-bottom: 0.5em; }
+    .status-indicator span { font-weight: bold; margin-left: 0.25em; }
+    .status-true { color: #4caf50; }
+    .status-false { color: #f44336; }
+    .status-unknown { color: #aaa; }
 
   </style>
 </head>
 <body>
   <h2>Seestar Live Dashboard</h2>
+
+  <div class="circles">
+    <div>
+      <canvas id="altitudeCanvas" width="120" height="120"></canvas>
+      <div id="altValue" style="text-align:center; color:#aaa; font-size: 0.9em;"></div>
+    </div>
+    <div>
+      <canvas id="azimuthCanvas" width="120" height="120"></canvas>
+      <div id="azValue" style="text-align:center; color:#aaa; font-size: 0.9em;"></div>
+    </div>
+    <div id="statusPanel" style="min-width: 100px;"></div>
+  </div>
+
   <div class="dashboard" id="dashboard">Connecting...</div>
 
-  <script src="renderStatus.js"></script>
+  <script src="fancy_status_cards.js"></script>
+  <script src="fancy_headlines.js"></script>
   <script>
     const dashboard = document.getElementById("dashboard");
-    const expandedCards = new Map(); // Tracks expanded state
-
+    const expandedCards = new Map();
     const socket = new WebSocket("ws://localhost:8765");
 
+    // Draw default visuals before any data arrives
+    drawAltitude(document.getElementById('altitudeCanvas').getContext('2d'));
+    drawAzimuth(document.getElementById('azimuthCanvas').getContext('2d'));
+    document.getElementById('altValue').textContent = 'Alt: —';
+    document.getElementById('azValue').textContent = 'Az: —';
+
     socket.onmessage = function(event) {
-    try {
-      const json = JSON.parse(event.data);
-      renderStatus(json, dashboard, expandedCards);
-    } catch (e) {
-      dashboard.innerHTML = '<div class="card error">Invalid JSON received</div>';
-    }
+      try {
+        const json = JSON.parse(event.data);
+        fancy_status_cards(json, dashboard, expandedCards);
+        updateAltAzFromJson(json);
+      } catch (e) {
+        dashboard.innerHTML = '<div class="card error">Invalid JSON received</div>';
+      }
     };
 
     socket.onopen = () => dashboard.innerHTML = '<div class="card">Connected. Waiting for data...</div>';
     socket.onerror = () => dashboard.innerHTML = '<div class="card error">WebSocket error!</div>';
     socket.onclose = () => dashboard.innerHTML = '<div class="card error">Connection closed.</div>';
   </script>
-
 
 </body>
 </html>

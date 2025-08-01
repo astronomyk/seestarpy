@@ -8,7 +8,7 @@ from pathlib import Path
 from src.seestarpy.connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
 from .event_stream import handle_event, LATEST_STATE
 
-HEARTBEAT_INTERVAL = 10
+HEARTBEAT_INTERVAL = 3
 _listener_running = False  # Prevent multiple starts
 _shutdown_event = None
 _listener_thread = None
@@ -17,21 +17,33 @@ connected_clients = set()
 
 async def heartbeat(writer):
     """Send periodic heartbeat messages to keep connection alive."""
+    hb_i = 0
     while not _shutdown_event.is_set():
-        await asyncio.sleep(HEARTBEAT_INTERVAL)
+        if hb_i % 10 == 0:        # Every 20th heartbeat
+            method_name = "get_device_state"
+        elif hb_i % 10 == 4:       # Every 30th heartbeat, offset by 15 heartbeats
+            method_name = "iscope_get_app_state"
+        elif hb_i % 3 == 1:         # Every 3rd heartbeat
+            method_name = "scope_get_equ_coord"
+        else:
+            method_name = "scope_get_horiz_coord"
+        hb_i += 1
+
         if writer is not None:
-            heartbeat_msg = {"id": int(time.time()), "method": "scope_get_equ_coord"}
+            heartbeat_msg = {"id": int(time.time()), "method": method_name}
             data = json.dumps(heartbeat_msg) + "\r\n"
             writer.write(data.encode())
             await writer.drain()
             if VERBOSE_LEVEL >= 2:
                 print("[heartbeat] Sent:", heartbeat_msg)
 
+        await asyncio.sleep(HEARTBEAT_INTERVAL)
+
 async def run():
     """
     Watch for and handle Seestar event messages.
     """
-    # This is not a graceful way to shut down the
+    # This is not a graceful way to shut down the Thread
     while not _shutdown_event.is_set():
         try:
             print(f"Connecting to {DEFAULT_IP}:{DEFAULT_PORT}...")
@@ -47,19 +59,12 @@ async def run():
                     data = json.loads(message)
 
                     # Treat responses to heartbeat as events
-                    if "method" in data and data[
-                        "method"] == "scope_get_equ_coord":
-                        event_data = {
-                            "Event": "Heartbeat",
-                            "state": "update",
-                            "Timestamp": data.get("Timestamp"),
-                            "ra": data["result"]["ra"],
-                            "dec": data["result"]["dec"]
-                        }
-                        handle_event(event_data)
+                    if "result" in data:
+                        method_name = data["method"]
+                        # data = data["result"]
+                        data["Event"] = method_name
 
-                    else:
-                        handle_event(data)
+                    handle_event(data)
 
                     if VERBOSE_LEVEL >= 1:
                         print("[event]", data)
@@ -96,7 +101,7 @@ async def websocket_server():
     print("[websocket] Serving on ws://0.0.0.0:8765")
     await server.wait_closed()
 
-def start_listener(with_websocket: bool = False):
+def start_listener(with_websocket: bool = True):
     global _listener_running, _listener_thread, _shutdown_event
     if _listener_running:
         print("[seestarpy] Listener already running.")
@@ -109,6 +114,9 @@ def start_listener(with_websocket: bool = False):
         tasks = [asyncio.create_task(run())]
         if with_websocket:
             tasks.append(asyncio.create_task(websocket_server()))
+            paths = [str(p.resolve()) for p in dashboard_url()]
+            br = "\n- "
+            print(f"[seestarpy] Dashboards are available:\n- {br.join(paths)}")
         await asyncio.gather(*tasks)
 
     def thread_entry():
@@ -117,6 +125,7 @@ def start_listener(with_websocket: bool = False):
     print("[seestarpy] Starting background thread with asyncio loop.")
     _listener_thread = threading.Thread(target=thread_entry, daemon=True)
     _listener_thread.start()
+
 
 def stop_listener():
     global _listener_running, _listener_thread, _shutdown_event
@@ -130,14 +139,15 @@ def stop_listener():
     _listener_thread = None
 
 
-def dashboard_url(which="basic"):
+def dashboard_url():
     """
     Open the basic dashboard HTML file in the default system browser.
 
     Parameters
     ----------
     which : str
-        ["basic"]
+        ["basic", "fancy"]
     """
-    path = Path(__file__).parent.parent / "dashboards" / f"{which}.html"
-    return f"file://{path.resolve()}"
+    paths = [Path(__file__).parent.parent / "dashboards" / f"{which}.html"
+             for which in ["basic", "fancy"]]
+    return paths

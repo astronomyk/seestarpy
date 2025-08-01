@@ -1,4 +1,4 @@
-function renderStatus(data, dashboard, expandedCards) {
+function fancy_status_cards(data, dashboard, expandedCards) {
   dashboard.innerHTML = ''; // Clear previous cards
 
   const entries = Object.entries(data);
