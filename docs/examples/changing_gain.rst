@@ -3,7 +3,7 @@ Some notes on setting the Seestar gain values
 
 High vs Low Conversion Gain modes (HCG vs LCG)
 
-.. code-block::python
+.. code-block:: python
 
     from seestarpy import raw
     raw.set_control_value(gain=80):
