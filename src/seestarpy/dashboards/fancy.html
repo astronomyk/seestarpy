@@ -111,7 +111,9 @@
   <script>
     const dashboard = document.getElementById("dashboard");
     const expandedCards = new Map();
-    const socket = new WebSocket("ws://localhost:8765");
+    // const socket = new WebSocket("ws://localhost:8765");
+    const socket = new WebSocket("ws://100.73.152.103:8765");
+
 
     // Draw default visuals before any data arrives
     drawAltitude(document.getElementById('altitudeCanvas').getContext('2d'));

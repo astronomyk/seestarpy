@@ -49,7 +49,7 @@ def get_albums():
 
     Examples
     --------
-    ::
+
         >>> from seestarpy import raw
         >>> raw.get_albums()
         {'jsonrpc': '2.0',
@@ -531,7 +531,7 @@ def get_setting():
 
     Examples
     --------
-    ::
+
         >>> from seestarpy import raw
         >>> raw.get_setting()
         {'jsonrpc': '2.0',
@@ -587,7 +587,7 @@ def get_user_location():
 
     Examples
     --------
-    ::
+
         >>> from seestarpy import raw
         >>> raw.get_user_location()
         {'jsonrpc': '2.0',
@@ -611,7 +611,7 @@ def get_view_state():
 
     Examples
     --------
-    ::
+
         >>> from seestarpy import raw
         >>> raw.get_view_state()
         {'jsonrpc': '2.0',
@@ -653,7 +653,8 @@ def iscope_get_app_state():
 
 
 def iscope_start_view(ra=None, dec=None,
-                      target_name="Unknown", lp_filter=False, mode="star"):
+                      target_name="Unknown", lp_filter=False, mode="star",
+                      mosaic=None):
     """
     Start viewing a target, but not stacking the incoming frames.
 
@@ -676,6 +677,12 @@ def iscope_start_view(ra=None, dec=None,
         Default: False, use the light pollution filter
     mode : str
         Default: "star", ["star", "sun", ]
+    mosaic : dict, optional
+        Default: None. If you want to set Seestar running on a mosaic, you need
+        to provide a dict with the following keys:
+        `scale`, `angle`, `star_map_angle`, `star_map_ratio`
+        See below for an example
+
 
     Returns
     -------
@@ -683,12 +690,22 @@ def iscope_start_view(ra=None, dec=None,
 
     Examples
     --------
-    ::
+
         >>> from seestarpy import raw
         # Put the camera into "ContinuousExposure" mode. No frames are saved.
         >>> raw.iscope_start_view()
         # Slew to a target, trigger a plate-solve, then turn the camera on.
         >>> raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar")
+
+    An example for setting up mosics, contributed by NurseJackass of the
+    Seestar Collective
+
+        # Set up a mosaicing run and start observing
+        >>> mosaic={'scale': 3.5,           # This is how many "screen" big should the mosaic be
+                    'angle': -90,           # Rotation angle of the mosaic, like how you rotate in the app
+                    'star_map_angle': 271,  # no idea. it said 361 in get_settings. I've been making it "361 + angle", which seems to work
+                    'star_map_ratio':1.0}   # not sure. this is 3.5 after the goto, per get_settings.
+        >>> raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar", mosaic=mosaic)
 
     """
     params = {"method": "iscope_start_view",
@@ -698,6 +715,9 @@ def iscope_start_view(ra=None, dec=None,
                          "lp_filter": lp_filter
                          }
               }
+    if mosaic is not None and isinstance(mosaic, dict):
+        params["params"]["mosaic"] = mosaic
+
     return send_command(params)
 
 
@@ -724,7 +744,7 @@ def iscope_stop_view(stage=None):
 
     Examples
     --------
-    ::
+
         >>> from seestarpy import raw
         >>> raw.iscope_stop_view("ContinuousExposure")
         {'Event': 'ContinuousExposure',
