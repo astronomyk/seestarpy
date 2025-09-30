@@ -47,7 +47,9 @@ Contents
 
    examples/basic_connection
    examples/basic_observing
+   examples/basic_status_checks
    examples/changing_seestar_settings
+   examples/changing_gain
    info/errors
    api/api_index
 

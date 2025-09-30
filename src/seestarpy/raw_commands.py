@@ -897,22 +897,55 @@ def pi_set_time(time_zone=None):
 
 
 def pi_reboot():
+    """
+    Reboot the Seestar
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.pi_reboot()
+
+    """
     params = {'method': 'pi_reboot'}
     return send_command(params)
 
 
 def pi_shutdown(force=False):
+    """
+    Shutdown the Seestar. It will NOT REBOOT after shutdown!
+
+    Parameters
+    ----------
+    force: bool
+        Default: False. To actually force a shutdown, you need to set this to
+        ``True``. This is to make sure you actually want to shut down the
+        Seestar, not just reboot it.
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.pi_shutdown()
+        # The previous command will do nothing. To actually shut it down:
+        >>> raw.pi_shutdown(force=True)
+
+    """
+
     params = {'method': 'pi_shutdown'}
     return send_command(params) if force else "Are you sure you want to shutdown? Then use force=True"
 
 
 def pi_is_verified():
+    """
+    No idea why this is here...
+    """
     params = {'method': 'pi_is_verified'}
     return send_command(params)
 
 
 def pi_output_set2(is_dew_on=False, dew_heater_power=0):
-    """
+"""
     Turn on dew heater
 
     Parameters
@@ -976,6 +1009,36 @@ def set_control_value(gain=80):
     Returns
     -------
     dict
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        # Trigger the IMX462 chip to use Low-Conversion-Gain mode (<80)
+        >>> raw.set_control_value(60)
+
+    Notes
+    -----
+    High vs Low Conversion Gain modes (HCG vs LCG)
+
+    According to the docs on the IMX462 chip, it has two internal capacitors
+    which are used to read the pixel values. The larger capacitor used in the
+    LCG mode can map the full pixel well depth of 32k electrons, albeit still
+    only with the 12-bit ADC.
+    The smaller, more sensitive capacitor used for the HCG mode, can only map
+    to about a third of the full well depth. However this small capacitor
+    produces less noise and is therefore much better suited for low-flux objects
+    such as nebula and galaxies.
+
+    Use cases:
+    - If you prefer to map the full dynamic range of as many stars in the field as
+    possible, without the bright ones "burning out" (i.e. saturating) then it
+    makes sense to use the LCG mode, with gains set to below 80
+
+    - If you are looking for the best possible contrast within extended sources
+    like nebulae and galaxy disks, then the HCG mode is better suited. Set the
+    gain value to 80+
+
 
     """
     params = {"method": "set_control_value", "params": ["gain", gain]}
@@ -1196,6 +1259,12 @@ def set_user_location(lat, lon):
     Returns
     -------
     dict
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.set_user_location(48.2, 16.4)   # For Vienna, Austria
 
     """
     params = {'method': 'set_user_location',

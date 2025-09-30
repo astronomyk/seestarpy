@@ -48,8 +48,8 @@ minimal set of commands to do this:
 
 .. code-block:: python
 
-    raw.set_time()
-    raw.set_user_location(14.8, 47.9)
+    raw.pi_set_time()
+    raw.set_user_location(lat=47.9, long=14.8)
 
     raw.scope_move_to_horizon()
     raw.scope_park(True)        # set_eq_mode=True

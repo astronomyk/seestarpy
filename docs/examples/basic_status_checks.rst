@@ -14,7 +14,7 @@ Checking the Status of the Seestar
 
     raw.scope_get_track_state()
     raw.get_focuser_position()
-    raw.set_wheel_position()
+    raw.get_wheel_position()
 
     raw.scope_get_horiz_coord()
     raw.scope_get_equ_coord()
