@@ -945,7 +945,7 @@ def pi_is_verified():
 
 
 def pi_output_set2(is_dew_on=False, dew_heater_power=0):
-"""
+    """
     Turn on dew heater
 
     Parameters
