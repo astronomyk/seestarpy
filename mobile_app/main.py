@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add parent src directory to path for local seestarpy
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout

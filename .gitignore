@@ -4,3 +4,5 @@
 *.pyc
 _build/
 dist/
+mobile_env/
+.buildozer/
