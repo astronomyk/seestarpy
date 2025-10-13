@@ -3,6 +3,8 @@ A light-weight python module to drive the Seestar smart telescopes
 
 This package is on ReadTheDocs. See [seestarpy.readthedocs.io](https://seestarpy.readthedocs.io/en/latest/)
 
+If you've found the package useful - how about [buying me a coffee](https://buymeacoffee.com/kdleschinsf), to keep the creative juices flowing ;)
+
 
 Quickstart
 ----------
