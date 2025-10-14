@@ -1,8 +1,8 @@
 from datetime import datetime as dt
 
 from .connection import send_command
-from .raw_commands import (get_device_state, iscope_get_app_state,
-                           scope_get_horiz_coord, scope_get_ra_dec, )
+from .raw import (get_device_state, iscope_get_app_state,
+                  scope_get_horiz_coord, scope_get_ra_dec, )
 
 
 def status_bar(return_type="str"):

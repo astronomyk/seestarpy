@@ -1,9 +1,3 @@
-import sys
-import os
-
-# Add parent src directory to path for local seestarpy
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -132,8 +126,22 @@ class SeestarControllerApp(App):
 
         main_layout.add_widget(selector_layout)
 
-        # Scrollable area for parameters
-        scroll = ScrollView(size_hint=(1, 0.4))
+        # Middle section with parameters and response
+        middle_section = BoxLayout(
+            orientation='vertical',
+            spacing=10,
+            size_hint_y=1
+        )
+
+        # Parameters container (dynamic content)
+        self.param_container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            spacing=5
+        )
+        self.param_container.bind(
+            minimum_height=self.param_container.setter('height'))
+
         self.param_layout = GridLayout(
             cols=1,
             spacing=5,
@@ -141,29 +149,15 @@ class SeestarControllerApp(App):
         )
         self.param_layout.bind(
             minimum_height=self.param_layout.setter('height'))
-        scroll.add_widget(self.param_layout)
-        main_layout.add_widget(scroll)
+        self.param_container.add_widget(self.param_layout)
 
-        # Docstring display
-        docstring_label = Label(
-            text='Function Documentation:',
-            size_hint_y=None,
-            height=30,
-            font_size='14sp',
-            bold=True
-        )
-        main_layout.add_widget(docstring_label)
+        # Wrap in ScrollView for when there are many parameters
+        param_scroll = ScrollView(size_hint=(1, None), size=(0, 0))
+        param_scroll.add_widget(self.param_container)
+        self.param_scroll = param_scroll
+        middle_section.add_widget(param_scroll)
 
-        self.docstring_text = TextInput(
-            text='',
-            readonly=True,
-            size_hint_y=None,
-            height=100,
-            multiline=True
-        )
-        main_layout.add_widget(self.docstring_text)
-
-        # Response display
+        # Response display (floats below parameters)
         response_label = Label(
             text='Response:',
             size_hint_y=None,
@@ -171,7 +165,7 @@ class SeestarControllerApp(App):
             font_size='14sp',
             bold=True
         )
-        main_layout.add_widget(response_label)
+        middle_section.add_widget(response_label)
 
         self.response_text = TextInput(
             text='',
@@ -180,7 +174,28 @@ class SeestarControllerApp(App):
             height=150,
             multiline=True
         )
-        main_layout.add_widget(self.response_text)
+        middle_section.add_widget(self.response_text)
+
+        # Docstring display at the bottom
+        docstring_label = Label(
+            text='Function Documentation:',
+            size_hint_y=None,
+            height=30,
+            font_size='14sp',
+            bold=True
+        )
+        middle_section.add_widget(docstring_label)
+
+        self.docstring_text = TextInput(
+            text='',
+            readonly=True,
+            size_hint_y=None,
+            height=100,
+            multiline=True
+        )
+        middle_section.add_widget(self.docstring_text)
+
+        main_layout.add_widget(middle_section)
 
         return main_layout
 
@@ -270,12 +285,12 @@ class SeestarControllerApp(App):
         error_msg = ''
 
         # Try common ports
-        ports_to_try = [4700, 80]
+        ports_to_try = [4700, 80, 8080]
 
         for port in ports_to_try:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1)  # 2 second timeout
+                sock.settimeout(2)  # 2 second timeout
                 result = sock.connect_ex((ip_address, port))
                 sock.close()
 
@@ -323,11 +338,16 @@ class SeestarControllerApp(App):
         # Get function signature
         sig = inspect.signature(func)
 
+        # Count parameters to size the scroll view
+        param_count = 0
+
         # Create input fields for each parameter
         for param_name, param in sig.parameters.items():
             # Skip 'self' parameter
             if param_name == 'self':
                 continue
+
+            param_count += 1
 
             # Create a row for this parameter
             param_row = BoxLayout(
@@ -363,6 +383,17 @@ class SeestarControllerApp(App):
             param_row.add_widget(param_input)
 
             self.param_layout.add_widget(param_row)
+
+        # Adjust scroll view height based on number of parameters
+        if param_count > 0:
+            # Calculate height: each param is 40px + 5px spacing
+            scroll_height = min(param_count * 45, 300)  # Max 300px
+            self.param_scroll.size_hint_y = None
+            self.param_scroll.height = scroll_height
+        else:
+            # No parameters, hide scroll view
+            self.param_scroll.size_hint_y = None
+            self.param_scroll.height = 0
 
         # Enable submit button
         self.submit_btn.disabled = False
