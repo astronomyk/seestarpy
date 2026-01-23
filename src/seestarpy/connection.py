@@ -1,8 +1,9 @@
 import json
 import socket
+import copy
 
 DEFAULT_PORT = 4700
-DEFAULT_IP = "192.168.1.243"
+DEFAULT_IP = "192.168.1.83"
 VERBOSE_LEVEL = 1
 
 
@@ -14,7 +15,7 @@ def send_command(params):
     s.connect((DEFAULT_IP, DEFAULT_PORT))
 
     # params = {"method":"scope_park","params":{"equ_mode":self.is_EQ_mode}}
-    cmd = {"id": 1}
+    cmd = {"id": 1, "verify": True}
     cmd.update(params)
 
     message = json.dumps(cmd) + "\r\n"
