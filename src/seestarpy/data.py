@@ -54,7 +54,7 @@ def download_contents(folder=None, local_base=None, file_types=None, ip_override
     ip = DEFAULT_IP if ip_override is None else ip_override
 
     local_base = local_base or os.path.expanduser('~/seestar_downloads')
-    file_types = file_types or [".fit"]
+    file_types = file_types or [".fit", ".jpg"]
 
     conn = SMBConnection('', '', 'windows_pc', 'seestar', use_ntlm_v2=True)
     connected = conn.connect(ip, 139)

@@ -19,9 +19,3 @@ def goto_target(target_name, ra, dec, use_lp_filter=False):
     return send_command(params)
 
 
-def set_exposure(exptime, which="stack_l"):
-    """which : [stack_l, continuous]"""
-    params = {"method": "set_setting", "params": {"exp_ms": {which: exptime}}}
-    return send_command(params)
-
-
