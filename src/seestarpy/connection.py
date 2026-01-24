@@ -53,16 +53,3 @@ def send_command(params):
         print("Raw response:\n", response)
 
         return response
-
-#
-# def is_port_open(ip=DEFAULT_IP, port=DEFAULT_PORT, timeout=2):
-#     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-#         sock.settimeout(timeout)
-#         try:
-#             sock.connect((ip, port))
-#             return True
-#         except (socket.timeout, socket.error):
-#             return False
-#
-#
-# IS_SEESTAR_ONLINE = is_port_open()
