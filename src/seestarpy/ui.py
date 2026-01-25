@@ -121,6 +121,4 @@ def start_stack(restart=True):
 
 def set_exposure(exptime, which="stack_l"):
     """which : [stack_l, continuous]"""
-    raw.set_setting({"exp_ms": {which: exptime}})
-    params = {"method": "set_setting", "params": {}}
-    return send_command(params)
+    return raw.set_setting({"exp_ms": {which: exptime}})

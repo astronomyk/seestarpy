@@ -44,3 +44,6 @@ docs = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seestarpy"]
+
+[project.scripts]
+seestar = "seestarpy.cli:main"
