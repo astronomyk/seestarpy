@@ -4,8 +4,7 @@ from tzlocal import get_localzone_name  # pip install tzlocal
 from .connection import send_command
 
 """
-To imeplement:
-
+To implement:
 """
 
 # def begin_streaming():

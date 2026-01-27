@@ -5,7 +5,7 @@ import websockets
 import threading
 from pathlib import Path
 
-from src.seestarpy.connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
+from ..connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
 from .event_stream import handle_event, LATEST_STATE
 
 HEARTBEAT_INTERVAL = 3
@@ -14,6 +14,7 @@ _shutdown_event = None
 _listener_thread = None
 
 connected_clients = set()
+
 
 async def heartbeat(writer):
     """Send periodic heartbeat messages to keep connection alive."""
@@ -38,6 +39,7 @@ async def heartbeat(writer):
                 print("[heartbeat] Sent:", heartbeat_msg)
 
         await asyncio.sleep(HEARTBEAT_INTERVAL)
+
 
 async def run():
     """
@@ -85,6 +87,7 @@ async def run():
 
         await asyncio.sleep(3)
 
+
 async def websocket_server():
     async def handler(websocket):
         connected_clients.add(websocket)
@@ -100,6 +103,7 @@ async def websocket_server():
     server = await websockets.serve(handler, "0.0.0.0", 8765)
     print("[websocket] Serving on ws://0.0.0.0:8765")
     await server.wait_closed()
+
 
 def start_listener(with_websocket: bool = True):
     global _listener_running, _listener_thread, _shutdown_event

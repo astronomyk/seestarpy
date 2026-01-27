@@ -1,6 +1,5 @@
-from . import connection as conn
 from . import raw
-from .status import get_exposure, get_filter
+from .status import get_filter
 
 
 def copy_doc(from_func):
@@ -105,8 +104,8 @@ def focuser(pos: int | None = None):
 
 
 @copy_doc(raw.iscope_start_view)
-def start_view(**kwargs):
-    return raw.iscope_start_view(**kwargs)
+def goto_target(target_name, ra, dec, lp_filter=False):
+    return raw.iscope_start_view(ra, dec, target_name, lp_filter)
 
 
 @copy_doc(raw.iscope_stop_view)
@@ -119,6 +118,5 @@ def start_stack(restart=True):
     return raw.iscope_start_stack(restart)
 
 
-def set_exposure(exptime, which="stack_l"):
-    """which : [stack_l, continuous]"""
-    return raw.set_setting({"exp_ms": {which: exptime}})
+def set_eq_mode(equ_mode=True):
+    return raw.scope_park(equ_mode)

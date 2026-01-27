@@ -1,8 +1,7 @@
 from datetime import datetime as dt
 
+from . import raw
 from .connection import send_command
-from .raw import (get_device_state, iscope_get_app_state,
-                  scope_get_horiz_coord, scope_get_ra_dec, )
 
 
 def status_bar(return_type="str"):
@@ -38,12 +37,12 @@ def status_bar(return_type="str"):
 
     """
 
-    dev = get_device_state(["balance_sensor", "mount", "pi_status",
+    dev = raw.get_device_state(["balance_sensor", "mount", "pi_status",
                             "storage"]).get("result", {})
-    app = iscope_get_app_state().get("result", {})
+    app = raw.iscope_get_app_state().get("result", {})
     view = app.get("View", {})
-    azalt = scope_get_horiz_coord().get("result", ["---", "---"])
-    radec = scope_get_ra_dec().get("result", ["---", "---"])
+    azalt = raw.scope_get_horiz_coord().get("result", ["---", "---"])
+    radec = raw.scope_get_ra_dec().get("result", ["---", "---"])
 
     t11 = f'{view.get("mode", "---"):^14}'
     t12 = f'{view.get("state", "---"):^14}'
@@ -95,29 +94,24 @@ def status_bar(return_type="str"):
 
 
 def get_mount_state():
-    params = {"method": "get_device_state", "params": {"keys":["mount"]}}
-    payload = send_command(params)
-    return payload["result"]["mount"]
+    return raw.get_device_state(keys=["mount"]).get("result", {}).get("mount", {})
 
 
 def is_eq_mode():
-    return get_mount_state()["equ_mode"]
+    return get_mount_state().get("equ_mode")
 
 
 def is_tracking():
-    return get_mount_state()["tracking"]
+    return get_mount_state().get("tracking")
 
 
 def is_parked():
-    return get_mount_state()["close"]
+    return get_mount_state().get("close")
 
 
 def get_coords():
-    # params = {'method': 'scope_get_equ_coord'}
-    params = {'method': 'scope_get_ra_dec'}
-    eq_dict = send_command(params)
-    params = {'method': 'scope_get_horiz_coord'}
-    altaz_dict = send_command(params)
+    eq_dict = raw.scope_get_ra_dec()
+    altaz_dict = raw.scope_get_horiz_coord()
 
     if (isinstance(eq_dict.get("result"), list) and
             isinstance(altaz_dict.get("result"), list)):
@@ -137,6 +131,7 @@ def get_exposure(which="stack_l"):
 
 
 def get_filter():
+
     params = {"method": "get_wheel_position"}
     return send_command(params)
 

@@ -1,16 +1,46 @@
 import json
 import socket
-import copy
 
 DEFAULT_PORT = 4700
-DEFAULT_IP = "192.168.1.83"
+DEFAULT_IP = "10.0.0.1"
 VERBOSE_LEVEL = 1
 
 
-def send_command(params):
-    # if not IS_SEESTAR_ONLINE:
-    #     return {"error": "Seestar is not online"}
+def find_seestar():
+    """Find Seestar using mDNS hostname"""
+    try:
+        ip = socket.gethostbyname('seestar.local')
+        print(f"Seestar found at: {ip}")
+        return ip
+    except socket.gaierror:
+        print("Seestar not found on network")
+        return None
 
+
+seestar_ip = find_seestar()
+DEFAULT_IP = seestar_ip if seestar_ip else "10.0.0.1"
+
+
+def send_command(params):
+    """
+    Send a generic JSON command to the Seestar
+
+    Parameters
+    ----------
+    params : dict
+        Expected format: {"method": <method-name>, "params": <params-dict>}
+
+    Returns
+    -------
+    response : dict | str
+        {'jsonrpc': '2.0',
+        'Timestamp': float,
+        'method': str,
+        'result': dict,
+        'code': 0,
+        'id': 1}
+
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((DEFAULT_IP, DEFAULT_PORT))
 

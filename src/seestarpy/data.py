@@ -1,176 +1,124 @@
+# seestar_smb_utils.py
+# Utilities for listing, deleting, and downloading data from a Seestar S50
+# Listing/deleting uses pysmb over direct SMB (port 445)
+# Downloading uses mounted SMB paths on Unix; Windows uses native SMB paths
+
 import os
+from typing import Dict
+
 from smb.SMBConnection import SMBConnection
+from .connection import DEFAULT_IP
 
-from .connection import DEFAULT_IP, VERBOSE_LEVEL
+SHARE_NAME = "EMMC Images"
+ROOT_DIR = "MyWorks"
 
 
-def list_contents(folder=None, ip_override=None):
-    ip = DEFAULT_IP if ip_override is None else ip_override
+def _connect_smb(ip: str = DEFAULT_IP) -> SMBConnection:
+    """Create and return an SMBConnection using direct TCP (445)."""
 
-    conn = SMBConnection('', '', 'windows_pc', 'seestar', use_ntlm_v2=True)
-    connected = conn.connect(ip, 139)
+    conn = SMBConnection(
+        username='',
+        password='',
+        my_name='raspi',
+        remote_name='seestar',
+        use_ntlm_v2=False,
+        is_direct_tcp=True
+    )
+    connected = conn.connect(ip, 445)
+
     if not connected:
-        print(f"❌ Could not connect to Seestar at {ip}")
-        return {}
+        raise ConnectionError(f"Could not connect to Seestar at {ip} via SMB")
 
+    return conn
+
+
+def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
+    """List all folders under MyWorks and return file counts per folder."""
+    conn = _connect_smb(ip)
     summary = {}
 
-    entries = conn.listPath('EMMC Images', 'MyWorks')
-
-    if not folder:
-        print("📂 Folders in MyWorks:")
+    try:
+        entries = conn.listPath(SHARE_NAME, ROOT_DIR)
         for entry in entries:
-            if entry.isDirectory and entry.filename not in ['.', '..']:
-                folder_name = entry.filename
-                # Count files inside this folder
+            if entry.isDirectory and entry.filename not in {".", ".."}:
+                folder = entry.filename
+                files = conn.listPath(SHARE_NAME, f"{ROOT_DIR}/{folder}")
                 count = sum(
-                    1 for f in
-                    conn.listPath('EMMC Images', f"MyWorks/{folder_name}")
-                    if not f.isDirectory and f.filename not in ['.', '..']
+                    1 for f in files if not f.isDirectory and f.filename not in {".", ".."}
                 )
-                summary[folder_name] = count
-                if VERBOSE_LEVEL >= 1: print(f" - {folder_name} ({count} files)")
-    else:
-        # Look for folder match
-        found = False
-        for entry in entries:
-            if entry.isDirectory and entry.filename == folder:
-                found = True
-                print(f"📁 Files in MyWorks/{folder}:")
-                sub_entries = conn.listPath('EMMC Images', f"MyWorks/{folder}")
-                for sub in sub_entries:
-                    if sub.filename not in ['.', '..'] and not sub.isDirectory:
-                        summary[sub.filename] = sub.file_size
-                        if VERBOSE_LEVEL >= 1: print(f" - {sub.filename} ({sub.file_size} bytes)")
-                break
-        if not found:
-            if VERBOSE_LEVEL >= 1: print(f"🚫 Folder '{folder}' not found in MyWorks.")
+                summary[folder] = count
+    finally:
+        conn.close()
 
-    conn.close()
     return summary
 
 
-def download_contents(folder=None, local_base=None, file_types=None, ip_override=None):
-    ip = DEFAULT_IP if ip_override is None else ip_override
+def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
+    """List files inside a specific folder under MyWorks."""
+    conn = _connect_smb(ip)
+    contents = {}
 
-    local_base = local_base or os.path.expanduser('~/seestar_downloads')
-    file_types = file_types or [".fit", ".jpg"]
-
-    conn = SMBConnection('', '', 'windows_pc', 'seestar', use_ntlm_v2=True)
-    connected = conn.connect(ip, 139)
-    if not connected:
-        print(f"❌ Could not connect to Seestar at {ip}")
-        return
-
-    entries = conn.listPath('EMMC Images', 'MyWorks')
-
-    if not folder:
-        # Copy all folders under MyWorks
-        for entry in entries:
-            if entry.isDirectory and entry.filename not in ['.', '..']:
-                copy_folder_contents(conn, entry.filename, local_base, file_types)
-    else:
-        # Look for that specific folder on Seestar
-        found = False
-        for entry in entries:
-            if entry.isDirectory and entry.filename == folder:
-                found = True
-                copy_folder_contents(conn, entry.filename, local_base, file_types)
-                break
-        if not found:
-            print(f"🚫 Folder '{folder}' not found on Seestar.")
-
-    conn.close()
-
-
-def copy_folder_contents(conn, remote_folder, local_base, file_types):
-    remote_path = f"MyWorks/{remote_folder}"
-    local_path = os.path.join(local_base, remote_folder)
-    os.makedirs(local_path, exist_ok=True)
-
-    print(f"🔄 Syncing folder: {remote_folder} with file types {file_types}")
-
-    local_files = set(os.listdir(local_path))
-
-    remote_files = conn.listPath('EMMC Images', remote_path)
-    for file in remote_files:
-        if file.isDirectory or file.filename in ['.', '..']:
-            continue
-
-        # Check extension filter
-        if not should_download(file.filename, file_types):
-            continue
-
-        if file.filename not in local_files:
-            local_file_path = os.path.join(local_path, file.filename)
-            with open(local_file_path, 'wb') as f:
-                conn.retrieveFile('EMMC Images', f"{remote_path}/{file.filename}", f)
-            print(f"✅ Downloaded: {remote_folder}/{file.filename}")
-        else:
-            print(f"✔️ Skipped (already exists): {remote_folder}/{file.filename}")
-
-def should_download(filename, file_types):
-    if ".*" in file_types:
-        return True
-    for ext in file_types:
-        if filename.lower().endswith(ext.lower()):
-            return True
-    return False
-
-
-def delete_contents(folder=None, ip_override=None):
-    ip = DEFAULT_IP if ip_override is None else ip_override
-    if not folder:
-        print("🚫 Please specify a folder name to delete.")
-        return
-
-    conn = SMBConnection('', '', 'windows_pc', 'seestar', use_ntlm_v2=True)
-    connected = conn.connect(ip, 139)
-    if not connected:
-        print(f"❌ Could not connect to Seestar at {ip}")
-        return
-
-    remote_path = f"MyWorks/{folder}"
-
-    # Check if folder exists
     try:
-        conn.listPath('EMMC Images', remote_path)
-    except Exception as e:
-        print(f"🚫 Folder '{folder}' does not exist on Seestar.")
+        entries = conn.listPath(SHARE_NAME, f"{ROOT_DIR}/{folder}")
+        for entry in entries:
+            if not entry.isDirectory and entry.filename not in {".", ".."}:
+                contents[entry.filename] = entry.file_size
+    finally:
         conn.close()
-        return
 
-    # Delete files inside the folder
+    return contents
+
+
+def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
+    """Delete a folder and all its contents using SMB."""
+    conn = _connect_smb(ip)
+
     try:
-        files = conn.listPath('EMMC Images', remote_path)
-        for file in files:
-            if file.filename in ['.', '..']:
+        path = f"{ROOT_DIR}/{folder}"
+        entries = conn.listPath(SHARE_NAME, path)
+
+        for entry in entries:
+            if entry.filename in {".", ".."}:
                 continue
-            if file.isDirectory:
-                print(
-                    f"⚠️ Nested directory '{file.filename}' detected, skipping (simple delete only handles single level).")
+
+            full_path = f"{path}/{entry.filename}"
+            if entry.isDirectory:
+                # recursive delete
+                delete_folder(f"{folder}/{entry.filename}", ip)
             else:
-                file_path = f"{remote_path}/{file.filename}"
-                conn.deleteFiles('EMMC Images', file_path)
-                print(f"🗑️ Deleted file: {file.filename}")
+                conn.deleteFiles(SHARE_NAME, full_path)
 
-        # Attempt to remove the empty folder
-        conn.deleteDirectory('EMMC Images', remote_path)
-        print(f"✅ Deleted folder '{folder}' from Seestar.")
-
-    except Exception as e:
-        print(f"❌ Error while deleting folder: {e}")
-
-    conn.close()
+        conn.deleteDirectory(SHARE_NAME, path)
+    finally:
+        conn.close()
 
 
-# Usage examples:
-# print(list_contents())  # list folders only
-# print(list_contents(folder="M 81"))  # list files inside MyWorks/M42 if exists
+def download_folder(folder: str = "", dest: str = "",
+                    ip: str = DEFAULT_IP) -> None:
+    """Download an entire folder from MyWorks using SMB."""
+    os.makedirs(dest, exist_ok=True)
 
-# Usage examples:
-# download_contents(local_base="E:/seestar_downloads")               # downloads all folders under MyWorks
-# download_contents(folder="Mizar_sub", local_base="E:/seestar_downloads", file_types=["thn.jpg"])   # only downloads missing files under MyWorks/M42
+    # List files and download each one using SMB
+    files = list_folder_contents(folder, ip)
+    folder_dest = os.path.join(dest, folder)
+    os.makedirs(folder_dest, exist_ok=True)
 
-# Usage example:
-# delete_contents(folder="Mizar_sub")
+    total_files = len(files)
+    total_size = sum(files.values())
+    print(
+        f"📁 Downloading {total_files} files from '{folder}' ({total_size / 1024 / 1024:.1f} MB)...")
+
+    conn = _connect_smb(ip)
+    try:
+        for idx, (fname, fsize) in enumerate(files.items(), 1):
+            remote_path = f"{ROOT_DIR}/{folder}/{fname}"
+            local_path = os.path.join(folder_dest, fname)
+            print(
+                f"  [{idx}/{total_files}] {fname} ({fsize / 1024 / 1024:.2f} MB)",
+                end="", flush=True)
+            with open(local_path, "wb") as f:
+                conn.retrieveFile(SHARE_NAME, remote_path, f)
+            print(" ✓")
+        print(f"✓ Download complete: {total_files} files")
+    finally:
+        conn.close()

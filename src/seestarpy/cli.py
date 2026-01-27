@@ -1,6 +1,6 @@
 import sys
 import click
-from seestarpy import raw
+from . import raw
 
 
 @click.group(invoke_without_command=True)
