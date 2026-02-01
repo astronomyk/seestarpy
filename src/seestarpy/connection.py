@@ -1,9 +1,10 @@
 import json
 import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 
-DEFAULT_PORT = 4700
-DEFAULT_IP = "10.0.0.1"
 VERBOSE_LEVEL = 1
+DEFAULT_PORT = 4700
 
 
 def find_seestar():
@@ -19,6 +20,41 @@ def find_seestar():
 
 seestar_ip = find_seestar()
 DEFAULT_IP = seestar_ip if seestar_ip else "10.0.0.1"
+AVAILABLE_IPS = {'seestar.local': DEFAULT_IP}
+
+
+def find_available_ips(n_ip, timeout=1.5):
+    """Find all Seestars quickly using parallel lookups"""
+    hostnames = ['seestar.local'] + [f'seestar-{i}.local' for i in
+                                     range(2, n_ip + 1)]
+    found = {}
+
+    def try_lookup(hostname):
+        try:
+            ip = socket.gethostbyname(hostname)
+            return (hostname, ip)
+        except socket.gaierror:
+            return None
+
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        futures = {executor.submit(try_lookup, h): h for h in hostnames}
+
+    try:
+        for future in as_completed(futures, timeout=timeout):
+            result = future.result()
+            if result:
+                name, ip = result
+                found[name] = ip
+                print(f"✓ Found {name} at {ip}")
+    except FuturesTimeoutError:
+        pass
+
+    for hostname in hostnames:
+        if hostname not in found:
+            print(f"✗ {hostname} has no active IP address")
+
+    print("Use connection.AVAILABLE_IPS to get active addresses")
+    AVAILABLE_IPS.update(found)
 
 
 def send_command(params):

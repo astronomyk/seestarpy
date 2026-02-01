@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "seestarpy"
-version = "0.1.1"
+version = "0.1.2"
 authors = [ { name = "Kieran Leschinski", email = "kdleschinski@gmail.com" },]
 description = "Python interface for the SeeStar telescope control system"
 readme = "README.md"
