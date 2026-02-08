@@ -19,9 +19,16 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
+# These three for talking to the Seestar
     "websockets",       # for html dashboard
     "pysmb>=1.2.9",     # For SMB file operations
-    "tzlocal"           # For getting the local timezone
+    "tzlocal",          # For getting the local timezone
+# Below here for the stacking and stashing algos
+    "numpy",
+    "opencv-python",
+    "astropy",
+    "astroalign",
+    "sep"
 ]
 
 [tool.setuptools]
@@ -40,6 +47,7 @@ docs = [
 
 [project.urls]
 "Homepage" = "https://github.com/astronomyk/seestarpy"
+"Documentation" = "https://seestarpy.readthedocs.io/en/latest/"
 "Bug Tracker" = "https://github.com/astronomyk/seestarpy/issues"
 
 [tool.hatch.build.targets.wheel]
