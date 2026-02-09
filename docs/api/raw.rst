@@ -1,7 +1,7 @@
 Raw Commands Module
 ===================
 
-.. automodule:: seestarpy.raw_commands
+.. automodule:: seestarpy.raw
     :members:
     :undoc-members:
     :show-inheritance:

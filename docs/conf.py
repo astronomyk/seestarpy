@@ -21,6 +21,7 @@ release = 'v0.1.0'
 extensions = [
     'sphinx.ext.autodoc',  # Enables auto-generation of API docs from docstrings
     'sphinx.ext.napoleon',  # Supports Google-style and NumPy-style docstrings
+    "sphinx_autodoc_typehints",
 ]
 
 templates_path = ['_templates']

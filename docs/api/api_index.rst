@@ -5,6 +5,6 @@ Python API index
    :maxdepth: 2
 
    connection
-   raw_commands
+   raw
    data
    status
