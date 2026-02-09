@@ -1,4 +1,6 @@
 from datetime import datetime
+
+from astropy.utils import deprecated
 from tzlocal import get_localzone_name  # pip install tzlocal
 
 from .connection import send_command
@@ -449,8 +451,10 @@ def get_stacked_img():
     return send_command(params)
 
 
+@deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def get_stack_setting():
     """
+    DEPRECATED IN FIRMWARE v6.7
     Find out whether the seestar is saving all sub-frames, good and bad
 
     Returns
@@ -1059,45 +1063,49 @@ def set_setting(**kwargs):
         'close'
     lang: string
         ['en', ?]
-    center_xy: list of ints
-        Default: [540, 960] Defined by the chip size. Not settable.
+    center_xy: list of ints --> !NOT SETTABLE!
+        Default: [540, 960]     # Defined by the chip size.
     stack_lenhance: bool
-        Default: True. Enables dark subtraction. NOTE - Needs own call as it moves the filter.
+        Default: True.          # Enables dark subtraction. NOTE - Needs own call as it moves the filter.
     heater_enable: bool
-        Default: False. Turn on dew heater
+        Default: False.         # Turn on dew heater
     expt_heater_enable: bool
-        Default: False              # TODO: No idea what this means
+        Default: False          # TODO: No idea what this means
     focal_pos: int
-        Current focuser position. Acceptable range [1200 to 2600]
+                                # Current focuser position. Acceptable range [1200 to 2600]
     factory_focal_pos: int
         Factory default is 1580.
+    expert_mode : bool
+        Default: False          # Allows exposure times of [2,5]s via "exp_ms".
     exp_ms': dict
-        {'stack_l': 10000,      # [ms] For stacking
+        {'stack_l': 10000,      # [ms] For stacking     # As of firmware v6.7, only accepts [10,20,30,60] sec. If expert_mode=True, it also accepts [2,5]s
          'continuous': 500      # [ms] For "live view"
          }
     auto_power_off: bool
-        Default True. Turns off the Seestar if no open connection and not exposing for 15 mins (?)
+        Default True.           # Turns off the Seestar if no open connection and not exposing for 15 mins (?)
     stack_dither:
         {"pix": 50,             # Number of pixels in dither pattern throw
-         "interval": 0,         # TODO: Uncertain if this is millisec or sec
-         "enable": False        # Use dithering function
+         "interval": 5,         # Number of frames before dithering
+         "enable": True         # Use dithering function
          }
     auto_3ppa_calib: bool
-        Defualt: True. Turn on automatic 3-point polar-alignment calibration
+        Defualt: True.          # Turn on automatic 3-point polar-alignment calibration
     auto_af: bool
-        Defualt: False. auto_af was introduced in recent firmware that seems to perform autofocus after a goto.
+        Defualt: False.         # auto_af was introduced in recent firmware that seems to perform autofocus after a goto.
     frame_calib: bool
-        Default: True.              # TODO: no idea what this means
+        Default: True.          # TODO: no idea what this means
     calib_location: int
-        Default: 2.                 # TODO: no idea what this means
+        Default: 2.             # TODO: no idea what this means
     wide_cam: bool
-        Default: False              # TODO: no idea what this means
+        Default: False          # Use the wide-field camera on the S30pro
+    wide_4k : bool
+        Default: True           # Stack using the 4k dither approach
     stack_after_goto: bool
-        Default: True. stack_after_goto is in 2.1+ firmware. Note: Disable if possible
+        Default: True.          # stack_after_goto is in 2.1+ firmware. Note: Disable if possible
     guest_mode: bool
-        Default: False              # TODO: No idea what this means
+        Default: False          # TODO: No idea what this means
     user_stack_sim: bool
-        Default: False              # TODO: No idea what this means
+        Default: False          # TODO: No idea what this means
     mosaic: dict
         {'scale': 1.0,                  # TODO: No idea what this means
          'angle': 0.0,                  # TODO: No idea what this means
@@ -1108,8 +1116,20 @@ def set_setting(**kwargs):
     stack: dict
         {'dbe': True,               # TODO: No idea what this means
          'star_correction': True,   # TODO: No idea what this means
-         'cont_capt': False         # TODO: No idea what this means
-         }
+         'cont_capt': False         # [false] Do on-board stacking or [true] simply save every frame and don't stack
+         'airplane_line_removal': False,    # TODO: No idea what this means
+         'drizzle2x': False,        # Create a 4k image with the S50 sensor by debayering and drizzling individual exposures
+         'wide_denoise': False,     # TODO: No idea what this means
+         'capt_type': 'stack',      # TODO: No idea what this means
+         'save_discrete_frame': True,       # TODO: No idea what this means
+         'save_discrete_ok_frame': True,    # TODO: No idea what this means
+         'capt_num': 50,            # TODO: No idea what this means
+         'light_duration_min': -1,  # TODO: No idea what this means
+         'brightness': 0.0,         # TODO: No idea what this means
+         'contrast': 0.0,           # TODO: No idea what this means
+         'saturation': 0.0,         # TODO: No idea what this means
+         'dbe_enable': False        # TODO: No idea what this means
+         },
     ae_bri_percent: float
         Default: 50.0.              # TODO: No idea what this means
     manual_exp: bool
@@ -1124,6 +1144,19 @@ def set_setting(**kwargs):
         Default: [30, 1000000],     # TODO: No idea what this means
     isp_range_exp_us_scenery: list
         Default: [30, 1000000],     # TODO: No idea what this means
+    wifi_country
+        Default: None       # TODO: No idea what this means
+    usb_en_eth : bool
+        Default: False      # TODO: No idea what this means
+    dark_mode : bool
+        Default: False      # TODO: No idea what this means
+    plan_target_af : bool
+        Default: False      # TODO: No idea what this means - assuming it means autofocus between planned observations
+    viewplan_gohome : bool
+        Default: True       # TODO: No idea what this means
+    remote_joined : bool
+        Default: False      # Assume it means whether the Seestar is connected via a remote connection
+
 
     Returns
     -------
@@ -1134,62 +1167,14 @@ def set_setting(**kwargs):
 
 
     """
-    params_dict = {
-        "temp_unit": "C",               # Default to Celsius
-        "beep_volume": "close",
-        "lang": "en",
-        "center_xy": [540, 960],        # Not settable, defined by chip size
-        "stack_lenhance": True,         # Enables dark subtraction
-        "heater_enable": False,         # Turn on dew heater
-        "expt_heater_enable": False,
-        "focal_pos": 1580,              # Using factory default as initial value
-        "factory_focal_pos": 1580,
-        "exp_ms": {
-            "stack_l": 10000,           # [ms] For stacking
-            "continuous": 500           # [ms] For "live view"
-        },
-        "auto_power_off": True,         # Turns off after 15 mins of inactivity
-        "stack_dither": {
-            "pix": 50,                  # Number of pixels in dither pattern throw
-            "interval": 0,              # Uncertain if millisec or sec
-            "enable": False             # Use dithering function
-        },
-        "auto_3ppa_calib": True,        # Automatic 3-point polar-alignment calibration
-        "auto_af": False,               # Autofocus after goto
-        "frame_calib": True,
-        "calib_location": 2,
-        "wide_cam": False,
-        "stack_after_goto": True,       # In 2.1+ firmware
-        "guest_mode": False,
-        "user_stack_sim": False,
-        "mosaic": {
-            "scale": 1.0,
-            "angle": 0.0,
-            "estimated_hours": 0.258333,
-            "star_map_angle": 361.0,
-            "star_map_ratio": 1.0
-        },
-        "stack": {
-            "dbe": True,
-            "star_correction": True,
-            "cont_capt": False
-        },
-        "ae_bri_percent": 50.0,
-        "manual_exp": False,
-        "isp_exp_ms": -999000.0,
-        "isp_gain": -9990.0,
-        "isp_range_gain": [0, 400],
-        "isp_range_exp_us": [30, 1000000],
-        "isp_range_exp_us_scenery": [30, 1000000],
-        "master_cli": True  # Keeping this from original as it seems important
-    }
-    params_dict.update(kwargs)
-    params = {"method": "set_setting", "params": params_dict}
+    params = {"method": "set_setting", "params": kwargs}
     return send_command(params)
 
 
+@deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
     """
+    DEPRECATED IN FIRMWARE v6.7
     Save individual frames to emmc.
 
     Parameters
@@ -1204,8 +1189,8 @@ def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
 
     """
     params = {"method": "set_stack_setting",
-              "params": {"save_discrete_ok_frame": True,
-                         "save_discrete_frame": False
+              "params": {"save_discrete_ok_frame": save_ok_frames,
+                         "save_discrete_frame": save_rejected_frames
                          }
               }
     return send_command(params)
@@ -1299,11 +1284,13 @@ def scope_get_horiz_coord():
 
 
 def scope_get_ra_dec():
+    """Works in firmware v6.70"""
     params = {'method': 'scope_get_ra_dec'}
     return send_command(params)
 
 
 def scope_get_track_state():
+    """Works in firmware v6.70"""
     params = {'method': 'scope_get_track_state'}
     return send_command(params)
 
@@ -1511,7 +1498,7 @@ def start_polar_align(restart=True, dec_pos_index=3):
     restart : bool
         Default: True.
     dec_pos_index: int
-        TODO: Find out what this means
+        Potentially: 1: 45 deg South, 2: 22 deg south, 3: zenith, 4: 22 deg North, 45 deg North
 
     Returns
     -------

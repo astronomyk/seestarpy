@@ -16,11 +16,11 @@ def copy_doc(from_func):
 def multiple_ips(func):
     """
     Decorator that allows a function to run against multiple IP addresses.
-    Pass ip_list at call time to override DEFAULT_IP.
+    Pass `ips` at call time to override DEFAULT_IP.
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        # Extract ip_list from call arguments
+        # Extract the ips list from call arguments
         call_time_ips = kwargs.pop('ips', None)
 
         def resolve_ip(ip):
@@ -79,11 +79,33 @@ def multiple_ips(func):
 
 @multiple_ips
 def open():
+    """Opens the Seestar arm"""
     return raw.scope_move_to_horizon()
 
 
 @multiple_ips
 def close(eq_mode=None):
+    """
+    Closes the Seestar, and sets the mode to EQ or AzAlt
+
+    Parameters
+    ----------
+    eq_mode : bool | None
+        bool : explicitly set the EQ mode (True) or AzAlt (False)
+        None : checks the current mode and uses that
+
+    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+
+    Examples
+    --------
+    ::
+        >>> import seestarpy as ssp
+        >>> ssp.close()             # Use the current value for EQ mode
+        ...
+        >>> ssp.close(False)        # Explicitly set the mount mode to AzAlt
+        ...
+
+    """
     eq_mode = is_eq_mode() if eq_mode is None else eq_mode
     return raw.scope_park(eq_mode)
 
@@ -105,6 +127,30 @@ def goto(ra_dec=()):
 
 @multiple_ips
 def tracking(flag=None):
+    """
+
+    Parameters
+    ----------
+    flag : None | bool
+        None : returns the tracking state
+        bool : set the tracking state to on|off
+
+    Returns
+    -------
+    dict : Return dictionary of relevant seestarpy.raw calls
+
+    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+
+    Examples
+    --------
+    ::
+        >>> import seestarpy as ssp
+        >>> ssp.tracking()
+        False
+        >>> ssp.tracking(False)     # Turn off tracking
+        ...
+
+    """
     if flag is None:
         return raw.scope_get_track_state()
     elif isinstance(flag, bool):
@@ -116,19 +162,38 @@ def tracking(flag=None):
 @multiple_ips
 def exposure(exptime: int | None = None, which="stack_l"):
     """
+    Get or set the exposure time.
 
     Parameters
     ----------
-    exptime
+    exptime : int | None
+        None: returns the current exposure time
+        int: sets the current exposure time. Accepted values in sec or milli-sec
+    which : str, Optional
+        Default: "stack_l". Set the long-exposure time. Options ["stack_l", "continuous"]
 
-    Returns
-    -------
+    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+
+
+    Examples
+    --------
+    ::
+        >>> import seestarpy as ssp
+        >>> ssp.exposure()
+        {'stack_l': 10000, 'continuous': 500}
+        >>> ssp.exposure(exptime=30, which="stack_l")       # 30s exposure time
+        {'Event': 'Setting', 'Timestamp': '1380808.244289322', 'wide_cam': False, 'exp_ms': {'stack_l': 30000}}
+        >>> ssp.conn.find_available_ips(n_ip=3)
+        >>> ssp.exposure(exptime=5, ips="all")               # 5s exposure time for all 3 connected Seestars
+        ...
 
     """
     if exptime is None:
         return raw.get_setting().get("result", {}).get("exp_ms")
-    elif isinstance(exptime, int):
-        return raw.set_setting(exp_ms={which: exptime})
+
+    exptime = int(exptime) // 1000 if exptime > 100 else int(exptime)
+    if isinstance(exptime, int) and exptime in [2, 5, 10, 20, 30, 60]:
+        return raw.set_setting(expert_mode=True, exp_ms={which: exptime * 1000})
     else:
         raise ValueError(f"exptime must be one of [None, int]: {exptime}")
 
@@ -143,6 +208,9 @@ def filter_wheel(pos: int | str | None = None):
     pos : int | str | None
         Returns the current filter wheel position with `None`
         Set the filter with any of: `[1, "open", "ircut", 2, "narrow", "lp"]`
+
+    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+
 
     Examples
     --------
@@ -166,15 +234,28 @@ def filter_wheel(pos: int | str | None = None):
 
 
 @multiple_ips
-def focuser(pos: int | None = None):
+def focuser(pos: int | str | None = None):
     """
+    Get or set the focuser position
 
     Parameters
     ----------
     pos : None
+        None : return the focuser position
+        int : set the focuser position
+        str : "auto" = start the auto-focus routine
 
-    Returns
-    -------
+
+    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+
+    Examples
+    --------
+    >>> from seestarpy import filter_wheel
+    >>> focuser()
+    1580
+    >>> focuser("auto")
+    >>> focuser(pos=1605)
+    ...
 
     """
     if pos is None:

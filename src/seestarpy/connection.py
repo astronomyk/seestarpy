@@ -23,7 +23,7 @@ DEFAULT_IP = seestar_ip if seestar_ip else "10.0.0.1"
 AVAILABLE_IPS = {'seestar.local': DEFAULT_IP}
 
 
-def find_available_ips(n_ip, timeout=1.5):
+def find_available_ips(n_ip, timeout=2):
     """Find all Seestars quickly using parallel lookups"""
     hostnames = ['seestar.local'] + [f'seestar-{i}.local' for i in
                                      range(2, n_ip + 1)]

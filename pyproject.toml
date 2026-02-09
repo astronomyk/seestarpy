@@ -19,16 +19,18 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
-# These three for talking to the Seestar
+    # These three for talking to the Seestar
     "websockets",       # for html dashboard
     "pysmb>=1.2.9",     # For SMB file operations
     "tzlocal",          # For getting the local timezone
-# Below here for the stacking and stashing algos
+    # Below here for the stacking and stashing algos
     "numpy",
     "opencv-python",
     "astropy",
     "astroalign",
-    "sep"
+    "sep>=1.4.0",
+    # For CrowdSky WebDAV uploads
+    "requests",
 ]
 
 [tool.setuptools]
