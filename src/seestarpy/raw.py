@@ -1,7 +1,23 @@
+import functools
+import warnings
 from datetime import datetime
 
-from astropy.utils import deprecated
 from tzlocal import get_localzone_name  # pip install tzlocal
+
+
+def _deprecated(since, message=""):
+    """Mark a function as deprecated, emitting a warning when called."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(
+                f"{func.__name__} is deprecated since {since}. {message}",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 from .connection import send_command
 
@@ -475,7 +491,7 @@ def get_stacked_img():
     return send_command(params)
 
 
-@deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
+@_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def get_stack_setting():
     """
     Find out whether the Seestar is saving all sub-frames, good and bad.
@@ -1242,7 +1258,7 @@ def set_setting(**kwargs):
     return send_command(params)
 
 
-@deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
+@_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
     """
     Save individual frames to emmc.
