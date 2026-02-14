@@ -8,7 +8,14 @@ DEFAULT_PORT = 4700
 
 
 def find_seestar():
-    """Find Seestar using mDNS hostname"""
+    """
+    Find a Seestar on the local network using mDNS hostname resolution.
+
+    Returns
+    -------
+    str or None
+        The IP address of the Seestar if found, otherwise ``None``.
+    """
     try:
         ip = socket.gethostbyname('seestar.local')
         print(f"Seestar found at: {ip}")
@@ -24,7 +31,19 @@ AVAILABLE_IPS = {'seestar.local': DEFAULT_IP}
 
 
 def find_available_ips(n_ip, timeout=2):
-    """Find all Seestars quickly using parallel lookups"""
+    """
+    Find all Seestars on the local network using parallel mDNS lookups.
+
+    Resolves hostnames ``seestar.local``, ``seestar-2.local``, etc.
+    and updates :data:`AVAILABLE_IPS` with the results.
+
+    Parameters
+    ----------
+    n_ip : int
+        Maximum number of Seestars to search for.
+    timeout : float, optional
+        Timeout in seconds for the parallel lookups. Default is 2.
+    """
     hostnames = ['seestar.local'] + [f'seestar-{i}.local' for i in
                                      range(2, n_ip + 1)]
     found = {}

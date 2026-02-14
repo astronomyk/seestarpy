@@ -14,7 +14,24 @@ ROOT_DIR = "MyWorks"
 
 
 def _connect_smb(ip: str = DEFAULT_IP) -> SMBConnection:
-    """Create and return an SMBConnection using direct TCP (445)."""
+    """
+    Create and return an SMBConnection using direct TCP (port 445).
+
+    Parameters
+    ----------
+    ip : str, optional
+        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+
+    Returns
+    -------
+    SMBConnection
+        An open SMB connection to the Seestar.
+
+    Raises
+    ------
+    ConnectionError
+        If the connection to the Seestar fails.
+    """
 
     conn = SMBConnection(
         username='',
@@ -33,7 +50,19 @@ def _connect_smb(ip: str = DEFAULT_IP) -> SMBConnection:
 
 
 def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
-    """List all folders under MyWorks and return file counts per folder."""
+    """
+    List all folders under ``MyWorks`` and return file counts per folder.
+
+    Parameters
+    ----------
+    ip : str, optional
+        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+
+    Returns
+    -------
+    dict of {str: int}
+        Mapping of folder names to the number of files they contain.
+    """
     conn = _connect_smb(ip)
     summary = {}
 
@@ -54,7 +83,21 @@ def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
 
 
 def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
-    """List files inside a specific folder under MyWorks."""
+    """
+    List files inside a specific folder under ``MyWorks``.
+
+    Parameters
+    ----------
+    folder : str
+        Name of the folder to list.
+    ip : str, optional
+        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+
+    Returns
+    -------
+    dict of {str: int}
+        Mapping of file names to their sizes in bytes.
+    """
     conn = _connect_smb(ip)
     contents = {}
 
@@ -70,7 +113,16 @@ def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
 
 
 def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
-    """Delete a folder and all its contents using SMB."""
+    """
+    Recursively delete a folder and all its contents via SMB.
+
+    Parameters
+    ----------
+    folder : str
+        Name of the folder under ``MyWorks`` to delete.
+    ip : str, optional
+        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+    """
     conn = _connect_smb(ip)
 
     try:
@@ -95,7 +147,18 @@ def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
 
 def download_folder(folder: str = "", dest: str = "",
                     ip: str = DEFAULT_IP) -> None:
-    """Download an entire folder from MyWorks using SMB."""
+    """
+    Download an entire folder from ``MyWorks`` via SMB.
+
+    Parameters
+    ----------
+    folder : str, optional
+        Name of the folder under ``MyWorks`` to download.
+    dest : str, optional
+        Local destination directory path.
+    ip : str, optional
+        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+    """
     os.makedirs(dest, exist_ok=True)
 
     # List files and download each one using SMB

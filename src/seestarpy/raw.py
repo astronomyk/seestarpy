@@ -138,14 +138,17 @@ def get_camera_info():
 
 def get_camera_state():
     """
-    Returns name and state of the camera ("idle"
+    Return the name and state of the camera.
 
+    Returns
+    -------
+    dict
 
     Examples
-    -------
+    --------
 
     >>> from seestarpy import raw
-    >>> raw.get_camera_info()
+    >>> raw.get_camera_state()
     {'jsonrpc': '2.0',
      'Timestamp': '3340.447572824',
      'method': 'get_camera_state',
@@ -412,11 +415,18 @@ def get_focuser_position():
 
 def get_last_solve_result():
     """
-    ERROR: no solve data
+    Get the result of the last plate-solve attempt.
 
     Returns
     -------
+    dict
+
+    Examples
+    --------
     ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_last_solve_result()
         {'jsonrpc': '2.0',
          'Timestamp': '3957.619006162',
          'method': 'get_last_solve_result',
@@ -430,14 +440,21 @@ def get_last_solve_result():
 
 def get_solve_result():
     """
-    ERROR: no solve data
+    Get the current plate-solve result.
 
     Returns
     -------
+    dict
+
+    Examples
+    --------
     ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_solve_result()
         {'jsonrpc': '2.0',
          'Timestamp': '3957.619006162',
-         'method': 'get_last_solve_result',
+         'method': 'get_solve_result',
          'error': 'no solve data',
          'code': 215,
          'id': 1}
@@ -447,6 +464,13 @@ def get_solve_result():
 
 
 def get_stacked_img():
+    """
+    Get the current stacked image data.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "get_stacked_img"}
     return send_command(params)
 
@@ -454,12 +478,21 @@ def get_stacked_img():
 @deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def get_stack_setting():
     """
-    DEPRECATED IN FIRMWARE v6.7
-    Find out whether the seestar is saving all sub-frames, good and bad
+    Find out whether the Seestar is saving all sub-frames, good and bad.
+
+    .. deprecated::
+        Seestar Firmware v6.7 uses :func:`set_setting` instead.
 
     Returns
     -------
+    dict
+
+    Examples
+    --------
     ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_stack_setting()
         {'jsonrpc': '2.0',
          'Timestamp': '4074.257331529',
          'method': 'get_stack_setting',
@@ -477,10 +510,18 @@ def get_stack_setting():
 
 def get_stack_info():
     """
+    Get the dimensions of the current stacked image.
 
     Returns
     -------
+    dict
+
+    Examples
+    --------
     ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_stack_info()
         {'jsonrpc': '2.0',
          'Timestamp': '4034.734550212',
          'method': 'get_stack_info',
@@ -641,16 +682,37 @@ def get_view_state():
 
 
 def get_wheel_position():
+    """
+    Get the current filter-wheel position.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "get_wheel_position"}
     return send_command(params)
 
 
 def get_wheel_setting():
+    """
+    Get the filter-wheel configuration settings.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "get_wheel_setting"}
     return send_command(params)
 
 
 def iscope_get_app_state():
+    """
+    Get the full application state from the Seestar.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "iscope_get_app_state"}
     return send_command(params)
 
@@ -787,14 +849,16 @@ def iscope_stop_view(stage=None):
 
 def iscope_start_stack(restart=False):
     """
+    Start stacking sub-frames on the current target.
 
     Parameters
     ----------
-    restart: bool
+    restart : bool, optional
+        If ``True``, restart the stacking sequence. Default is ``False``.
 
     Returns
     -------
-
+    dict
     """
     params = {"method": "iscope_start_stack",
               "params": {"restart": restart}
@@ -941,7 +1005,11 @@ def pi_shutdown(force=False):
 
 def pi_is_verified():
     """
-    No idea why this is here...
+    Check whether the device has been verified.
+
+    Returns
+    -------
+    dict
     """
     params = {'method': 'pi_is_verified'}
     return send_command(params)
@@ -972,6 +1040,13 @@ def pi_output_set2(is_dew_on=False, dew_heater_power=0):
 
 
 def scan_iscope():
+    """
+    Scan for connected Seestar devices.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "scan_iscope"}
     return send_command(params)
 
@@ -1050,122 +1125,118 @@ def set_control_value(gain=80):
 
 def set_setting(**kwargs):
     """
-    Sets values in the seestar settings dictionary
+    Set values in the Seestar settings dictionary.
 
-    (Theoretically) should accept any of the key arguments that are returned
-    with 'get_setting'
+    Should accept any of the keyword arguments returned by
+    :func:`get_setting`. See the **Other Parameters** section for a full
+    reference of known keys.
 
     Parameters
     ----------
-    temp_unit: string
-        ['C' 'F']
-    beep_volume: string or int
-        'close'
-    lang: string
-        ['en', ?]
-    center_xy: list of ints --> !NOT SETTABLE!
-        Default: [540, 960]     # Defined by the chip size.
-    stack_lenhance: bool
-        Default: True.          # Enables dark subtraction. NOTE - Needs own call as it moves the filter.
-    heater_enable: bool
-        Default: False.         # Turn on dew heater
-    expt_heater_enable: bool
-        Default: False          # TODO: No idea what this means
-    focal_pos: int
-                                # Current focuser position. Acceptable range [1200 to 2600]
-    factory_focal_pos: int
-        Factory default is 1580.
-    expert_mode : bool
-        Default: False          # Allows exposure times of [2,5]s via "exp_ms".
-    exp_ms': dict
-        {'stack_l': 10000,      # [ms] For stacking     # As of firmware v6.7, only accepts [10,20,30,60] sec. If expert_mode=True, it also accepts [2,5]s
-         'continuous': 500      # [ms] For "live view"
-         }
-    auto_power_off: bool
-        Default True.           # Turns off the Seestar if no open connection and not exposing for 15 mins (?)
-    stack_dither:
-        {"pix": 50,             # Number of pixels in dither pattern throw
-         "interval": 5,         # Number of frames before dithering
-         "enable": True         # Use dithering function
-         }
-    auto_3ppa_calib: bool
-        Defualt: True.          # Turn on automatic 3-point polar-alignment calibration
-    auto_af: bool
-        Defualt: False.         # auto_af was introduced in recent firmware that seems to perform autofocus after a goto.
-    frame_calib: bool
-        Default: True.          # TODO: no idea what this means
-    calib_location: int
-        Default: 2.             # TODO: no idea what this means
-    wide_cam: bool
-        Default: False          # Use the wide-field camera on the S30pro
-    wide_4k : bool
-        Default: True           # Stack using the 4k dither approach
-    stack_after_goto: bool
-        Default: True.          # stack_after_goto is in 2.1+ firmware. Note: Disable if possible
-    guest_mode: bool
-        Default: False          # TODO: No idea what this means
-    user_stack_sim: bool
-        Default: False          # TODO: No idea what this means
-    mosaic: dict
-        {'scale': 1.0,                  # TODO: No idea what this means
-         'angle': 0.0,                  # TODO: No idea what this means
-         'estimated_hours': 0.258333,   # TODO: No idea what this means
-         'star_map_angle': 361.0,       # TODO: No idea what this means
-         'star_map_ratio': 1.0          # TODO: No idea what this means
-         },
-    stack: dict
-        {'dbe': True,               # TODO: No idea what this means
-         'star_correction': True,   # TODO: No idea what this means
-         'cont_capt': False         # [false] Do on-board stacking or [true] simply save every frame and don't stack
-         'airplane_line_removal': False,    # TODO: No idea what this means
-         'drizzle2x': False,        # Create a 4k image with the S50 sensor by debayering and drizzling individual exposures
-         'wide_denoise': False,     # TODO: No idea what this means
-         'capt_type': 'stack',      # TODO: No idea what this means
-         'save_discrete_frame': True,       # TODO: No idea what this means
-         'save_discrete_ok_frame': True,    # TODO: No idea what this means
-         'capt_num': 50,            # TODO: No idea what this means
-         'light_duration_min': -1,  # TODO: No idea what this means
-         'brightness': 0.0,         # TODO: No idea what this means
-         'contrast': 0.0,           # TODO: No idea what this means
-         'saturation': 0.0,         # TODO: No idea what this means
-         'dbe_enable': False        # TODO: No idea what this means
-         },
-    ae_bri_percent: float
-        Default: 50.0.              # TODO: No idea what this means
-    manual_exp: bool
-        Default: False              # TODO: No idea what this means
-    isp_exp_ms': float
-        Default: -999000.0,         # TODO: No idea what this means
-    isp_gain: float
-        Default: -9990.0,           # TODO: No idea what this means
-    isp_range_gain: list
-        Default: [0, 400],          # TODO: No idea what this means
-    isp_range_exp_us: list
-        Default: [30, 1000000],     # TODO: No idea what this means
-    isp_range_exp_us_scenery: list
-        Default: [30, 1000000],     # TODO: No idea what this means
-    wifi_country
-        Default: None       # TODO: No idea what this means
-    usb_en_eth : bool
-        Default: False      # TODO: No idea what this means
-    dark_mode : bool
-        Default: False      # TODO: No idea what this means
-    plan_target_af : bool
-        Default: False      # TODO: No idea what this means - assuming it means autofocus between planned observations
-    viewplan_gohome : bool
-        Default: True       # TODO: No idea what this means
-    remote_joined : bool
-        Default: False      # Assume it means whether the Seestar is connected via a remote connection
-
+    **kwargs
+        Keyword arguments corresponding to Seestar setting keys.
 
     Returns
     -------
     dict
 
+    Other Parameters
+    ----------------
+    temp_unit : str
+        Temperature unit. One of ``'C'``, ``'F'``.
+    beep_volume : str or int
+        Beep volume. ``'close'`` to disable.
+    lang : str
+        UI language code, e.g. ``'en'``.
+    center_xy : list of int
+        **Not settable.** Defined by the chip size. Default ``[540, 960]``.
+    stack_lenhance : bool
+        Enable dark subtraction. Default ``True``.
+        Needs its own call as it moves the filter.
+    heater_enable : bool
+        Turn on the dew heater. Default ``False``.
+    expt_heater_enable : bool
+        Default ``False``.
+    focal_pos : int
+        Current focuser position. Acceptable range [1200, 2600].
+    factory_focal_pos : int
+        Factory default focuser position (1580).
+    expert_mode : bool
+        Allow exposure times of 2 s and 5 s via ``exp_ms``. Default ``False``.
+    exp_ms : dict
+        Exposure times in milliseconds.
+        Keys: ``'stack_l'`` (stacking, accepts 10/20/30/60 s; also 2/5 s
+        with ``expert_mode=True``), ``'continuous'`` (live view).
+    auto_power_off : bool
+        Auto power-off after ~15 min of inactivity. Default ``True``.
+    stack_dither : dict
+        Dither settings: ``'pix'`` (throw in pixels), ``'interval'``
+        (frames between dithers), ``'enable'`` (bool).
+    auto_3ppa_calib : bool
+        Automatic 3-point polar-alignment calibration. Default ``True``.
+    auto_af : bool
+        Auto-focus after a goto. Default ``False``.
+    frame_calib : bool
+        Default ``True``.
+    calib_location : int
+        Default ``2``.
+    wide_cam : bool
+        Use the wide-field camera (S30pro). Default ``False``.
+    wide_4k : bool
+        Stack using the 4k dither approach. Default ``True``.
+    stack_after_goto : bool
+        Start stacking automatically after goto (firmware 2.1+).
+        Default ``True``.
+    guest_mode : bool
+        Default ``False``.
+    user_stack_sim : bool
+        Default ``False``.
+    mosaic : dict
+        Mosaic settings: ``'scale'``, ``'angle'``, ``'estimated_hours'``,
+        ``'star_map_angle'``, ``'star_map_ratio'``.
+    stack : dict
+        Stacking settings: ``'dbe'``, ``'star_correction'``,
+        ``'cont_capt'`` (``True`` to save every frame without stacking),
+        ``'drizzle2x'`` (create 4k image by debayering and drizzling),
+        ``'airplane_line_removal'``, ``'wide_denoise'``,
+        ``'capt_type'``, ``'save_discrete_frame'``,
+        ``'save_discrete_ok_frame'``, ``'capt_num'``,
+        ``'light_duration_min'``, ``'brightness'``, ``'contrast'``,
+        ``'saturation'``, ``'dbe_enable'``.
+    ae_bri_percent : float
+        Default ``50.0``.
+    manual_exp : bool
+        Default ``False``.
+    isp_exp_ms : float
+        Default ``-999000.0``.
+    isp_gain : float
+        Default ``-9990.0``.
+    isp_range_gain : list
+        Default ``[0, 400]``.
+    isp_range_exp_us : list
+        Default ``[30, 1000000]``.
+    isp_range_exp_us_scenery : list
+        Default ``[30, 1000000]``.
+    wifi_country : str or None
+        Default ``None``.
+    usb_en_eth : bool
+        Default ``False``.
+    dark_mode : bool
+        Default ``False``.
+    plan_target_af : bool
+        Auto-focus between planned observations. Default ``False``.
+    viewplan_gohome : bool
+        Default ``True``.
+    remote_joined : bool
+        Whether the Seestar is connected via a remote connection.
+        Default ``False``.
+
     Examples
     --------
 
-
+        >>> from seestarpy import raw
+        >>> raw.set_setting(exp_ms={"stack_l": 20000})
+        >>> raw.set_setting(stack_dither={"pix": 50, "interval": 5, "enable": True})
     """
     params = {"method": "set_setting", "params": kwargs}
     return send_command(params)
@@ -1174,19 +1245,21 @@ def set_setting(**kwargs):
 @deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
     """
-    DEPRECATED IN FIRMWARE v6.7
     Save individual frames to emmc.
+
+    .. deprecated::
+        Seestar Firmware v6.7 uses :func:`set_setting` instead.
 
     Parameters
     ----------
-    save_ok_frames : bool
-        Default: True. Save accepted individual frames to emmc.
-    save_rejected_frames : bool
-        Default: False. Save rejected individual frames to emmc.
+    save_ok_frames : bool, optional
+        Save accepted individual frames to emmc. Default is ``True``.
+    save_rejected_frames : bool, optional
+        Save rejected individual frames to emmc. Default is ``False``.
 
     Returns
     -------
-
+    dict
     """
     params = {"method": "set_stack_setting",
               "params": {"save_discrete_ok_frame": save_ok_frames,
@@ -1197,6 +1270,18 @@ def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
 
 
 def set_sequence_setting(name):
+    """
+    Set the sequence (observation group) name.
+
+    Parameters
+    ----------
+    name : str
+        The group name for the observation sequence.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "set_sequence_setting",
               "params": [{"group_name": name}]}
     return send_command(params)
@@ -1210,13 +1295,13 @@ def set_sensor_calibration(x, y, z, x11, x12, y11, y12):
     Parameters
     ----------
     x, y, z : float
-
+        Compass sensor offsets.
     x11, x12, y11, y12 : float
         Rotation matrix coefficients.
 
     Returns
     -------
-
+    dict
     """
     params = {"method": "set_sensor_calibration",
               "params": {"compassSensor": {"x": x,
@@ -1264,33 +1349,67 @@ def set_wheel_position(pos):
 
     Parameters
     ----------
-    pos: int
-        0: Dark = Shutter closed
-        1: Open = 400-700nm, with Bayer RGB matrix
-        2: Narrow = 30 nm OIII (Blue) + 20 nm Hα (Red) (also LP: Light Pollution)
+    pos : int
+        - 0: Dark (shutter closed)
+        - 1: Open (400--700 nm, with Bayer RGB matrix)
+        - 2: Narrow (30 nm OIII + 20 nm Ha, also LP filter)
+
+    Returns
+    -------
+    dict
     """
     params = {"method": "set_wheel_position", "params": [pos]}
     return send_command(params)
 
 
 def scope_get_equ_coord():
+    """
+    Get the current equatorial coordinates (RA/Dec) from the mount.
+
+    Returns
+    -------
+    dict
+    """
     params = {'method': 'scope_get_equ_coord'}
     return send_command(params)
 
 
 def scope_get_horiz_coord():
+    """
+    Get the current horizontal coordinates (Alt/Az) from the mount.
+
+    Returns
+    -------
+    dict
+    """
     params = {'method': 'scope_get_horiz_coord'}
     return send_command(params)
 
 
 def scope_get_ra_dec():
-    """Works in firmware v6.70"""
+    """
+    Get the current RA/Dec coordinates from the mount.
+
+    .. note:: Requires firmware v6.70 or later.
+
+    Returns
+    -------
+    dict
+    """
     params = {'method': 'scope_get_ra_dec'}
     return send_command(params)
 
 
 def scope_get_track_state():
-    """Works in firmware v6.70"""
+    """
+    Get the current tracking state of the mount.
+
+    .. note:: Requires firmware v6.70 or later.
+
+    Returns
+    -------
+    dict
+    """
     params = {'method': 'scope_get_track_state'}
     return send_command(params)
 
@@ -1480,11 +1599,25 @@ def scope_speed_move(angle, speed, dur_sec):
 
 
 def start_auto_focuse():
+    """
+    Start the auto-focus routine.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "start_auto_focuse"}
     return send_command(params)
 
 
 def start_create_dark():
+    """
+    Start creating a dark-frame library.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "start_create_dark"}
     return send_command(params)
 
@@ -1513,49 +1646,126 @@ def start_polar_align(restart=True, dec_pos_index=3):
 
 
 def start_scan_planet():
+    """
+    Start scanning for planets.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "start_scan_planet"}
     return send_command(params)
 
 
 def start_solve():
+    """
+    Start a plate-solve on the current field.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "start_solve"}
     return send_command(params)
 
 
 def stop_auto_focuse():
+    """
+    Stop the auto-focus routine.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "stop_auto_focuse"}
     return send_command(params)
 
 
 def stop_create_dark():
+    """
+    Stop dark-frame library creation.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "stop_create_dark"}
     return send_command(params)
 
 
 def stop_goto_target():
+    """
+    Stop the current goto-target slew.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "stop_goto_target"}
     return send_command(params)
 
 
 def stop_polar_align():
+    """
+    Stop the polar-alignment sequence.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "stop_polar_align"}
     return send_command(params)
 
 
 def stop_solve():
+    """
+    Stop the current plate-solve.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "stop_solve"}
     return send_command(params)
 
 
 def stop_scheduler():
+    """
+    Stop the observation scheduler.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "stop_scheduler"}
     return send_command(params)
 
 
 def test_connection():
+    """
+    Test the connection to the Seestar.
+
+    Returns
+    -------
+    dict
+    """
     params = {'method': 'test_connection'}
     return send_command(params)
 
 
 def random_command(method, params=None):
+    """
+    Send an arbitrary command to the Seestar.
+
+    Parameters
+    ----------
+    method : str
+        The JSON-RPC method name.
+    params : dict, optional
+        Parameters to pass with the command.
+
+    Returns
+    -------
+    dict or str
+    """
     return send_command({"method": method, "params": params})

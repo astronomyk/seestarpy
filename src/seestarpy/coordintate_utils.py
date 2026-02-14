@@ -4,7 +4,24 @@ import datetime
 def ra_dec_to_alt_az(ra_hours, dec_deg, lat_deg, lon_deg, timestamp=None):
     """
     Convert Right Ascension and Declination to Altitude and Azimuth.
-    All angles in degrees. RA in hours.
+
+    Parameters
+    ----------
+    ra_hours : float
+        Right Ascension in decimal hours [0, 24).
+    dec_deg : float
+        Declination in decimal degrees [-90, 90].
+    lat_deg : float
+        Observer latitude in decimal degrees.
+    lon_deg : float
+        Observer longitude in decimal degrees.
+    timestamp : datetime.datetime, optional
+        UTC timestamp for the conversion. Defaults to ``datetime.now(UTC)``.
+
+    Returns
+    -------
+    tuple of float
+        ``(altitude, azimuth)`` in decimal degrees.
     """
     if timestamp is None:
         timestamp = datetime.datetime.now(datetime.UTC)
@@ -54,6 +71,21 @@ def ra_dec_to_alt_az(ra_hours, dec_deg, lat_deg, lon_deg, timestamp=None):
     return alt_deg, az_deg
 
 def get_mount_alt_az_from_latest_state(state):
+    """
+    Compute the mount's current Alt/Az from a cached device state dictionary.
+
+    Parameters
+    ----------
+    state : dict
+        A dictionary containing at least ``scope_get_equ_coord`` and
+        ``get_device_state`` result entries.
+
+    Returns
+    -------
+    tuple of (float or None)
+        ``(altitude, azimuth)`` in degrees, or ``(None, None)`` if the
+        required fields are missing.
+    """
     try:
         equ_coord = state.get("scope_get_equ_coord", {}).get("result", {})
         device_state = state.get("get_device_state", {}).get("result", {})

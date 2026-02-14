@@ -94,22 +94,65 @@ def status_bar(return_type="str"):
 
 
 def get_mount_state():
+    """
+    Get the current mount state dictionary.
+
+    Returns
+    -------
+    dict
+        Mount state containing keys like ``'move_type'``, ``'close'``,
+        ``'tracking'``, ``'equ_mode'``.
+    """
     return raw.get_device_state(keys=["mount"]).get("result", {}).get("mount", {})
 
 
 def is_eq_mode():
+    """
+    Check whether the mount is in equatorial mode.
+
+    Returns
+    -------
+    bool
+    """
     return get_mount_state().get("equ_mode")
 
 
 def is_tracking():
+    """
+    Check whether the mount is currently tracking.
+
+    Returns
+    -------
+    bool
+    """
     return get_mount_state().get("tracking")
 
 
 def is_parked():
+    """
+    Check whether the mount is parked (arm closed).
+
+    Returns
+    -------
+    bool
+    """
     return get_mount_state().get("close")
 
 
 def get_coords():
+    """
+    Get the current equatorial and horizontal coordinates.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys ``'ra'``, ``'dec'``, ``'alt'``, ``'az'``.
+
+    Raises
+    ------
+    ValueError
+        If the coordinate data cannot be retrieved.
+    """
     eq_dict = raw.scope_get_ra_dec()
     altaz_dict = raw.scope_get_horiz_coord()
 
@@ -124,29 +167,76 @@ def get_coords():
 
 
 def get_exposure(which="stack_l"):
-    """which : [stack_l, continuous]"""
+    """
+    Get the current exposure time in milliseconds.
+
+    Parameters
+    ----------
+    which : str, optional
+        Which exposure to query. One of ``'stack_l'`` or ``'continuous'``.
+        Default is ``'stack_l'``.
+
+    Returns
+    -------
+    int
+        Exposure time in milliseconds.
+    """
     params = {"method": "get_setting", "params": {"keys": ["exp_ms"]}}
     payload = send_command(params)
     return payload["result"]["exp_ms"][which]
 
 
 def get_filter():
+    """
+    Get the current filter-wheel position.
 
+    Returns
+    -------
+    dict
+    """
     params = {"method": "get_wheel_position"}
     return send_command(params)
 
 
 def get_target_name():
+    """
+    Get the current observation sequence (group) name.
+
+    Returns
+    -------
+    str or None
+        The group name, or ``None`` if not set.
+    """
     params = {"method": "get_sequence_setting"}
     return send_command(params).get("group_name")
 
 
 def get_target_name2():
+    """
+    Get the current image name field.
+
+    Returns
+    -------
+    dict
+    """
     params = {"method": "get_img_name_field"}
     return send_command(params)
 
 
 def azimuth_to_compass(degrees):
+    """
+    Convert an azimuth angle to a 16-point compass direction.
+
+    Parameters
+    ----------
+    degrees : float
+        Azimuth in decimal degrees [0, 360).
+
+    Returns
+    -------
+    str
+        Compass direction, e.g. ``'N'``, ``'NNE'``, ``'SW'``.
+    """
     directions = [
         "N", "NNE", "NE", "ENE",
         "E", "ESE", "SE", "SSE",

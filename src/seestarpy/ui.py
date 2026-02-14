@@ -7,6 +7,14 @@ from .status import get_filter, is_eq_mode
 
 
 def copy_doc(from_func):
+    """
+    Decorator that copies the docstring from one function to another.
+
+    Parameters
+    ----------
+    from_func : callable
+        The function whose docstring should be copied.
+    """
     def decorator(to_func):
         to_func.__doc__ = from_func.__doc__
         return to_func
@@ -86,24 +94,27 @@ def open():
 @multiple_ips
 def close(eq_mode=None):
     """
-    Closes the Seestar, and sets the mode to EQ or AzAlt
+    Close the Seestar arm and set the mode to EQ or AzAlt.
 
     Parameters
     ----------
-    eq_mode : bool | None
-        bool : explicitly set the EQ mode (True) or AzAlt (False)
-        None : checks the current mode and uses that
+    eq_mode : bool or None, optional
+        - ``True`` : explicitly set EQ mode.
+        - ``False`` : explicitly set AzAlt mode.
+        - ``None`` : use the current mode. Default is ``None``.
 
-    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
 
     Examples
     --------
     ::
+
         >>> import seestarpy as ssp
         >>> ssp.close()             # Use the current value for EQ mode
-        ...
         >>> ssp.close(False)        # Explicitly set the mount mode to AzAlt
-        ...
 
     """
     eq_mode = is_eq_mode() if eq_mode is None else eq_mode
@@ -128,27 +139,31 @@ def goto(ra_dec=()):
 @multiple_ips
 def tracking(flag=None):
     """
+    Get or set the mount tracking state.
 
     Parameters
     ----------
-    flag : None | bool
-        None : returns the tracking state
-        bool : set the tracking state to on|off
+    flag : bool or None, optional
+        - ``None`` : return the current tracking state.
+        - ``True`` / ``False`` : enable or disable tracking.
 
     Returns
     -------
-    dict : Return dictionary of relevant seestarpy.raw calls
+    dict
 
-    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
 
     Examples
     --------
     ::
+
         >>> import seestarpy as ssp
         >>> ssp.tracking()
         False
         >>> ssp.tracking(False)     # Turn off tracking
-        ...
 
     """
     if flag is None:
@@ -166,18 +181,27 @@ def exposure(exptime: int | None = None, which="stack_l"):
 
     Parameters
     ----------
-    exptime : int | None
-        None: returns the current exposure time
-        int: sets the current exposure time. Accepted values in sec or milli-sec
-    which : str, Optional
-        Default: "stack_l". Set the long-exposure time. Options ["stack_l", "continuous"]
+    exptime : int or None, optional
+        - ``None`` : return the current exposure time.
+        - ``int`` : set the exposure time in seconds (or milliseconds if > 100).
+          Accepted values: 2, 5, 10, 20, 30, 60.
+    which : str, optional
+        Which exposure to set. One of ``'stack_l'`` or ``'continuous'``.
+        Default is ``'stack_l'``.
 
-    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+    Returns
+    -------
+    dict
 
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
 
     Examples
     --------
     ::
+
         >>> import seestarpy as ssp
         >>> ssp.exposure()
         {'stack_l': 10000, 'continuous': 500}
@@ -185,7 +209,6 @@ def exposure(exptime: int | None = None, which="stack_l"):
         {'Event': 'Setting', 'Timestamp': '1380808.244289322', 'wide_cam': False, 'exp_ms': {'stack_l': 30000}}
         >>> ssp.conn.find_available_ips(n_ip=3)
         >>> ssp.exposure(exptime=5, ips="all")               # 5s exposure time for all 3 connected Seestars
-        ...
 
     """
     if exptime is None:
@@ -201,24 +224,32 @@ def exposure(exptime: int | None = None, which="stack_l"):
 @multiple_ips
 def filter_wheel(pos: int | str | None = None):
     """
-    Get/Set the filter wheel position
+    Get or set the filter-wheel position.
 
     Parameters
     ----------
-    pos : int | str | None
-        Returns the current filter wheel position with `None`
-        Set the filter with any of: `[1, "open", "ircut", 2, "narrow", "lp"]`
+    pos : int, str, or None, optional
+        - ``None`` : return the current filter-wheel position.
+        - ``1`` or ``'open'`` / ``'ircut'`` : open (IR-cut) filter.
+        - ``2`` or ``'narrow'`` / ``'lp'`` : narrow-band / light-pollution filter.
 
-    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+    Returns
+    -------
+    dict
 
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
 
     Examples
     --------
-    >>> from seestarpy import filter_wheel
-    >>> filter_wheel()
-    1
-    >>> filter_wheel("ircut")
-    >>> filter_wheel(2)
+
+        >>> from seestarpy import filter_wheel
+        >>> filter_wheel()
+        1
+        >>> filter_wheel("ircut")
+        >>> filter_wheel(2)
 
     """
     if pos is None:
@@ -236,26 +267,32 @@ def filter_wheel(pos: int | str | None = None):
 @multiple_ips
 def focuser(pos: int | str | None = None):
     """
-    Get or set the focuser position
+    Get or set the focuser position.
 
     Parameters
     ----------
-    pos : None
-        None : return the focuser position
-        int : set the focuser position
-        str : "auto" = start the auto-focus routine
+    pos : int, str, or None, optional
+        - ``None`` : return the current focuser position.
+        - ``int`` : move the focuser to this position.
+        - ``'auto'`` : start the auto-focus routine.
 
+    Returns
+    -------
+    dict
 
-    * Accepts the `ìps` keyword for sending the command to multiple Seestars simultaneously
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
 
     Examples
     --------
-    >>> from seestarpy import filter_wheel
-    >>> focuser()
-    1580
-    >>> focuser("auto")
-    >>> focuser(pos=1605)
-    ...
+
+        >>> from seestarpy import focuser
+        >>> focuser()
+        1580
+        >>> focuser("auto")
+        >>> focuser(pos=1605)
 
     """
     if pos is None:
@@ -288,4 +325,16 @@ def start_stack(restart=True):
 
 @multiple_ips
 def set_eq_mode(equ_mode=True):
+    """
+    Park the scope and set the equatorial mode.
+
+    Parameters
+    ----------
+    equ_mode : bool, optional
+        Enable equatorial mode. Default is ``True``.
+
+    Returns
+    -------
+    dict
+    """
     return raw.scope_park(equ_mode)
