@@ -551,11 +551,18 @@ def get_stack_info():
 
 def get_sensor_calibration():
     """
-    Get compass sensor calibration data
+    Get compass sensor calibration data.
 
     Returns
     -------
+    dict
+
+    Examples
+    --------
     ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_sensor_calibration()
         {'jsonrpc': '2.0',
          'Timestamp': '4183.724277609',
          'method': 'get_sensor_calibration',
@@ -778,14 +785,16 @@ def iscope_start_view(ra=None, dec=None,
         # Slew to a target, trigger a plate-solve, then turn the camera on.
         >>> raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar")
 
-    An example for setting up mosics, contributed by NurseJackass of the
-    Seestar Collective
+    An example for setting up mosaics, contributed by NurseJackass of the
+    Seestar Collective::
 
         # Set up a mosaicing run and start observing
-        >>> mosaic={'scale': 3.5,           # This is how many "screen" big should the mosaic be
-                    'angle': -90,           # Rotation angle of the mosaic, like how you rotate in the app
-                    'star_map_angle': 271,  # no idea. it said 361 in get_settings. I've been making it "361 + angle", which seems to work
-                    'star_map_ratio':1.0}   # not sure. this is 3.5 after the goto, per get_settings.
+        >>> mosaic = {
+        ...     'scale': 3.5,           # How many "screens" big the mosaic should be
+        ...     'angle': -90,           # Rotation angle of the mosaic
+        ...     'star_map_angle': 271,  # Try "361 + angle"
+        ...     'star_map_ratio': 1.0,
+        ... }
         >>> raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar", mosaic=mosaic)
 
     """
@@ -809,19 +818,18 @@ def iscope_stop_view(stage=None):
     Parameters
     ----------
     stage : str or None
-        - ``stage=None`` (default) will set the camera mode to "none"
-        - ``stage="ContinuousExposure"`` will turn off the camera, but leave the
-          camera mode in "star" (or whatever)
-        - ``stage="Stack"`` will stop stacking sub-frames but still leave the
-          camera in the ``ContinuousExposure`` View stage
+        - ``None`` (default) — set the camera mode to ``"none"``.
+        - ``"ContinuousExposure"`` — turn off the camera, but leave the
+          camera mode in ``"star"`` (or whatever it was).
+        - ``"Stack"`` — stop stacking sub-frames but leave the camera in
+          the ``ContinuousExposure`` View stage.
 
-    Potential stage names include: ``["DarkLibrary", "AutoGoto", "AutoFocus",
-    "PlateSolve", "ContinuousExposure", "Stack", "ScopeGoto"]``
-    TODO: Test when/if these need to be used.
+        Other valid stage names: ``"DarkLibrary"``, ``"AutoGoto"``,
+        ``"AutoFocus"``, ``"PlateSolve"``, ``"ScopeGoto"``.
 
     Returns
     -------
-    dict:
+    dict
 
     Examples
     --------
@@ -1125,14 +1133,14 @@ def set_control_value(gain=80):
     such as nebula and galaxies.
 
     Use cases:
-    - If you prefer to map the full dynamic range of as many stars in the field as
-    possible, without the bright ones "burning out" (i.e. saturating) then it
-    makes sense to use the LCG mode, with gains set to below 80
 
-    - If you are looking for the best possible contrast within extended sources
-    like nebulae and galaxy disks, then the HCG mode is better suited. Set the
-    gain value to 80+
-
+    - If you prefer to map the full dynamic range of as many stars in the
+      field as possible, without the bright ones "burning out" (i.e.
+      saturating) then it makes sense to use the LCG mode, with gains
+      set to below 80.
+    - If you are looking for the best possible contrast within extended
+      sources like nebulae and galaxy disks, then the HCG mode is better
+      suited.  Set the gain value to 80+.
 
     """
     params = {"method": "set_control_value", "params": ["gain", gain]}
