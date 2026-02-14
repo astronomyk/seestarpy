@@ -6,20 +6,6 @@ from . import connection as conn
 from .status import get_filter, is_eq_mode
 
 
-def copy_doc(from_func):
-    """
-    Decorator that copies the docstring from one function to another.
-
-    Parameters
-    ----------
-    from_func : callable
-        The function whose docstring should be copied.
-    """
-    def decorator(to_func):
-        to_func.__doc__ = from_func.__doc__
-        return to_func
-    return decorator
-
 
 def multiple_ips(func):
     """
@@ -87,7 +73,29 @@ def multiple_ips(func):
 
 @multiple_ips
 def open():
-    """Opens the Seestar arm"""
+    """
+    Open the Seestar arm by moving it to the horizontal position.
+
+    This must be called before slewing to a target. You cannot goto an
+    object directly from the parked position.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> import seestarpy as ssp
+        >>> ssp.open()
+        >>> ssp.open(ips="all")     # Open all connected Seestars
+
+    """
     return raw.scope_move_to_horizon()
 
 
@@ -122,8 +130,40 @@ def close(eq_mode=None):
 
 
 @multiple_ips
-@copy_doc(raw.scope_goto)
 def goto(ra_dec=()):
+    """
+    Move the scope arm to a given position.
+
+    Accepts an ``(ra, dec)`` tuple, or the strings ``'park'`` /
+    ``'horizon'`` as shortcuts.
+
+    Parameters
+    ----------
+    ra_dec : tuple of float, or str
+        - ``(ra, dec)`` : decimal hour angle [0, 24] and declination
+          [-90, 90].
+        - ``'park'`` : park the scope.
+        - ``'horizon'`` : move to the horizontal position.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> import seestarpy as ssp
+        >>> ssp.goto((13.4, 54.8))          # Mizar
+        >>> ssp.goto((5.63, -69.4))         # Tarantula Nebula
+        >>> ssp.goto("park")
+        >>> ssp.goto("horizon")
+
+    """
     if isinstance(ra_dec, (tuple, list)) and len(ra_dec) == 2:
         return raw.scope_goto(*ra_dec)
     elif isinstance(ra_dec, str):
@@ -306,20 +346,101 @@ def focuser(pos: int | str | None = None):
 
 
 @multiple_ips
-@copy_doc(raw.iscope_start_view)
 def goto_target(target_name, ra, dec, lp_filter=False):
+    """
+    Slew to a target by name and coordinates, then start viewing.
+
+    This triggers an ``AutoGoto`` sequence: the telescope slews to the
+    given coordinates, runs a plate-solve loop, and then enters
+    ``ContinuousExposure`` mode.
+
+    Parameters
+    ----------
+    target_name : str
+        Name of the target. Also used as the directory name on the
+        Seestar's internal storage.
+    ra : float
+        Right Ascension in decimal hours.
+    dec : float
+        Declination in decimal degrees.
+    lp_filter : bool, optional
+        Use the light-pollution filter. Default is ``False``.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> import seestarpy as ssp
+        >>> ssp.goto_target("Mizar", ra=13.4, dec=54.9)
+        >>> ssp.goto_target("M8", ra=18.06, dec=-24.38, lp_filter=True)
+
+    """
     return raw.iscope_start_view(ra, dec, target_name, lp_filter)
 
 
 @multiple_ips
-@copy_doc(raw.iscope_stop_view)
 def stop_view():
+    """
+    Stop the current viewing session.
+
+    Sets the camera mode to ``'none'`` and stops all activity.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> import seestarpy as ssp
+        >>> ssp.stop_view()
+        >>> ssp.stop_view(ips="all")    # Stop all connected Seestars
+
+    """
     return raw.iscope_stop_view()
 
 
 @multiple_ips
-@copy_doc(raw.iscope_start_stack)
 def start_stack(restart=True):
+    """
+    Start stacking sub-frames on the current target.
+
+    Parameters
+    ----------
+    restart : bool, optional
+        Restart the stacking sequence from scratch. Default is ``True``.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> import seestarpy as ssp
+        >>> ssp.goto_target("M31", ra=0.712, dec=41.27)
+        >>> ssp.start_stack()
+        >>> ssp.start_stack(ips="all")  # Start stacking on all Seestars
+
+    """
     return raw.iscope_start_stack(restart)
 
 
@@ -336,5 +457,19 @@ def set_eq_mode(equ_mode=True):
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> import seestarpy as ssp
+        >>> ssp.open()
+        >>> ssp.set_eq_mode(True)       # Park into EQ mode
+        >>> ssp.set_eq_mode(False)      # Park into AzAlt mode
+
     """
     return raw.scope_park(equ_mode)
