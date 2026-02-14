@@ -9,3 +9,4 @@ Python API index
    raw
    data
    status
+   events

@@ -17,7 +17,19 @@ connected_clients = set()
 
 
 async def heartbeat(writer):
-    """Send periodic heartbeat messages to keep connection alive."""
+    """
+    Send periodic heartbeat messages to keep the TCP connection alive.
+
+    Cycles through several query methods (``get_device_state``,
+    ``iscope_get_app_state``, ``scope_get_equ_coord``,
+    ``scope_get_horiz_coord``) so that :data:`event_stream.LATEST_STATE`
+    stays up to date even when the Seestar is idle.
+
+    Parameters
+    ----------
+    writer : asyncio.StreamWriter
+        The open TCP writer for the Seestar connection.
+    """
     hb_i = 0
     while not _shutdown_event.is_set():
         if hb_i % 10 == 0:        # Every 20th heartbeat
@@ -43,7 +55,12 @@ async def heartbeat(writer):
 
 async def run():
     """
-    Watch for and handle Seestar event messages.
+    Main event loop: connect to the Seestar and process incoming events.
+
+    Opens a persistent TCP connection, starts a :func:`heartbeat` task,
+    and reads newline-delimited JSON messages.  Each message is passed
+    to :func:`event_stream.handle_event`.  Automatically reconnects on
+    connection loss.
     """
     # This is not a graceful way to shut down the Thread
     while not _shutdown_event.is_set():
@@ -89,6 +106,13 @@ async def run():
 
 
 async def websocket_server():
+    """
+    Start a WebSocket server that broadcasts :data:`event_stream.LATEST_STATE`.
+
+    Serves on ``ws://0.0.0.0:8765``.  Each connected client receives the
+    full state dictionary once per second.  Used by the HTML dashboards
+    returned by :func:`dashboard_url`.
+    """
     async def handler(websocket):
         connected_clients.add(websocket)
         try:
@@ -106,6 +130,40 @@ async def websocket_server():
 
 
 def start_listener(with_websocket: bool = True):
+    """
+    Start the background event listener in a daemon thread.
+
+    Opens a persistent TCP connection to the Seestar and continuously
+    reads incoming event messages, keeping
+    :data:`event_stream.LATEST_STATE` up to date.  Optionally starts a
+    WebSocket server so that the bundled HTML dashboards can display
+    live data.
+
+    This function is safe to call multiple times — subsequent calls are
+    a no-op if the listener is already running.
+
+    Parameters
+    ----------
+    with_websocket : bool, optional
+        Also start the WebSocket relay server on ``ws://0.0.0.0:8765``.
+        Default is ``True``.
+
+    See Also
+    --------
+    stop_listener : Stop the background listener.
+    dashboard_url : Get paths to the bundled HTML dashboards.
+
+    Examples
+    --------
+
+        >>> from seestarpy import start_listener, stop_listener
+        >>> start_listener()
+        [seestarpy] Starting background thread with asyncio loop.
+        Connecting to 192.168.1.243:4700...
+        Connected to 192.168.1.243:4700
+        >>> stop_listener()
+
+    """
     global _listener_running, _listener_thread, _shutdown_event
     if _listener_running:
         print("[seestarpy] Listener already running.")
@@ -132,6 +190,16 @@ def start_listener(with_websocket: bool = True):
 
 
 def stop_listener():
+    """
+    Stop the background event listener.
+
+    Signals the listener thread to shut down and clears internal state.
+    Safe to call even if the listener is not running.
+
+    See Also
+    --------
+    start_listener : Start the background listener.
+    """
     global _listener_running, _listener_thread, _shutdown_event
     if not _listener_running:
         return
@@ -145,12 +213,24 @@ def stop_listener():
 
 def dashboard_url():
     """
-    Open the basic dashboard HTML file in the default system browser.
+    Get file paths to the bundled HTML dashboard pages.
 
-    Parameters
-    ----------
-    which : str
-        ["basic", "fancy"]
+    These dashboards connect to the WebSocket server started by
+    :func:`start_listener` and display live Seestar state.  Open the
+    returned paths in a web browser.
+
+    Returns
+    -------
+    list of pathlib.Path
+        Paths to the ``basic.html`` and ``fancy.html`` dashboard files.
+
+    Examples
+    --------
+
+        >>> from seestarpy.events.event_listener import dashboard_url
+        >>> dashboard_url()
+        [PosixPath('.../dashboards/basic.html'), PosixPath('.../dashboards/fancy.html')]
+
     """
     paths = [Path(__file__).parent.parent / "dashboards" / f"{which}.html"
              for which in ["basic", "fancy"]]

@@ -8,6 +8,19 @@ from src.seestarpy.events import event_definitions as evs
 
 
 class EventWatcher:
+    """
+    Async event watcher that collects Seestar events into typed dataclasses.
+
+    Maintains a persistent TCP connection to the Seestar and
+    deserialises each incoming JSON message into the corresponding
+    :mod:`~seestarpy.events.event_definitions` dataclass.  New event
+    types are added automatically on first occurrence; subsequent
+    messages of the same type update the existing instance.
+
+    .. note::
+        This class is experimental and requires an active ``asyncio``
+        event loop.  For most use cases, prefer :func:`start_listener`.
+    """
     def __init__(self):
         self.events_list: List[evs.Event] = []
         self._task = asyncio.create_task(self._listen())

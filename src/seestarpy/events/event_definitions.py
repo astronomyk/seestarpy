@@ -4,7 +4,11 @@ from typing import Optional, List, Dict, Any
 @dataclass
 class ThreePPA:
     """
-    Represents a 3PPA event, related to three-point polar alignment.
+    Three-Point Polar Alignment (3PPA) event.
+
+    Emitted during the automated polar-alignment sequence.  The Seestar
+    slews to three sky positions, plate-solves each one, and computes the
+    azimuth/altitude offset required to align the mount's polar axis.
 
     Parameters
     ----------
@@ -13,8 +17,8 @@ class ThreePPA:
     lapse_ms : int
         Elapsed time in milliseconds.
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     percent : float
         Progress percentage. Values: 0.0 to 100.0
     calib_fail_autogoto : bool
@@ -56,7 +60,10 @@ class ThreePPA:
 @dataclass
 class AIProcess:
     """
-    Represents an AI image processing event.
+    AI image-processing event.
+
+    Emitted when the Seestar applies its on-board AI enhancement to an
+    image (e.g. noise reduction, sharpening).
 
     Parameters
     ----------
@@ -65,8 +72,8 @@ class AIProcess:
     lapse_ms : int
         Elapsed time in ms.
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     ori_name : str
         Original image filename. Example: 'ori_path.jpg'
     dst_name : str
@@ -84,7 +91,11 @@ class AIProcess:
 @dataclass
 class Alert:
     """
-    Represents alerts raised during operations.
+    Alert event raised during observations.
+
+    Emitted when the Seestar encounters a problem such as the target
+    dropping below the horizon, too few stars for stacking, or star
+    trails being detected.
 
     Parameters
     ----------
@@ -100,15 +111,18 @@ class Alert:
 @dataclass
 class Annotate:
     """
-    Represents image annotation processes.
+    Image-annotation event.
+
+    Emitted when the Seestar annotates a stacked image with detected
+    object labels (stars, DSOs, etc.).
 
     Parameters
     ----------
     state : str
         Status of the annotation. Values: 'start', 'working', 'complete'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     page : str
         Page context. Values: 'stack'
     lapse_ms : int
@@ -128,15 +142,19 @@ class Annotate:
 @dataclass
 class AutoFocus:
     """
-    Represents autofocus operations and outcomes.
+    Auto-focus event.
+
+    Emitted during the automated focus routine.  The Seestar sweeps
+    through focuser positions and measures star FWHM to find the
+    optimal focus point.
 
     Parameters
     ----------
     state : str
         Autofocus state. Values: 'start', 'working', 'fail'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Elapsed time in milliseconds.
     error : str
@@ -156,21 +174,23 @@ class AutoFocus:
     result: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
 
 @dataclass
 class AutoGoto:
     """
-    Represents an AutoGoto operation.
+    Auto-goto event.
+
+    Emitted during the automated goto sequence: the mount slews to the
+    target coordinates, then enters a plate-solve loop to refine
+    pointing accuracy.
 
     Parameters
     ----------
     state : str
         State of the goto process. Values: 'start', 'working', 'complete', 'fail'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     page : str
         UI page. Values: 'preview'
     tag : str
@@ -211,15 +231,17 @@ class AutoGoto:
 @dataclass
 class AutoGotoStep:
     """
-    Represents a step in the AutoGoto sequence.
+    Individual step within an :class:`AutoGoto` sequence.
+
+    Emitted for each slew-and-solve iteration during the goto process.
 
     Parameters
     ----------
     state : str
         Status of the step. Values: 'fail'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     page : str
         UI page. Values: 'preview'
     tag : str
@@ -245,15 +267,19 @@ class AutoGotoStep:
 @dataclass
 class BalanceSensor:
     """
-    Represents data from the balance sensor.
+    Balance-sensor reading event.
+
+    Reports the accelerometer data (x, y, z) and the computed tilt
+    angle of the Seestar's body.  Useful for verifying the tripod is
+    level.
 
     Parameters
     ----------
     code : int
         Status code. Values: 0
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     data : dict
         Balance data with x, y, z acceleration and angle. Example: {'x': 0.316085, 'y': -0.515709, 'z': 1.104264, 'angle': 28.712015}
     """
@@ -264,15 +290,18 @@ class BalanceSensor:
 @dataclass
 class ContinuousExposure:
     """
-    Represents a continuous exposure stream.
+    Continuous-exposure (live-view) event.
+
+    Emitted while the camera is running in live-view mode, before
+    stacking has started.  Reports the frame rate and elapsed time.
 
     Parameters
     ----------
     state : str
         Current state. Values: 'cancel', 'working'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Duration in milliseconds.
     fps : float
@@ -289,15 +318,18 @@ class ContinuousExposure:
 @dataclass
 class DarkLibrary:
     """
-    Represents the dark frame library creation process.
+    Dark-frame library creation event.
+
+    Emitted while the Seestar is capturing dark frames for calibration.
+    Reports progress as a percentage.
 
     Parameters
     ----------
     state : str
         Process state. Values: 'working', 'complete'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Time in milliseconds.
     percent : float
@@ -314,7 +346,10 @@ class DarkLibrary:
 @dataclass
 class DiskSpace:
     """
-    Represents the current disk space usage.
+    Disk-space usage event.
+
+    Reports the percentage of used storage on the Seestar's internal
+    eMMC drive.
 
     Parameters
     ----------
@@ -324,21 +359,23 @@ class DiskSpace:
     used_percent: int
 
 
-from dataclasses import dataclass, field
-from typing import Optional, List
 
 @dataclass
 class Exposure:
     """
-    Represents an exposure capture operation.
+    Single-exposure capture event.
+
+    Emitted for each individual sub-frame during stacking or
+    auto-goto plate-solving.  Reports the exposure duration, gain,
+    and capture state.
 
     Parameters
     ----------
     state : str
         Current state of the exposure. Values: 'start', 'working', 'downloading', 'complete', 'fail', 'cancel'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     page : str
         UI context. Values: 'preview', 'stack'
     tag : str
@@ -376,15 +413,18 @@ class Exposure:
 @dataclass
 class FocuserMove:
     """
-    Represents a focuser movement operation.
+    Focuser-movement event.
+
+    Emitted when the focuser motor moves to a new position, either
+    manually or as part of the auto-focus routine.
 
     Parameters
     ----------
     state : str
         State of the focuser. Values: 'complete', 'working'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Time in milliseconds.
     position : int
@@ -401,7 +441,10 @@ class FocuserMove:
 @dataclass
 class GSensorMove:
     """
-    Represents G-sensor activity.
+    G-sensor movement-detection event.
+
+    Emitted when the accelerometer detects that the Seestar has been
+    physically moved or bumped.
 
     Parameters
     ----------
@@ -414,7 +457,10 @@ class GSensorMove:
 @dataclass
 class Initialise:
     """
-    Represents the initialization state of the device.
+    Device-initialisation event.
+
+    Emitted during the Seestar's startup sequence (dark-frame loading,
+    sensor calibration, etc.).
 
     Parameters
     ----------
@@ -423,8 +469,8 @@ class Initialise:
     state : str
         Status of initialization. Values: 'working', 'complete'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Elapsed time.
     route : list
@@ -439,7 +485,10 @@ class Initialise:
 @dataclass
 class MountMode:
     """
-    Represents equatorial mount mode status.
+    Mount-mode change event.
+
+    Emitted when the mount switches between equatorial (EQ) and
+    altitude-azimuth (AzAlt) mode.
 
     Parameters
     ----------
@@ -455,15 +504,18 @@ class MountMode:
 @dataclass
 class MoveByAngle:
     """
-    Represents movement by a specific angle.
+    Move-by-angle event.
+
+    Emitted when the mount is commanded to move by a specific angular
+    offset (e.g. during polar-alignment adjustments).
 
     Parameters
     ----------
     state : str
         State of the movement. Values: 'start', 'moving', 'complete'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     value : float
         Angle in degrees. Example: 10.043414
     """
@@ -474,10 +526,13 @@ class MoveByAngle:
 @dataclass
 class PiStatus:
     """
-    Represents Pi hardware status.
+    Raspberry Pi hardware status event.
 
-    Optional Parameters
-    -------------------
+    Periodic report of the Seestar's internal processor temperature,
+    battery level, and charging state.
+
+    Other Parameters
+    ----------------
     temp : float
         Temperature in Celsius. Example: 46.5
     battery_temp : int
@@ -493,21 +548,23 @@ class PiStatus:
     charger_status: Optional[str] = None
 
 
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
 
 @dataclass
 class PlateSolve:
     """
-    Represents plate solving events.
+    Plate-solve event.
+
+    Emitted during astrometric plate-solving of captured frames.
+    Reports the solved RA/Dec position, field of view, rotation angle,
+    and number of detected stars.
 
     Parameters
     ----------
     state : str
         Current solving state. Values: 'start', 'solving', 'working', 'complete', 'fail'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     page : str
         Context page. Values: 'preview', 'stack'
     tag : str
@@ -557,15 +614,18 @@ class PlateSolve:
 @dataclass
 class SaveImage:
     """
-    Represents the result of saving an image.
+    Image-save event.
+
+    Emitted when a stacked or sub-frame image is saved to the
+    Seestar's internal eMMC storage.
 
     Parameters
     ----------
     state : str
         Save state. Values: 'complete'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     filename : str
         File name only. Example: 'Stacked_36_Polaris_10.0s_IRCUT_20250720-224643.fit'
     fullname : str
@@ -579,15 +639,18 @@ class SaveImage:
 @dataclass
 class ScopeGoto:
     """
-    Represents telescope movement to RA/DEC coordinates.
+    Scope-goto (low-level slew) event.
+
+    Emitted as the mount physically moves toward the target coordinates.
+    Reports the current position and remaining angular distance.
 
     Parameters
     ----------
     state : str
         Movement state. Values: 'complete', 'fail', 'working'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Time taken for goto in ms.
     cur_ra_dec : list
@@ -610,21 +673,21 @@ class ScopeGoto:
     route: Optional[List[str]] = field(default_factory=list)
 
 
-from dataclasses import dataclass, field
-from typing import Optional, List
 
 @dataclass
 class ScopeHome:
     """
-    Represents the scope homing process.
+    Scope-home (park) event.
+
+    Emitted when the Seestar arm moves to the parked (closed) position.
 
     Parameters
     ----------
     state : str
         State of homing. Values: 'complete', 'working'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Time taken for the homing process in ms.
     close : bool
@@ -641,15 +704,18 @@ class ScopeHome:
 @dataclass
 class ScopeMoveToHorizon:
     """
-    Represents telescope move to horizon.
+    Scope move-to-horizon event.
+
+    Emitted when the Seestar arm moves from the parked position to the
+    horizontal (open) position, ready for observing.
 
     Parameters
     ----------
     state : str
         Status of movement. Values: 'complete', 'working'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Time in milliseconds.
     close : bool
@@ -663,15 +729,18 @@ class ScopeMoveToHorizon:
 @dataclass
 class ScopeTrack:
     """
-    Represents telescope tracking state.
+    Sidereal-tracking state event.
+
+    Emitted when tracking is toggled on or off, or when a tracking
+    error occurs (e.g. target below horizon, mount sync failure).
 
     Parameters
     ----------
     state : str
         Tracking status. Values: 'on', 'off'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     tracking : bool
         Whether tracking is active. Values: True, False
     manual : bool
@@ -694,15 +763,19 @@ class ScopeTrack:
 @dataclass
 class Stack:
     """
-    Represents the image stacking process.
+    Image-stacking event.
+
+    Emitted for each stacking cycle.  Reports the number of stacked
+    and dropped frames, frame error codes, and whether annotation is
+    available on the current stack.
 
     Parameters
     ----------
     state : str
         State of the stacking. Values: 'start', 'working', 'cancel', 'frame_complete'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Time elapsed in milliseconds.
     frame_errcode : int
@@ -743,15 +816,18 @@ class Stack:
 @dataclass
 class View:
     """
-    Represents a view operation on a target.
+    Top-level view-session event.
+
+    Emitted when a viewing session starts, changes mode, or completes.
+    Carries the target name, coordinates, gain, and filter state.
 
     Parameters
     ----------
     state : str
         View state. Values: 'cancel', 'working'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     lapse_ms : int
         Elapsed time.
     mode : str
@@ -783,15 +859,18 @@ class View:
 @dataclass
 class WheelMove:
     """
-    Represents movement of the filter wheel.
+    Filter-wheel movement event.
+
+    Emitted when the filter wheel rotates to a new position
+    (e.g. switching between IR-cut and narrow-band filters).
 
     Parameters
     ----------
     state : str
         Movement state. Values: 'start', 'complete'
 
-    Optional Parameters
-    -------------------
+    Other Parameters
+    ----------------
     position : int
         Position index. Examples: 0, 1
     """
