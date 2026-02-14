@@ -51,7 +51,11 @@ def _connect_smb(ip: str = DEFAULT_IP) -> SMBConnection:
 
 def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
     """
-    List all folders under ``MyWorks`` and return file counts per folder.
+    List all observation folders stored on the Seestar's internal eMMC.
+
+    Each observation session creates a folder under ``MyWorks`` (e.g.
+    ``"M 81"``, ``"Lunar"``).  This function returns every folder
+    together with a count of the files it contains.
 
     Parameters
     ----------
@@ -62,6 +66,14 @@ def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
     -------
     dict of {str: int}
         Mapping of folder names to the number of files they contain.
+
+    Examples
+    --------
+
+        >>> from seestarpy import data
+        >>> data.list_folders()
+        {'M 81': 3, 'M 81_sub': 37, 'Lunar': 2}
+
     """
     conn = _connect_smb(ip)
     summary = {}
@@ -84,12 +96,12 @@ def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
 
 def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
     """
-    List files inside a specific folder under ``MyWorks``.
+    List every file inside an observation folder on the Seestar's eMMC.
 
     Parameters
     ----------
     folder : str
-        Name of the folder to list.
+        Name of the folder under ``MyWorks`` to list (e.g. ``"M 81_sub"``).
     ip : str, optional
         IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
 
@@ -97,6 +109,18 @@ def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
     -------
     dict of {str: int}
         Mapping of file names to their sizes in bytes.
+
+    Examples
+    --------
+
+        >>> from seestarpy import data
+        >>> files = data.list_folder_contents("M 81_sub")
+        >>> for name, size in list(files.items())[:3]:
+        ...     print(f"{name}: {size / 1024:.0f} KB")
+        Light_M 81_10.0s_IRCUT_20250607-221746.fit: 4050 KB
+        Light_M 81_10.0s_IRCUT_20250607-221758.fit: 4050 KB
+        Light_M 81_10.0s_IRCUT_20250607-221810.fit: 4050 KB
+
     """
     conn = _connect_smb(ip)
     contents = {}
@@ -114,14 +138,30 @@ def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
 
 def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
     """
-    Recursively delete a folder and all its contents via SMB.
+    Recursively delete an observation folder and all its files via SMB.
+
+    .. warning::
+        This permanently removes data from the Seestar's internal eMMC
+        storage. There is no undo.
 
     Parameters
     ----------
     folder : str
-        Name of the folder under ``MyWorks`` to delete.
+        Name of the folder under ``MyWorks`` to delete (e.g.
+        ``"M 81_sub"``).
     ip : str, optional
         IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+
+    Examples
+    --------
+
+        >>> from seestarpy import data
+        >>> data.list_folders()
+        {'M 81': 3, 'M 81_sub': 37, 'Lunar': 2}
+        >>> data.delete_folder("M 81_sub")
+        >>> data.list_folders()
+        {'M 81': 3, 'Lunar': 2}
+
     """
     conn = _connect_smb(ip)
 
@@ -148,16 +188,32 @@ def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
 def download_folder(folder: str = "", dest: str = "",
                     ip: str = DEFAULT_IP) -> None:
     """
-    Download an entire folder from ``MyWorks`` via SMB.
+    Download an entire observation folder from the Seestar's eMMC via SMB.
+
+    Copies every file from the given folder under ``MyWorks`` to a local
+    directory.  Progress is printed to stdout as each file completes.
 
     Parameters
     ----------
-    folder : str, optional
-        Name of the folder under ``MyWorks`` to download.
-    dest : str, optional
-        Local destination directory path.
+    folder : str
+        Name of the folder under ``MyWorks`` to download (e.g.
+        ``"M 81_sub"``).
+    dest : str
+        Local directory where the folder will be saved.  Created
+        automatically if it does not exist.
     ip : str, optional
         IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+
+    Examples
+    --------
+
+        >>> from seestarpy import data
+        >>> data.download_folder("M 81_sub", dest="/home/user/astro")
+        Downloading 37 files from 'M 81_sub' (150.0 MB)...
+          [1/37] Light_M 81_10.0s_IRCUT_20250607-221746.fit (4.05 MB) ✓
+          ...
+        ✓ Download complete: 37 files
+
     """
     os.makedirs(dest, exist_ok=True)
 

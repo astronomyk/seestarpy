@@ -6,34 +6,42 @@ from .connection import send_command
 
 def status_bar(return_type="str"):
     """
-    Generate a structured ASCII-style status bar for Seestar state display.
+    Query the Seestar and return a formatted ASCII status dashboard.
+
+    Pulls data from multiple device endpoints (device state, app state,
+    coordinates) and combines them into a single table.  Useful for
+    quick at-a-glance monitoring in a terminal or Jupyter notebook.
 
     Parameters
     ----------
-    return_type : str
-        ["str", "dict"] Return the CLI-formatted status bar as a string or
-        a dictionary with all the entries
+    return_type : str, optional
+        Output format.  ``"str"`` (default) returns a printable multi-line
+        string; ``"dict"`` returns the raw values as a dictionary.
 
     Returns
     -------
     str or dict
-        A multi-line string formatted for CLI or Jupyter display.
+        The formatted status table, or a dictionary of all queried values.
 
-|================|================|================|================|==========|
-| View           | Coordinates    | Observation    | Initialisation | Seestar  |
-|================|================|================|================|==========|
-| MODE           | TARGET RA/DEC  | LP_FILTER      | DARK           | BATTERY  |
-| "star"         | hh.hhh  dd.dd  | True           | 100%           | 100%     |
-|----------------|----------------|----------------|----------------|----------|
-| STATE          | CURRENT RA/DEC | EXPTIME        | FOCUS POS      | FREE MB  |
-| "ContinuousEx" | hh.hhh  dd.dd  | 10             | 1605           | 40000    |
-|----------------|----------------|----------------|----------------|----------|
-| ERROR          | AZ      AZ     | STACK    DROP  | PLATESOLVE     | EQ_MODE  |
-| "Fail to move" | ddd.dd  dd.dd  | sssss    dddd  | x.xx y.yy      | False    |
-|----------------|----------------|----------------|----------------|----------|
-| NAME           | BALANCE ANGLE  | TRACKING       | LAST UPDATE               |
-| "Mizar"        | dd.dd          | True           | hh:mm:ss  (sss sec ago)   |
-|================|================|================|================|==========|
+    Notes
+    -----
+    The table layout is shown below.  Each cell is populated from live
+    device queries::
+
+        |================|================|================|================|==========|
+        | View           | Coordinates    | Observation    | Initialisation | Seestar  |
+        |================|================|================|================|==========|
+        | MODE           | TARGET RA/DEC  | LP FILTER      | DARK FRAME     | BATTERY  |
+        | STATE          | CURRENT RA/DEC | EXPOSURE TIME  | FOCUS POSITION | FREE MB  |
+        | ERROR          | ALT  AZ  COMP  | STACK    DROP  | PLATE SOLVE    | EQ_MODE  |
+        | TARGET NAME    | BALANCE ANGLE  | TRACKING       | SOLVE ERROR    | TIME     |
+        |================|================|================|================|==========|
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> print(status.status_bar())
 
     """
 
@@ -95,13 +103,29 @@ def status_bar(return_type="str"):
 
 def get_mount_state():
     """
-    Get the current mount state dictionary.
+    Get the full mount state dictionary from the Seestar.
+
+    This is a convenience wrapper around
+    ``raw.get_device_state(keys=["mount"])``, returning just the
+    ``mount`` sub-dictionary.
 
     Returns
     -------
     dict
-        Mount state containing keys like ``'move_type'``, ``'close'``,
-        ``'tracking'``, ``'equ_mode'``.
+        Mount state with keys:
+
+        - ``'move_type'`` (str) — e.g. ``"none"``, ``"tracking"``.
+        - ``'close'`` (bool) — ``True`` when the arm is parked.
+        - ``'tracking'`` (bool) — ``True`` when sidereal tracking is on.
+        - ``'equ_mode'`` (bool) — ``True`` when in equatorial-mount mode.
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_mount_state()
+        {'move_type': 'none', 'close': False, 'tracking': True, 'equ_mode': True}
+
     """
     return raw.get_device_state(keys=["mount"]).get("result", {}).get("mount", {})
 
@@ -110,48 +134,92 @@ def is_eq_mode():
     """
     Check whether the mount is in equatorial mode.
 
+    Returns ``True`` when the Seestar has been parked with the
+    equatorial wedge enabled (i.e. ``scope_park(equ_mode=True)``).
+
     Returns
     -------
     bool
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.is_eq_mode()
+        True
+
     """
     return get_mount_state().get("equ_mode")
 
 
 def is_tracking():
     """
-    Check whether the mount is currently tracking.
+    Check whether the mount is currently sidereal-tracking.
 
     Returns
     -------
     bool
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.is_tracking()
+        False
+
     """
     return get_mount_state().get("tracking")
 
 
 def is_parked():
     """
-    Check whether the mount is parked (arm closed).
+    Check whether the Seestar arm is in the closed (parked) position.
 
     Returns
     -------
     bool
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.is_parked()
+        True
+
     """
     return get_mount_state().get("close")
 
 
 def get_coords():
     """
-    Get the current equatorial and horizontal coordinates.
+    Get the mount's current equatorial and horizontal coordinates.
+
+    Queries both the RA/Dec and Alt/Az endpoints and merges the results
+    into a single dictionary.
 
     Returns
     -------
     dict
-        Dictionary with keys ``'ra'``, ``'dec'``, ``'alt'``, ``'az'``.
+        Dictionary with keys:
+
+        - ``'ra'`` (float) — Right Ascension in decimal hours.
+        - ``'dec'`` (float) — Declination in decimal degrees.
+        - ``'alt'`` (float) — Altitude in decimal degrees.
+        - ``'az'`` (float) — Azimuth in decimal degrees.
 
     Raises
     ------
     ValueError
-        If the coordinate data cannot be retrieved.
+        If either coordinate endpoint returns an error (e.g. the mount
+        has not been initialised).
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_coords()
+        {'ra': 13.398, 'dec': 54.925, 'alt': 42.3, 'az': 312.7}
+
     """
     eq_dict = raw.scope_get_ra_dec()
     altaz_dict = raw.scope_get_horiz_coord()
@@ -170,16 +238,30 @@ def get_exposure(which="stack_l"):
     """
     Get the current exposure time in milliseconds.
 
+    The Seestar maintains two independent exposure settings:
+    ``'stack_l'`` for long-exposure stacking, and ``'continuous'`` for
+    the live-view / continuous-exposure mode.
+
     Parameters
     ----------
     which : str, optional
-        Which exposure to query. One of ``'stack_l'`` or ``'continuous'``.
-        Default is ``'stack_l'``.
+        Which exposure to query.  One of ``'stack_l'`` (default) or
+        ``'continuous'``.
 
     Returns
     -------
     int
         Exposure time in milliseconds.
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_exposure()           # Stacking exposure
+        10000
+        >>> status.get_exposure("continuous")   # Live-view exposure
+        500
+
     """
     params = {"method": "get_setting", "params": {"keys": ["exp_ms"]}}
     payload = send_command(params)
@@ -190,9 +272,25 @@ def get_filter():
     """
     Get the current filter-wheel position.
 
+    The Seestar S50 filter wheel has three positions:
+
+    - **0** — Dark (shutter closed).
+    - **1** — IR-cut (open, 400–700 nm with Bayer matrix).
+    - **2** — Narrow-band / light-pollution (30 nm OIII + 20 nm Ha).
+
     Returns
     -------
     dict
+        Response dictionary whose ``'result'`` key contains the
+        integer position.
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_filter()
+        {'jsonrpc': '2.0', ..., 'result': 1, 'code': 0, 'id': 1}
+
     """
     params = {"method": "get_wheel_position"}
     return send_command(params)
@@ -200,12 +298,24 @@ def get_filter():
 
 def get_target_name():
     """
-    Get the current observation sequence (group) name.
+    Get the target name from the current observation sequence setting.
+
+    This returns the group name that was set when the observation
+    sequence was configured (e.g. via ``raw.set_sequence_setting``).
 
     Returns
     -------
     str or None
-        The group name, or ``None`` if not set.
+        The group name (e.g. ``"M 81"``), or ``None`` if no sequence
+        is configured.
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_target_name()
+        'M 81'
+
     """
     params = {"method": "get_sequence_setting"}
     return send_command(params).get("group_name")
@@ -213,11 +323,22 @@ def get_target_name():
 
 def get_target_name2():
     """
-    Get the current image name field.
+    Get the target name from the image-name field.
+
+    This is an alternative to :func:`get_target_name` that reads the
+    name embedded in the image filename template rather than the
+    sequence setting.
 
     Returns
     -------
     dict
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_target_name2()
+
     """
     params = {"method": "get_img_name_field"}
     return send_command(params)
@@ -227,6 +348,9 @@ def azimuth_to_compass(degrees):
     """
     Convert an azimuth angle to a 16-point compass direction.
 
+    Uses the standard meteorological convention where 0° is North,
+    90° is East, 180° is South, and 270° is West.
+
     Parameters
     ----------
     degrees : float
@@ -235,7 +359,22 @@ def azimuth_to_compass(degrees):
     Returns
     -------
     str
-        Compass direction, e.g. ``'N'``, ``'NNE'``, ``'SW'``.
+        One of the 16 compass points: ``'N'``, ``'NNE'``, ``'NE'``,
+        ``'ENE'``, ``'E'``, ``'ESE'``, ``'SE'``, ``'SSE'``, ``'S'``,
+        ``'SSW'``, ``'SW'``, ``'WSW'``, ``'W'``, ``'WNW'``, ``'NW'``,
+        ``'NNW'``.
+
+    Examples
+    --------
+
+        >>> from seestarpy.status import azimuth_to_compass
+        >>> azimuth_to_compass(0)
+        'N'
+        >>> azimuth_to_compass(135)
+        'SE'
+        >>> azimuth_to_compass(312.7)
+        'NW'
+
     """
     directions = [
         "N", "NNE", "NE", "ENE",
