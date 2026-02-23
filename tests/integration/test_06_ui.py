@@ -61,13 +61,13 @@ def test_focuser_get(verified_connection):
 def test_open_and_close(verified_connection):
     """Open the arm, verify not parked, close, verify parked."""
     ui.open()
-    time.sleep(5)
+    time.sleep(20)
 
     parked = status.is_parked()
     assert parked is False, "Scope should be open (not parked)"
 
     ui.close()
-    time.sleep(5)
+    time.sleep(20)
 
     parked = status.is_parked()
     assert parked is True, "Scope should be parked after close()"

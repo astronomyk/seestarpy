@@ -44,7 +44,7 @@ def test_move_to_horizon(verified_connection):
     """Open the arm before multi-target sequence."""
     raw.scope_move_to_horizon()
     result = wait_for_event(
-        "ScopeMoveToHorizon", {"complete"}, timeout=30,
+        "ScopeMoveToHorizon", {"complete"}, timeout=45,
     )
     assert result["state"] == "complete"
 
@@ -70,7 +70,7 @@ def test_stack_mizar(verified_connection):
 def test_stop_view_mizar(verified_connection):
     """Stop viewing Mizar."""
     raw.iscope_stop_view()
-    time.sleep(3)
+    time.sleep(5)
 
 
 # ---- TARGET 2: Polaris ----
@@ -94,10 +94,10 @@ def test_stack_polaris(verified_connection):
 def test_stop_view_and_park(verified_connection):
     """Stop viewing Polaris and park the scope."""
     raw.iscope_stop_view()
-    time.sleep(3)
+    time.sleep(5)
 
     raw.scope_park()
     result = wait_for_event(
-        "ScopeMoveToHorizon", {"complete"}, timeout=30,
+        "ScopeMoveToHorizon", {"complete"}, timeout=45,
     )
     assert result["state"] == "complete"

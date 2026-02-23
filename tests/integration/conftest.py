@@ -166,10 +166,11 @@ def module_safety_net():
     yield
     try:
         raw.iscope_stop_view()
-        time.sleep(2)
+        time.sleep(5)
     except Exception:
         pass
     try:
         raw.scope_park()
+        time.sleep(20)
     except Exception:
         pass

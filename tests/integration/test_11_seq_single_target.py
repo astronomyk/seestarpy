@@ -5,12 +5,12 @@ hemisphere.
 
 Flow::
 
-    scope_move_to_horizon()                   -> wait complete (30 s)
+    scope_move_to_horizon()                   -> wait complete (45 s)
     iscope_start_view(Polaris)                -> wait AutoGoto complete|fail (120 s)
     start_auto_focuse()                       -> wait AutoFocus complete|fail (90 s)
     iscope_start_stack(restart=True)          -> wait >= 3 stacked frames (120 s)
-    iscope_stop_view()                        -> sleep 3 s
-    scope_park()                              -> wait complete (30 s)
+    iscope_stop_view()                        -> sleep 5 s
+    scope_park()                              -> wait complete (45 s)
 """
 
 import time
@@ -37,7 +37,7 @@ def test_move_to_horizon(verified_connection):
     """Open the arm before starting the observation."""
     raw.scope_move_to_horizon()
     result = wait_for_event(
-        "ScopeMoveToHorizon", {"complete"}, timeout=30,
+        "ScopeMoveToHorizon", {"complete"}, timeout=45,
     )
     assert result["state"] == "complete"
 
@@ -77,10 +77,10 @@ def test_stack_three_frames(verified_connection):
 def test_stop_view_and_park(verified_connection):
     """Stop the observation and park the scope."""
     raw.iscope_stop_view()
-    time.sleep(3)
+    time.sleep(5)
 
     raw.scope_park()
     result = wait_for_event(
-        "ScopeMoveToHorizon", {"complete"}, timeout=30,
+        "ScopeMoveToHorizon", {"complete"}, timeout=45,
     )
     assert result["state"] == "complete"

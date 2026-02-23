@@ -29,7 +29,7 @@ class TestBelowHorizonTarget:
 
     def test_move_to_horizon(self, verified_connection):
         raw.scope_move_to_horizon()
-        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=30)
+        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)
 
     def test_below_horizon_triggers_alert(self, verified_connection):
         """Target at Dec=-89 should be below horizon from northern hemisphere."""
@@ -51,7 +51,7 @@ class TestBelowHorizonTarget:
     def test_recovery_after_below_horizon(self, verified_connection):
         """After a below-horizon error, a valid goto should succeed."""
         raw.iscope_stop_view()
-        time.sleep(2)
+        time.sleep(5)
 
         raw.iscope_start_view(
             ra=POLARIS_RA, dec=POLARIS_DEC, target_name="Polaris",
@@ -63,9 +63,9 @@ class TestBelowHorizonTarget:
 
     def test_park_after_recovery(self, verified_connection):
         raw.iscope_stop_view()
-        time.sleep(2)
+        time.sleep(5)
         raw.scope_park()
-        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=30)
+        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)
 
 
 class TestStopGotoMidSlew:
@@ -73,7 +73,7 @@ class TestStopGotoMidSlew:
 
     def test_move_to_horizon(self, verified_connection):
         raw.scope_move_to_horizon()
-        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=30)
+        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)
 
     def test_cancel_goto_mid_slew(self, verified_connection):
         """Start a goto to a far-away target, then cancel after 2 s."""
@@ -90,7 +90,7 @@ class TestStopGotoMidSlew:
 
     def test_park_after_cancel(self, verified_connection):
         raw.scope_park()
-        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=30)
+        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)
 
 
 class TestAutofocusNoStars:
@@ -98,7 +98,7 @@ class TestAutofocusNoStars:
 
     def test_move_to_horizon(self, verified_connection):
         raw.scope_move_to_horizon()
-        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=30)
+        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)
 
     def test_start_view_no_goto(self, verified_connection):
         """Start continuous exposure without coordinates (no goto)."""
@@ -117,6 +117,6 @@ class TestAutofocusNoStars:
 
     def test_stop_view_and_park(self, verified_connection):
         raw.iscope_stop_view()
-        time.sleep(2)
+        time.sleep(5)
         raw.scope_park()
-        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=30)
+        wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)

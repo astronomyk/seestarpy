@@ -7,9 +7,9 @@ do NOT include an explicit dark step.
 
 Flow::
 
-    scope_move_to_horizon()  -> wait ScopeMoveToHorizon complete (30 s)
+    scope_move_to_horizon()  -> wait ScopeMoveToHorizon complete (45 s)
     start_create_dark()      -> wait DarkLibrary complete (180 s)
-    scope_park()             -> wait ScopeHome complete (30 s)
+    scope_park()             -> wait ScopeHome complete (45 s)
 """
 
 import pytest
@@ -29,7 +29,7 @@ def test_move_to_horizon(verified_connection):
     """Open the arm and wait for ScopeMoveToHorizon to complete."""
     raw.scope_move_to_horizon()
     result = wait_for_event(
-        "ScopeMoveToHorizon", {"complete"}, timeout=30,
+        "ScopeMoveToHorizon", {"complete"}, timeout=45,
     )
     assert result["state"] == "complete"
 
@@ -48,6 +48,6 @@ def test_park_after_darks(verified_connection):
     raw.scope_park()
     # Parking triggers a ScopeMoveToHorizon event (state=complete when arm closes)
     result = wait_for_event(
-        "ScopeMoveToHorizon", {"complete"}, timeout=30,
+        "ScopeMoveToHorizon", {"complete"}, timeout=45,
     )
     assert result["state"] == "complete"
