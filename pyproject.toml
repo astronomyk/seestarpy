@@ -51,5 +51,15 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/seestarpy"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires a live Seestar",
+    "destructive: modifies telescope or data state",
+    "sequence: multi-step observational sequence",
+    "slow: takes more than 30 seconds",
+]
+addopts = "-v --tb=short"
+
 [project.scripts]
 seestar = "seestarpy.cli:main"
