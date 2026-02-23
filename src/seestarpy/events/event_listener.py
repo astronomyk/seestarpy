@@ -12,6 +12,7 @@ HEARTBEAT_INTERVAL = 3
 _listener_running = False  # Prevent multiple starts
 _shutdown_event = None
 _listener_thread = None
+_loop = None  # asyncio event loop running in the listener thread
 
 connected_clients = set()
 
@@ -62,8 +63,8 @@ async def run():
     to :func:`event_stream.handle_event`.  Automatically reconnects on
     connection loss.
     """
-    # This is not a graceful way to shut down the Thread
     while not _shutdown_event.is_set():
+        writer = None
         try:
             print(f"Connecting to {DEFAULT_IP}:{DEFAULT_PORT}...")
             reader, writer = await asyncio.open_connection(DEFAULT_IP, DEFAULT_PORT)
@@ -72,16 +73,23 @@ async def run():
             hb_task = asyncio.create_task(heartbeat(writer))
 
             while not _shutdown_event.is_set():
-                line = await reader.readuntil(separator=b"\r\n")
+                try:
+                    line = await asyncio.wait_for(
+                        reader.readuntil(separator=b"\r\n"),
+                        timeout=2.0,
+                    )
+                except asyncio.TimeoutError:
+                    continue
+
                 message = line.decode().strip()
                 try:
                     data = json.loads(message)
 
                     # Treat responses to heartbeat as events
                     if "result" in data:
-                        method_name = data["method"]
-                        # data = data["result"]
-                        data["Event"] = method_name
+                        method_name = data.get("method")
+                        if method_name:
+                            data["Event"] = method_name
 
                     handle_event(data)
 
@@ -91,6 +99,9 @@ async def run():
                     if VERBOSE_LEVEL >= 1:
                         print("[non-json]", message)
 
+        except asyncio.CancelledError:
+            break
+
         except (asyncio.IncompleteReadError, ConnectionResetError):
             print("Connection closed by Seestar. Will reconnect in 5 sec...")
 
@@ -99,10 +110,18 @@ async def run():
 
         try:
             hb_task.cancel()
-        except:
+        except Exception:
             pass
 
-        await asyncio.sleep(3)
+        if writer is not None:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+        if not _shutdown_event.is_set():
+            await asyncio.sleep(3)
 
 
 async def websocket_server():
@@ -126,6 +145,9 @@ async def websocket_server():
 
     server = await websockets.serve(handler, "0.0.0.0", 8765)
     print("[websocket] Serving on ws://0.0.0.0:8765")
+    while not _shutdown_event.is_set():
+        await asyncio.sleep(1)
+    server.close()
     await server.wait_closed()
 
 
@@ -164,7 +186,7 @@ def start_listener(with_websocket: bool = True):
         >>> stop_listener()
 
     """
-    global _listener_running, _listener_thread, _shutdown_event
+    global _listener_running, _listener_thread, _shutdown_event, _loop
     if _listener_running:
         print("[seestarpy] Listener already running.")
         return
@@ -173,6 +195,8 @@ def start_listener(with_websocket: bool = True):
     _shutdown_event = asyncio.Event()
 
     async def main():
+        global _loop
+        _loop = asyncio.get_running_loop()
         tasks = [asyncio.create_task(run())]
         if with_websocket:
             tasks.append(asyncio.create_task(websocket_server()))
@@ -200,15 +224,25 @@ def stop_listener():
     --------
     start_listener : Start the background listener.
     """
-    global _listener_running, _listener_thread, _shutdown_event
+    global _listener_running, _listener_thread, _shutdown_event, _loop
     if not _listener_running:
         return
     print("[seestarpy] Stopping listener...")
 
-    # Dirty, dirty way to shut down the thread, but it works. Force an exception
-    _shutdown_event = None
+    # Signal shutdown to all coroutines (thread-safe)
+    if _loop is not None and _loop.is_running():
+        _loop.call_soon_threadsafe(_shutdown_event.set)
+    elif _shutdown_event is not None:
+        _shutdown_event.set()
+
+    # Wait for the thread to finish
+    if _listener_thread is not None:
+        _listener_thread.join(timeout=10)
+
     _listener_running = False
     _listener_thread = None
+    _shutdown_event = None
+    _loop = None
 
 
 def dashboard_url():
