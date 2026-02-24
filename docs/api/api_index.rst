@@ -7,6 +7,8 @@ Python API index
    ui
    connection
    raw
+   plan
+   stack
    data
    status
    events
