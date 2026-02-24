@@ -1,31 +1,43 @@
 from .connection import send_command
-
-"""
-To implement (params unknown):
-"""
-
-# def import_plan():
-#     """
-#     Import a plan to the Seestar.
-#
-#     .. note:: Parameters are unknown. Discovered via decompilation of the
-#        Seestar APK v3.0.2, but no dedicated command class was found.
-#
-#     """
-#     params = {'method': 'import_plan'}
-#     return send_command(params)
+from .raw import iscope_get_app_state
 
 
-# def clear_plan():
-#     """
-#     Clear a plan from the Seestar.
-#
-#     .. note:: Parameters are unknown. Discovered via decompilation of the
-#        Seestar APK v3.0.2, but no dedicated command class was found.
-#
-#     """
-#     params = {'method': 'clear_plan'}
-#     return send_command(params)
+def get_running_plan():
+    """
+    Return the currently running observation plan, or ``None`` if no plan
+    is active.
+
+    This queries ``iscope_get_app_state`` and extracts the ``ViewPlan``
+    key, which is how the official Seestar app checks plan status.
+
+    .. note:: Confirmed via traffic capture from the official Seestar app
+       v3.0.2 on 2026-02-24.
+
+    Returns
+    -------
+    dict or None
+        The ``ViewPlan`` state dict when a plan is loaded (even if
+        stopped/cancelled), or ``None`` if no plan data is present.
+        The dict includes ``state`` (``"working"``, ``"cancel"``, etc.)
+        and ``plan`` with the full plan payload including per-target
+        ``state``, ``lapse_ms``, and ``skip`` fields added by the
+        firmware.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> vp = plan.get_running_plan()
+        >>> if vp and vp["state"] == "working":
+        ...     print(f"Running: {vp['plan']['plan_name']}")
+
+    """
+    resp = iscope_get_app_state()
+    result = resp.get("result")
+    if isinstance(result, dict):
+        return result.get("ViewPlan")
+    return None
 
 
 def set_view_plan(plan):
