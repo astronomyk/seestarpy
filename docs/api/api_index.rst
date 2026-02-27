@@ -9,6 +9,7 @@ Python API index
    raw
    plan
    stack
+   stream
    data
    status
    events
