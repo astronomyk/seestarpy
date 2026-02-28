@@ -7,6 +7,7 @@ import os
 from typing import Dict
 
 from smb.SMBConnection import SMBConnection
+from smb.smb_structs import OperationFailure
 from .connection import multiple_ips
 from .raw import get_albums
 
@@ -81,7 +82,7 @@ def list_folders() -> Dict[str, int]:
 
 
 @multiple_ips
-def list_folder_contents(folder: str) -> Dict[str, int]:
+def list_folder_contents(folder: str, filetype: str = "*") -> Dict[str, int]:
     """
     List every file inside an observation folder on the Seestar's eMMC.
 
@@ -89,6 +90,14 @@ def list_folder_contents(folder: str) -> Dict[str, int]:
     ----------
     folder : str
         Name of the folder under ``MyWorks`` to list (e.g. ``"M 81_sub"``).
+    filetype : str, optional
+        Filter files by type. One of:
+
+        - ``"*"`` — all files (default)
+        - ``"fit"`` — FITS files only (``.fit``)
+        - ``"jpg"`` — full-size JPEGs only (excludes thumbnails)
+        - ``"thn.jpg"`` — thumbnail JPEGs only (``_thn.jpg``)
+        - ``"*jpg"`` — all JPEGs (full-size and thumbnails)
 
     Returns
     -------
@@ -99,7 +108,7 @@ def list_folder_contents(folder: str) -> Dict[str, int]:
     --------
 
         >>> from seestarpy import data
-        >>> files = data.list_folder_contents("M 81_sub")
+        >>> files = data.list_folder_contents("M 81_sub", filetype="fit")
         >>> for name, size in list(files.items())[:3]:
         ...     print(f"{name}: {size / 1024:.0f} KB")
         Light_M 81_10.0s_IRCUT_20250607-221746.fit: 4050 KB
@@ -107,6 +116,10 @@ def list_folder_contents(folder: str) -> Dict[str, int]:
         Light_M 81_10.0s_IRCUT_20250607-221810.fit: 4050 KB
 
     """
+    _valid = {"*", "fit", "jpg", "thn.jpg", "*jpg"}
+    if filetype not in _valid:
+        raise ValueError(f"filetype must be one of {_valid}, got {filetype!r}")
+
     conn = _connect_smb()
     contents = {}
 
@@ -114,7 +127,24 @@ def list_folder_contents(folder: str) -> Dict[str, int]:
         entries = conn.listPath(SHARE_NAME, f"{ROOT_DIR}/{folder}")
         for entry in entries:
             if not entry.isDirectory and entry.filename not in {".", ".."}:
-                contents[entry.filename] = entry.file_size
+                name = entry.filename
+                if filetype == "*":
+                    pass
+                elif filetype == "fit":
+                    if not name.endswith(".fit"):
+                        continue
+                elif filetype == "thn.jpg":
+                    if not name.endswith("_thn.jpg"):
+                        continue
+                elif filetype == "*jpg":
+                    if not name.endswith(".jpg"):
+                        continue
+                elif filetype == "jpg":
+                    if not name.endswith(".jpg") or name.endswith("_thn.jpg"):
+                        continue
+                contents[name] = entry.file_size
+    except OperationFailure:
+        pass
     finally:
         conn.close()
 
@@ -164,6 +194,8 @@ def delete_folder(folder: str) -> None:
                 conn.deleteFiles(SHARE_NAME, full_path)
 
         conn.deleteDirectory(SHARE_NAME, path)
+    except OperationFailure:
+        pass
     finally:
         conn.close()
 
