@@ -7,20 +7,19 @@ import os
 from typing import Dict
 
 from smb.SMBConnection import SMBConnection
-from .connection import DEFAULT_IP
+from .connection import multiple_ips
+from .raw import get_albums
 
 SHARE_NAME = "EMMC Images"
 ROOT_DIR = "MyWorks"
 
 
-def _connect_smb(ip: str = DEFAULT_IP) -> SMBConnection:
+def _connect_smb() -> SMBConnection:
     """
     Create and return an SMBConnection using direct TCP (port 445).
 
-    Parameters
-    ----------
-    ip : str, optional
-        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
+    Uses the module-level :data:`connection.DEFAULT_IP`, which the
+    :func:`~connection.multiple_ips` decorator swaps per-thread.
 
     Returns
     -------
@@ -32,7 +31,9 @@ def _connect_smb(ip: str = DEFAULT_IP) -> SMBConnection:
     ConnectionError
         If the connection to the Seestar fails.
     """
+    from . import connection
 
+    ip = connection.DEFAULT_IP
     conn = SMBConnection(
         username='',
         password='',
@@ -49,18 +50,14 @@ def _connect_smb(ip: str = DEFAULT_IP) -> SMBConnection:
     return conn
 
 
-def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
+@multiple_ips
+def list_folders() -> Dict[str, int]:
     """
     List all observation folders stored on the Seestar's internal eMMC.
 
     Each observation session creates a folder under ``MyWorks`` (e.g.
     ``"M 81"``, ``"Lunar"``).  This function returns every folder
     together with a count of the files it contains.
-
-    Parameters
-    ----------
-    ip : str, optional
-        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
 
     Returns
     -------
@@ -75,26 +72,16 @@ def list_folders(ip: str = DEFAULT_IP) -> Dict[str, int]:
         {'M 81': 3, 'M 81_sub': 37, 'Lunar': 2}
 
     """
-    conn = _connect_smb(ip)
+    response = get_albums()
     summary = {}
-
-    try:
-        entries = conn.listPath(SHARE_NAME, ROOT_DIR)
-        for entry in entries:
-            if entry.isDirectory and entry.filename not in {".", ".."}:
-                folder = entry.filename
-                files = conn.listPath(SHARE_NAME, f"{ROOT_DIR}/{folder}")
-                count = sum(
-                    1 for f in files if not f.isDirectory and f.filename not in {".", ".."}
-                )
-                summary[folder] = count
-    finally:
-        conn.close()
-
+    for group in response.get("result", {}).get("list", []):
+        for entry in group.get("files", []):
+            summary[entry["name"]] = entry["count"]
     return summary
 
 
-def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
+@multiple_ips
+def list_folder_contents(folder: str) -> Dict[str, int]:
     """
     List every file inside an observation folder on the Seestar's eMMC.
 
@@ -102,8 +89,6 @@ def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
     ----------
     folder : str
         Name of the folder under ``MyWorks`` to list (e.g. ``"M 81_sub"``).
-    ip : str, optional
-        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
 
     Returns
     -------
@@ -122,7 +107,7 @@ def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
         Light_M 81_10.0s_IRCUT_20250607-221810.fit: 4050 KB
 
     """
-    conn = _connect_smb(ip)
+    conn = _connect_smb()
     contents = {}
 
     try:
@@ -136,7 +121,8 @@ def list_folder_contents(folder: str, ip: str = DEFAULT_IP) -> Dict[str, int]:
     return contents
 
 
-def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
+@multiple_ips
+def delete_folder(folder: str) -> None:
     """
     Recursively delete an observation folder and all its files via SMB.
 
@@ -149,8 +135,6 @@ def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
     folder : str
         Name of the folder under ``MyWorks`` to delete (e.g.
         ``"M 81_sub"``).
-    ip : str, optional
-        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
 
     Examples
     --------
@@ -163,7 +147,7 @@ def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
         {'M 81': 3, 'Lunar': 2}
 
     """
-    conn = _connect_smb(ip)
+    conn = _connect_smb()
 
     try:
         path = f"{ROOT_DIR}/{folder}"
@@ -175,8 +159,7 @@ def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
 
             full_path = f"{path}/{entry.filename}"
             if entry.isDirectory:
-                # recursive delete
-                delete_folder(f"{folder}/{entry.filename}", ip)
+                _delete_folder_recursive(conn, f"{folder}/{entry.filename}")
             else:
                 conn.deleteFiles(SHARE_NAME, full_path)
 
@@ -185,8 +168,26 @@ def delete_folder(folder: str, ip: str = DEFAULT_IP) -> None:
         conn.close()
 
 
-def download_folder(folder: str = "", dest: str = "",
-                    ip: str = DEFAULT_IP) -> None:
+def _delete_folder_recursive(conn: SMBConnection, folder: str) -> None:
+    """Recursively delete a subfolder using an existing SMB connection."""
+    path = f"{ROOT_DIR}/{folder}"
+    entries = conn.listPath(SHARE_NAME, path)
+
+    for entry in entries:
+        if entry.filename in {".", ".."}:
+            continue
+
+        full_path = f"{path}/{entry.filename}"
+        if entry.isDirectory:
+            _delete_folder_recursive(conn, f"{folder}/{entry.filename}")
+        else:
+            conn.deleteFiles(SHARE_NAME, full_path)
+
+    conn.deleteDirectory(SHARE_NAME, path)
+
+
+@multiple_ips
+def download_folder(folder: str = "", dest: str = "") -> None:
     """
     Download an entire observation folder from the Seestar's eMMC via SMB.
 
@@ -201,8 +202,6 @@ def download_folder(folder: str = "", dest: str = "",
     dest : str
         Local directory where the folder will be saved.  Created
         automatically if it does not exist.
-    ip : str, optional
-        IP address of the Seestar. Defaults to :data:`connection.DEFAULT_IP`.
 
     Examples
     --------
@@ -218,7 +217,7 @@ def download_folder(folder: str = "", dest: str = "",
     os.makedirs(dest, exist_ok=True)
 
     # List files and download each one using SMB
-    files = list_folder_contents(folder, ip)
+    files = list_folder_contents(folder)
     folder_dest = os.path.join(dest, folder)
     os.makedirs(folder_dest, exist_ok=True)
 
@@ -227,7 +226,7 @@ def download_folder(folder: str = "", dest: str = "",
     print(
         f"📁 Downloading {total_files} files from '{folder}' ({total_size / 1024 / 1024:.1f} MB)...")
 
-    conn = _connect_smb(ip)
+    conn = _connect_smb()
     try:
         for idx, (fname, fsize) in enumerate(files.items(), 1):
             remote_path = f"{ROOT_DIR}/{folder}/{fname}"
