@@ -6,6 +6,8 @@ from datetime import datetime
 from .connection import send_command
 from .raw import iscope_get_app_state
 
+_N_EDGE_POINTS = 50
+
 
 def get_running_plan():
     """
@@ -321,3 +323,107 @@ def create_mosaic_plan(
         "update_time_seestar": datetime.now().strftime("%Y.%m.%d"),
         "list": targets,
     }
+
+
+def plot_mosaic_plan(plan, fov_width=0.75, fov_height=1.33, ax=None):
+    """
+    Plot panel borders of a mosaic plan on a Mollweide all-sky projection.
+
+    Each panel is drawn as a closed rectangle in RA/Dec space, assuming an
+    equatorial mount (panels axis-aligned).  This is useful for visually
+    verifying the output of :func:`create_mosaic_plan` before sending it
+    to the telescope.
+
+    Parameters
+    ----------
+    plan : dict
+        A plan dictionary (from :func:`create_mosaic_plan` or hand-built)
+        containing ``"plan_name"`` and ``"list"`` with target dicts that
+        each have ``"target_ra_dec"`` and ``"target_name"``.
+    fov_width : float, optional
+        Field-of-view width in degrees (RA direction on the sky).
+        Default is 0.75 (Seestar S50).
+    fov_height : float, optional
+        Field-of-view height in degrees (Dec direction).
+        Default is 1.33 (Seestar S50).
+    ax : matplotlib.axes.Axes or None, optional
+        A Mollweide-projection axes to plot on.  If ``None``, a new figure
+        and axes are created.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axes with panel outlines and labels plotted.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> mosaic = plan.create_mosaic_plan(
+        ...     "NGC 7000", 20.99, 44.53, 3.0, 2.0, 1.0, 1.0, 180, 1320,
+        ... )
+        >>> ax = plan.plot_mosaic_plan(mosaic)
+
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    if ax is None:
+        fig, ax = plt.subplots(subplot_kw={"projection": "mollweide"})
+
+    ax.grid(True, alpha=0.3)
+
+    for target in plan["list"]:
+        ra_hours, dec_deg = target["target_ra_dec"]
+        cos_dec = math.cos(math.radians(dec_deg))
+
+        # Panel half-extents
+        half_dec = fov_height / 2.0
+        half_ra_hours = fov_width / (2.0 * 15.0 * cos_dec)
+
+        dec_lo = dec_deg - half_dec
+        dec_hi = dec_deg + half_dec
+        ra_lo = ra_hours - half_ra_hours
+        ra_hi = ra_hours + half_ra_hours
+
+        # Build the four edges with interpolation for Mollweide curvature
+        n = _N_EDGE_POINTS
+        ra_pts = []
+        dec_pts = []
+
+        # Bottom edge: (ra_lo→ra_hi, dec_lo)
+        ra_pts.extend(np.linspace(ra_lo, ra_hi, n))
+        dec_pts.extend([dec_lo] * n)
+
+        # Right edge: (ra_hi, dec_lo→dec_hi)
+        ra_pts.extend([ra_hi] * n)
+        dec_pts.extend(np.linspace(dec_lo, dec_hi, n))
+
+        # Top edge: (ra_hi→ra_lo, dec_hi)
+        ra_pts.extend(np.linspace(ra_hi, ra_lo, n))
+        dec_pts.extend([dec_hi] * n)
+
+        # Left edge: (ra_lo, dec_hi→dec_lo)
+        ra_pts.extend([ra_lo] * n)
+        dec_pts.extend(np.linspace(dec_hi, dec_lo, n))
+
+        # Convert to Mollweide coordinates (radians)
+        ra_arr = np.array(ra_pts)
+        dec_arr = np.array(dec_pts)
+        lon_rad = -np.radians(ra_arr * 15 - 180)
+        lat_rad = np.radians(dec_arr)
+
+        ax.plot(lon_rad, lat_rad, "-", linewidth=0.8)
+
+        # Label at panel centre
+        clon = -math.radians(ra_hours * 15 - 180)
+        clat = math.radians(dec_deg)
+        ax.text(
+            clon, clat, target["target_name"],
+            fontsize=6, ha="center", va="center",
+        )
+
+    ax.set_title(plan.get("plan_name", ""))
+
+    return ax
