@@ -11,7 +11,7 @@ import pytest
 
 from seestarpy import raw
 from seestarpy.events import event_stream
-from .conftest import wait_for_event
+from .conftest import wait_for_event, wait_for_app_event
 
 pytestmark = [
     pytest.mark.integration,
@@ -56,15 +56,15 @@ class TestBelowHorizonTarget:
         raw.iscope_start_view(
             ra=POLARIS_RA, dec=POLARIS_DEC, target_name="Polaris",
         )
-        result = wait_for_event(
-            "AutoGoto", {"complete", "fail"}, timeout=120,
+        result = wait_for_app_event(
+            "AutoGoto", {"complete", "fail"}, timeout=180,
         )
         assert result["state"] == "complete", f"Recovery goto failed: {result}"
 
     def test_park_after_recovery(self, verified_connection):
         raw.iscope_stop_view()
         time.sleep(5)
-        raw.scope_park()
+        raw.scope_park(True)
         wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)
 
 
@@ -89,7 +89,7 @@ class TestStopGotoMidSlew:
         assert result["state"] in ("complete", "fail")
 
     def test_park_after_cancel(self, verified_connection):
-        raw.scope_park()
+        raw.scope_park(True)
         wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)
 
 
@@ -109,7 +109,7 @@ class TestAutofocusNoStars:
     def test_autofocus_fails_no_star(self, verified_connection):
         """Autofocus should fail with 'no star is detected'."""
         raw.start_auto_focuse()
-        result = wait_for_event(
+        result = wait_for_app_event(
             "AutoFocus", {"complete", "fail"}, timeout=90,
         )
         assert result["state"] == "fail"
@@ -118,5 +118,5 @@ class TestAutofocusNoStars:
     def test_stop_view_and_park(self, verified_connection):
         raw.iscope_stop_view()
         time.sleep(5)
-        raw.scope_park()
+        raw.scope_park(True)
         wait_for_event("ScopeMoveToHorizon", {"complete"}, timeout=45)

@@ -4,13 +4,23 @@ import pathlib
 import pytest
 
 
-def _seestar_reachable(host="seestar.local", port=4700, timeout=3):
-    """Return True if a TCP connection to the Seestar succeeds."""
+def _seestar_reachable(port=4700, timeout=5):
+    """Return True if a TCP connection to the Seestar succeeds.
+
+    Uses the IP already resolved by ``seestarpy.connection`` at import
+    time (which runs during test collection).  Falls back to a fresh
+    mDNS lookup and then the direct-AP address ``10.0.0.1``.
+    """
+    # By the time pytest_collection_modifyitems runs, test modules have
+    # been imported, so seestarpy.connection.DEFAULT_IP is available.
     try:
-        ip = socket.gethostbyname(host)
-    except socket.gaierror:
-        # mDNS name not resolvable — try direct IP fallback
-        ip = "10.0.0.1"
+        from seestarpy.connection import DEFAULT_IP
+        ip = DEFAULT_IP
+    except Exception:
+        try:
+            ip = socket.gethostbyname("seestar.local")
+        except socket.gaierror:
+            ip = "10.0.0.1"
 
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

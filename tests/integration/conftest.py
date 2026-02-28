@@ -74,6 +74,58 @@ def wait_for_event(event_name, terminal_states, timeout=60, poll_interval=1.0):
     )
 
 
+def wait_for_app_event(event_name, terminal_states, timeout=60, poll_interval=3.0):
+    """Poll ``iscope_get_app_state()`` via send_command until *event_name*
+    reaches a terminal state.
+
+    This is a more reliable alternative to :func:`wait_for_event` for
+    long-running operations (AutoGoto, AutoFocus) because it queries the
+    device directly rather than depending on the event listener, which
+    can miss events during reconnection gaps.
+
+    Parameters
+    ----------
+    event_name : str
+        Key inside the ``result`` dict of ``iscope_get_app_state()``
+        (e.g. ``"AutoGoto"``, ``"AutoFocus"``).
+    terminal_states : set[str]
+        States that signal completion (e.g. ``{"complete", "fail"}``).
+    timeout : float
+        Maximum seconds to wait before raising ``TimeoutError``.
+    poll_interval : float
+        Seconds between polls.
+
+    Returns
+    -------
+    dict
+        The sub-dictionary for *event_name* from the app state.
+    """
+    deadline = time.time() + timeout
+    last_entry = {}
+    while time.time() < deadline:
+        try:
+            app = raw.iscope_get_app_state()
+            result = app.get("result", {})
+            # Top-level check (e.g. FocuserMove, DarkLibrary)
+            entry = result.get(event_name, {})
+            # AutoGoto, AutoFocus, Stack etc. are nested inside View
+            if not entry:
+                entry = result.get("View", {}).get(event_name, {})
+            if entry:
+                last_entry = entry
+            state = entry.get("state")
+            if state in terminal_states:
+                return entry
+        except Exception:
+            pass
+        time.sleep(poll_interval)
+
+    raise TimeoutError(
+        f"Timed out waiting for {event_name} to reach {terminal_states}. "
+        f"Last app state entry: {last_entry}"
+    )
+
+
 def wait_for_stacked_frames(min_frames, timeout=120, poll_interval=2.0):
     """Poll ``LATEST_STATE["Stack"]`` until *min_frames* have been stacked.
 
@@ -170,7 +222,7 @@ def module_safety_net():
     except Exception:
         pass
     try:
-        raw.scope_park()
+        raw.scope_park(True)
         time.sleep(20)
     except Exception:
         pass

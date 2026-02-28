@@ -45,7 +45,7 @@ def test_create_dark_frames(verified_connection):
 
 def test_park_after_darks(verified_connection):
     """Park the scope and wait for ScopeHome/ScopeMoveToHorizon to complete."""
-    raw.scope_park()
+    raw.scope_park(True)
     # Parking triggers a ScopeMoveToHorizon event (state=complete when arm closes)
     result = wait_for_event(
         "ScopeMoveToHorizon", {"complete"}, timeout=45,

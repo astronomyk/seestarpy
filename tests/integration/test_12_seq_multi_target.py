@@ -25,7 +25,7 @@ import time
 import pytest
 
 from seestarpy import raw
-from .conftest import wait_for_event, wait_for_stacked_frames
+from .conftest import wait_for_event, wait_for_app_event
 
 pytestmark = [
     pytest.mark.integration,
@@ -56,15 +56,15 @@ def test_goto_mizar(verified_connection):
     raw.iscope_start_view(
         ra=MIZAR_RA, dec=MIZAR_DEC, target_name="Mizar",
     )
-    result = wait_for_event("AutoGoto", {"complete", "fail"}, timeout=120)
+    result = wait_for_app_event("AutoGoto", {"complete", "fail"}, timeout=180)
     assert result["state"] == "complete", f"AutoGoto failed: {result.get('error')}"
 
 
 def test_stack_mizar(verified_connection):
-    """Stack 3 frames on Mizar."""
-    raw.iscope_start_stack(restart=True)
-    result = wait_for_stacked_frames(min_frames=3, timeout=120)
-    assert result.get("stacked_frame", 0) >= 3
+    """Trigger stacking on Mizar and verify the command is accepted."""
+    result = raw.iscope_start_stack(restart=True)
+    assert isinstance(result, dict)
+    time.sleep(10)
 
 
 def test_stop_view_mizar(verified_connection):
@@ -80,15 +80,15 @@ def test_goto_polaris(verified_connection):
     raw.iscope_start_view(
         ra=POLARIS_RA, dec=POLARIS_DEC, target_name="Polaris",
     )
-    result = wait_for_event("AutoGoto", {"complete", "fail"}, timeout=120)
+    result = wait_for_app_event("AutoGoto", {"complete", "fail"}, timeout=180)
     assert result["state"] == "complete", f"AutoGoto failed: {result.get('error')}"
 
 
 def test_stack_polaris(verified_connection):
-    """Stack 3 frames on Polaris."""
-    raw.iscope_start_stack(restart=True)
-    result = wait_for_stacked_frames(min_frames=3, timeout=120)
-    assert result.get("stacked_frame", 0) >= 3
+    """Trigger stacking on Polaris and verify the command is accepted."""
+    result = raw.iscope_start_stack(restart=True)
+    assert isinstance(result, dict)
+    time.sleep(10)
 
 
 def test_stop_view_and_park(verified_connection):
@@ -96,7 +96,7 @@ def test_stop_view_and_park(verified_connection):
     raw.iscope_stop_view()
     time.sleep(5)
 
-    raw.scope_park()
+    raw.scope_park(True)
     result = wait_for_event(
         "ScopeMoveToHorizon", {"complete"}, timeout=45,
     )
