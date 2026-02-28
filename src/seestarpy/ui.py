@@ -1,74 +1,7 @@
-from functools import wraps
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 from . import raw
 from . import connection as conn
+from .connection import multiple_ips
 from .status import get_filter, is_eq_mode
-
-
-
-def multiple_ips(func):
-    """
-    Decorator that allows a function to run against multiple IP addresses.
-    Pass `ips` at call time to override DEFAULT_IP.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        # Extract the ips list from call arguments
-        call_time_ips = kwargs.pop('ips', None)
-
-        def resolve_ip(ip):
-            print(ip)
-            # Use provided IPs or default to current DEFAULT_IP
-            if isinstance(ip, list):
-                return [resolve_ip(ip) for ip in ip]
-            elif isinstance(ip, str):
-                if ip in conn.AVAILABLE_IPS:
-                    return conn.AVAILABLE_IPS[ip]
-                elif ip in conn.AVAILABLE_IPS.values():
-                    return ip
-                else:
-                    print(f"{ip} is not a valid IP address")
-                    return None
-            elif isinstance(ip, int):
-                name = f"seestar-{ip}.local" if ip > 1 else "seestar.local"
-                return resolve_ip(name)
-            elif ip is None:
-                return conn.DEFAULT_IP
-
-        if isinstance(call_time_ips, str) and call_time_ips.lower() == "all":
-            call_time_ips = list(conn.AVAILABLE_IPS.values())
-        if not isinstance(call_time_ips, list):
-            call_time_ips = [call_time_ips]
-        ips = resolve_ip(call_time_ips)
-
-        def call_with_ip(ip):
-            """Helper function to call the original function with a specific IP"""
-            conn.DEFAULT_IP = ip
-            print(f"{func.__name__}: call to {ip}")
-            return func(*args, **kwargs)
-
-        results = {}
-        original_ip = conn.DEFAULT_IP  # Save the original IP
-
-        try:
-            with ThreadPoolExecutor(max_workers=len(ips)) as executor:
-                # Submit all tasks
-                future_to_ip = {executor.submit(call_with_ip, ip): ip for ip in
-                                ips}
-
-                # Collect results as they complete
-                for future in future_to_ip:
-                    ip = future_to_ip[future]
-                    results[ip] = future.result()
-
-        finally:
-            conn.DEFAULT_IP = original_ip  # Always restore the original IP
-
-        # Return single result if only one IP, otherwise return list
-        return list(results.values())[0] if len(results) == 1 else results
-
-    return wrapper
 
 
 @multiple_ips

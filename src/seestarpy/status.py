@@ -1,9 +1,10 @@
 from datetime import datetime as dt
 
 from . import raw
-from .connection import send_command
+from .connection import send_command, multiple_ips
 
 
+@multiple_ips
 def status_bar(return_type="str"):
     """
     Query the Seestar and return a formatted ASCII status dashboard.
@@ -101,6 +102,7 @@ def status_bar(return_type="str"):
 """
 
 
+@multiple_ips
 def get_mount_state():
     """
     Get the full mount state dictionary from the Seestar.
@@ -119,6 +121,10 @@ def get_mount_state():
         - ``'tracking'`` (bool) — ``True`` when sidereal tracking is on.
         - ``'equ_mode'`` (bool) — ``True`` when in equatorial-mount mode.
 
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
+
     Examples
     --------
 
@@ -130,6 +136,7 @@ def get_mount_state():
     return raw.get_device_state(keys=["mount"]).get("result", {}).get("mount", {})
 
 
+@multiple_ips
 def is_eq_mode():
     """
     Check whether the mount is in equatorial mode.
@@ -140,6 +147,10 @@ def is_eq_mode():
     Returns
     -------
     bool
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
 
     Examples
     --------
@@ -152,6 +163,7 @@ def is_eq_mode():
     return get_mount_state().get("equ_mode")
 
 
+@multiple_ips
 def is_tracking():
     """
     Check whether the mount is currently sidereal-tracking.
@@ -159,6 +171,10 @@ def is_tracking():
     Returns
     -------
     bool
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
 
     Examples
     --------
@@ -171,6 +187,7 @@ def is_tracking():
     return get_mount_state().get("tracking")
 
 
+@multiple_ips
 def is_parked():
     """
     Check whether the Seestar arm is in the closed (parked) position.
@@ -178,6 +195,10 @@ def is_parked():
     Returns
     -------
     bool
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
 
     Examples
     --------
@@ -190,6 +211,7 @@ def is_parked():
     return get_mount_state().get("close")
 
 
+@multiple_ips
 def get_coords():
     """
     Get the mount's current equatorial and horizontal coordinates.
@@ -213,6 +235,10 @@ def get_coords():
         If either coordinate endpoint returns an error (e.g. the mount
         has not been initialised).
 
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
+
     Examples
     --------
 
@@ -234,6 +260,7 @@ def get_coords():
         raise ValueError(f"Could not get coordinates: {eq_dict}, {altaz_dict}")
 
 
+@multiple_ips
 def get_exposure(which="stack_l"):
     """
     Get the current exposure time in milliseconds.
@@ -253,6 +280,10 @@ def get_exposure(which="stack_l"):
     int
         Exposure time in milliseconds.
 
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
+
     Examples
     --------
 
@@ -268,6 +299,7 @@ def get_exposure(which="stack_l"):
     return payload["result"]["exp_ms"][which]
 
 
+@multiple_ips
 def get_filter():
     """
     Get the current filter-wheel position.
@@ -284,6 +316,10 @@ def get_filter():
         Response dictionary whose ``'result'`` key contains the
         integer position.
 
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
+
     Examples
     --------
 
@@ -296,6 +332,7 @@ def get_filter():
     return send_command(params)
 
 
+@multiple_ips
 def get_target_name():
     """
     Get the target name from the current observation sequence setting.
@@ -309,6 +346,10 @@ def get_target_name():
         The group name (e.g. ``"M 81"``), or ``None`` if no sequence
         is configured.
 
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
+
     Examples
     --------
 
@@ -321,6 +362,7 @@ def get_target_name():
     return send_command(params).get("group_name")
 
 
+@multiple_ips
 def get_target_name2():
     """
     Get the target name from the image-name field.
@@ -332,6 +374,10 @@ def get_target_name2():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
 
     Examples
     --------
