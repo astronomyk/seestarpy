@@ -9,6 +9,7 @@ Python API index
    raw
    plan
    stack
+   crowdsky
    stream
    data
    status

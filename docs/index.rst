@@ -52,6 +52,7 @@ Contents
    examples/changing_gain
    examples/live_streaming
    examples/observation_plans
+   examples/crowdsky_stacking
    info/errors
    info/image_stream_protocol
    api/api_index
