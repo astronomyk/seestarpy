@@ -1,7 +1,8 @@
-from .connection import send_command
+from .connection import multiple_ips, send_command
 from .raw import iscope_get_app_state
 
 
+@multiple_ips
 def get_batch_stack_setting():
     """
     Get the current batch stack configuration.
@@ -29,6 +30,7 @@ def get_batch_stack_setting():
     return send_command(params)
 
 
+@multiple_ips
 def set_batch_stack_setting(path, files):
     """
     Configure which sub-frames to include in the next batch stack.
@@ -78,6 +80,7 @@ def set_batch_stack_setting(path, files):
     return send_command(params)
 
 
+@multiple_ips
 def start_batch_stack():
     """
     Start batch stacking the files configured via
@@ -110,6 +113,7 @@ def start_batch_stack():
     return send_command(params)
 
 
+@multiple_ips
 def stop_batch_stack():
     """
     Stop a batch stack that is currently in progress.
@@ -130,6 +134,7 @@ def stop_batch_stack():
     return send_command(params)
 
 
+@multiple_ips
 def clear_batch_stack():
     """
     Clear the batch stack state after stacking completes or is stopped.
@@ -156,6 +161,7 @@ def clear_batch_stack():
     return send_command(params)
 
 
+@multiple_ips
 def get_batch_stack_status():
     """
     Return the current batch stack progress, or ``None`` if no batch

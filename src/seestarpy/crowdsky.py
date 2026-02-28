@@ -26,6 +26,7 @@ import time
 from datetime import datetime, timedelta
 
 from . import data
+from .connection import multiple_ips
 from .stack import (
     clear_batch_stack,
     get_batch_stack_status,
@@ -139,6 +140,7 @@ def _rename_output(target, block, status):
         return None
 
 
+@multiple_ips
 def find_unstacked_blocks(target, block_minutes=15):
     """Find time blocks of raw frames that have not yet been batch-stacked.
 
@@ -249,6 +251,7 @@ def find_unstacked_blocks(target, block_minutes=15):
     return result
 
 
+@multiple_ips
 def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False):
     """Find and batch-stack all unstacked time blocks for a target.
 
@@ -390,6 +393,7 @@ def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False):
     return summary
 
 
+@multiple_ips
 def list_targets():
     """List observation targets that have raw sub-frames available for stacking.
 
