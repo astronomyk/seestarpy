@@ -1,3 +1,8 @@
+import math
+import random
+import warnings
+from datetime import datetime
+
 from .connection import send_command
 from .raw import iscope_get_app_state
 
@@ -149,3 +154,170 @@ def stop_view_plan():
     """
     params = {'method': 'stop_func', 'params': {'name': 'ViewPlan'}}
     return send_command(params)
+
+
+def _generate_target_ids(n):
+    """Return *n* unique random 9-digit integers for use as target IDs."""
+    ids = set()
+    while len(ids) < n:
+        ids.add(random.randint(100_000_000, 999_999_999))
+    return list(ids)
+
+
+def create_mosaic_plan(
+    plan_name,
+    center_ra,
+    center_dec,
+    width,
+    height,
+    delta_ra,
+    delta_dec,
+    t_total,
+    start_min,
+    lp_filter=False,
+    target_name_prefix="Mosaic",
+):
+    """
+    Create an observation plan that tiles a rectangular sky region.
+
+    The Seestar S50 FOV is roughly 0.75 x 1.33 degrees — too small for many
+    extended objects.  This function generates a plan dictionary with
+    individual pointings arranged in a grid, ready to be sent with
+    :func:`set_view_plan`.  No network I/O is performed.
+
+    Panels are traversed in **boustrophedon** (snake) order: even Dec rows
+    go left-to-right in RA, odd rows go right-to-left.  This minimises
+    slew distance between consecutive panels.
+
+    Parameters
+    ----------
+    plan_name : str
+        Human-readable name for the plan.
+    center_ra : float
+        Right ascension of the mosaic centre in decimal hours [0, 24).
+    center_dec : float
+        Declination of the mosaic centre in decimal degrees [-90, 90].
+    width : float
+        Angular extent in RA on the sky, in degrees.  Use 0 for a single
+        column of panels.
+    height : float
+        Angular extent in Dec, in degrees.  Use 0 for a single row.
+    delta_ra : float
+        Panel spacing in the RA direction, in degrees (> 0).
+    delta_dec : float
+        Panel spacing in the Dec direction, in degrees (> 0).
+    t_total : float
+        Total observation time in minutes, divided equally among panels.
+    start_min : int
+        Start time as minutes since local midnight (same convention as
+        :func:`set_view_plan`).
+    lp_filter : bool, optional
+        Enable the light-pollution filter for every panel (default False).
+    target_name_prefix : str, optional
+        Prefix for panel names (default ``"Mosaic"``).  Panels are named
+        ``"{prefix}_01"``, ``"{prefix}_02"``, etc.
+
+    Returns
+    -------
+    dict
+        A plan dictionary suitable for :func:`set_view_plan`.
+
+    Raises
+    ------
+    ValueError
+        If any parameter is out of range.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> mosaic = plan.create_mosaic_plan(
+        ...     plan_name="NGC 7000 Mosaic",
+        ...     center_ra=20.99,       # ~20h 59m
+        ...     center_dec=44.53,
+        ...     width=3.0,
+        ...     height=2.0,
+        ...     delta_ra=1.0,
+        ...     delta_dec=1.0,
+        ...     t_total=180,
+        ...     start_min=1320,        # 22:00
+        ... )
+        >>> len(mosaic["list"])
+        6
+        >>> plan.set_view_plan(mosaic)
+
+    """
+    # --- validate inputs ---
+    if not 0 <= center_ra < 24:
+        raise ValueError(f"center_ra must be in [0, 24), got {center_ra}")
+    if not -90 <= center_dec <= 90:
+        raise ValueError(f"center_dec must be in [-90, 90], got {center_dec}")
+    if width < 0:
+        raise ValueError(f"width must be >= 0, got {width}")
+    if height < 0:
+        raise ValueError(f"height must be >= 0, got {height}")
+    if delta_ra <= 0:
+        raise ValueError(f"delta_ra must be > 0, got {delta_ra}")
+    if delta_dec <= 0:
+        raise ValueError(f"delta_dec must be > 0, got {delta_dec}")
+    if abs(center_dec) == 90:
+        raise ValueError(
+            "Mosaics at exactly ±90° declination are not supported "
+            "(cos(dec) = 0 causes division by zero in RA spacing)."
+        )
+    if abs(center_dec) > 85:
+        warnings.warn(
+            f"Declination {center_dec}° is near a pole; "
+            "RA spacing will be very large and the mosaic may not tile correctly.",
+            stacklevel=2,
+        )
+
+    # --- grid dimensions ---
+    n_ra = max(1, math.ceil(width / delta_ra)) if width > 0 else 1
+    n_dec = max(1, math.ceil(height / delta_dec)) if height > 0 else 1
+    n_panels = n_ra * n_dec
+
+    # --- cos(dec) correction for RA spacing ---
+    cos_dec = math.cos(math.radians(center_dec))
+    ra_step_hours = delta_ra / (15.0 * cos_dec)
+
+    dec_step_deg = delta_dec
+
+    # --- symmetric grid offsets ---
+    ra_offsets = [
+        (i - (n_ra - 1) / 2.0) * ra_step_hours for i in range(n_ra)
+    ]
+    dec_offsets = [
+        (j - (n_dec - 1) / 2.0) * dec_step_deg for j in range(n_dec)
+    ]
+
+    # --- time allocation ---
+    duration_per_panel = max(1, int(t_total // n_panels))
+
+    # --- generate targets with boustrophedon traversal ---
+    target_ids = _generate_target_ids(n_panels)
+    targets = []
+    panel_num = 0
+
+    for j, dec_off in enumerate(dec_offsets):
+        ra_order = ra_offsets if j % 2 == 0 else list(reversed(ra_offsets))
+        for ra_off in ra_order:
+            ra = (center_ra + ra_off) % 24.0
+            dec = center_dec + dec_off
+            targets.append({
+                "target_id": target_ids[panel_num],
+                "target_name": f"{target_name_prefix}_{panel_num + 1:02d}",
+                "alias_name": "",
+                "target_ra_dec": [ra, dec],
+                "lp_filter": lp_filter,
+                "start_min": start_min + panel_num * duration_per_panel,
+                "duration_min": duration_per_panel,
+            })
+            panel_num += 1
+
+    return {
+        "plan_name": plan_name,
+        "update_time_seestar": datetime.now().strftime("%Y.%m.%d"),
+        "list": targets,
+    }

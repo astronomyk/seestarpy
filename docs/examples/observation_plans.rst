@@ -225,3 +225,46 @@ progress, and then parks:
     # Park when done
     raw.iscope_stop_view()
     raw.scope_park(True)
+
+
+Mosaic plans
+------------
+
+Extended objects like the North America Nebula (NGC 7000) are larger than
+the Seestar's ~0.75 x 1.33 degree field of view.
+:func:`~seestarpy.plan.create_mosaic_plan` generates a multi-panel
+observation plan that tiles a rectangular sky region:
+
+.. code-block:: python
+
+    from seestarpy import plan
+
+    mosaic = plan.create_mosaic_plan(
+        plan_name="NGC 7000 Mosaic",
+        center_ra=20.99,       # ~20h 59m
+        center_dec=44.53,
+        width=3.0,             # 3° wide
+        height=2.0,            # 2° tall
+        delta_ra=1.0,          # 1° panel spacing in RA
+        delta_dec=1.0,         # 1° panel spacing in Dec
+        t_total=180,           # 3 hours total
+        start_min=1320,        # 22:00
+        lp_filter=True,
+    )
+
+    print(f"{len(mosaic['list'])} panels, "
+          f"{mosaic['list'][0]['duration_min']} min each")
+    # 6 panels, 30 min each
+
+    # Inspect the grid before sending
+    for p in mosaic["list"]:
+        ra, dec = p["target_ra_dec"]
+        print(f"  {p['target_name']}: RA={ra:.3f}h  Dec={dec:.2f}°")
+
+    # Send to the Seestar
+    plan.set_view_plan(mosaic)
+
+Panels are traversed in **boustrophedon** (snake) order — even rows go
+left-to-right in RA, odd rows go right-to-left — to minimise slew time
+between consecutive panels.  RA spacing is automatically corrected for
+``cos(dec)`` so panels cover equal angular extents on the sky.
