@@ -58,19 +58,22 @@ def list_folders() -> Dict[str, int]:
 
     Each observation session creates a folder under ``MyWorks`` (e.g.
     ``"M 81"``, ``"Lunar"``).  This function returns every folder
-    together with a count of the files it contains.
+    together with the number of album entries it contains (i.e. stacked
+    results, not individual files).  Use :func:`list_folder_contents` to
+    get the actual file listing.
 
     Returns
     -------
     dict of {str: int}
-        Mapping of folder names to the number of files they contain.
+        Mapping of folder names to the number of album entries they
+        contain.
 
     Examples
     --------
 
         >>> from seestarpy import data
         >>> data.list_folders()
-        {'M 81': 3, 'M 81_sub': 37, 'Lunar': 2}
+        {'M 81': 1, 'M 81_sub': 2053, 'Lunar': 2}
 
     """
     response = get_albums()

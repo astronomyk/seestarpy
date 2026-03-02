@@ -177,6 +177,53 @@ def find_available_ips(n_ip, timeout=2):
     AVAILABLE_IPS.update(found)
 
 
+def set_default_ip(n):
+    """
+    Set :data:`DEFAULT_IP` to the *n*-th Seestar in :data:`AVAILABLE_IPS`.
+
+    This is a convenience shorthand so you can switch between Seestars
+    with a single integer instead of typing full hostnames or IPs.
+
+    The mapping follows the Seestar naming convention:
+
+    - ``1`` → ``seestar.local``
+    - ``2`` → ``seestar-2.local``
+    - ``3`` → ``seestar-3.local``
+    - etc.
+
+    Parameters
+    ----------
+    n : int
+        Seestar number (1-based).
+
+    Raises
+    ------
+    KeyError
+        If the corresponding hostname is not in :data:`AVAILABLE_IPS`.
+        Call :func:`find_available_ips` first to populate the dictionary.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import connection as conn
+        >>> conn.find_available_ips(3)
+        >>> conn.set_default_ip(2)
+        DEFAULT_IP → 192.168.1.83 (seestar-2.local)
+
+    """
+    global DEFAULT_IP
+    hostname = f"seestar-{n}.local" if n > 1 else "seestar.local"
+    if hostname not in AVAILABLE_IPS:
+        raise KeyError(
+            f"{hostname} not found in AVAILABLE_IPS. "
+            f"Call find_available_ips() first. "
+            f"Available: {list(AVAILABLE_IPS.keys())}"
+        )
+    DEFAULT_IP = AVAILABLE_IPS[hostname]
+    print(f"DEFAULT_IP \u2192 {DEFAULT_IP} ({hostname})")
+
+
 def send_command(params):
     """
     Send a JSON-RPC command to the Seestar over TCP.

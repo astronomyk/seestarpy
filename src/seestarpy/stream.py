@@ -569,6 +569,7 @@ class StreamSession:
         self._reader_thread = None
         self._heartbeat_thread = None
         self._latest_frame = None  # (header, stretched_uint8) for show()
+        self._has_stacked = False  # True once we've received a stacked frame
         self._poll_stacked = False  # request stacked images in heartbeat
 
     # -- background threads ------------------------------------------------
@@ -609,13 +610,23 @@ class StreamSession:
     # -- matplotlib live display -------------------------------------------
 
     def _display_callback(self, header, payload):
-        """Internal callback that decodes and stretches each frame."""
+        """Internal callback that decodes and stretches each frame.
+
+        Once a stacked frame (img_type=5) has been received, preview
+        frames are ignored so the display stays on the better image.
+        """
         import numpy as np
+
+        if self._has_stacked and header['img_type'] != IMG_TYPE_STACKED:
+            return
 
         try:
             arr = decode_payload(payload, header)
         except ValueError:
             return  # skip ack/keepalive frames
+
+        if header['img_type'] == IMG_TYPE_STACKED:
+            self._has_stacked = True
 
         if arr.ndim == 2:
             # Single-channel Bayer → convert to pseudo-RGB for display

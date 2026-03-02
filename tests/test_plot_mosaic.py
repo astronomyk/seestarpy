@@ -29,6 +29,16 @@ def _make_3x3(center_ra=12.0, center_dec=0.0):
     )
 
 
+def _panel_lines(ax):
+    """Return lines that are panel outlines (linewidth > 0.5)."""
+    return [ln for ln in ax.lines if ln.get_linewidth() > 0.5]
+
+
+def _grid_lines(ax):
+    """Return lines that are grid lines (linewidth <= 0.5)."""
+    return [ln for ln in ax.lines if ln.get_linewidth() <= 0.5]
+
+
 # ---------------------------------------------------------------------------
 # 3x3 grid near Dec=0
 # ---------------------------------------------------------------------------
@@ -43,7 +53,13 @@ class TestPlotMosaicDec0:
     def test_nine_panel_outlines(self):
         plan = _make_3x3()
         ax = plot_mosaic_plan(plan)
-        assert len(ax.lines) == 9
+        assert len(_panel_lines(ax)) == 9
+        plt.close("all")
+
+    def test_grid_lines_present(self):
+        plan = _make_3x3()
+        ax = plot_mosaic_plan(plan)
+        assert len(_grid_lines(ax)) > 0
         plt.close("all")
 
     def test_nine_text_labels(self):
@@ -56,6 +72,17 @@ class TestPlotMosaicDec0:
         plan = _make_3x3()
         ax = plot_mosaic_plan(plan)
         assert ax.get_title() == "Test 3x3"
+        plt.close("all")
+
+    def test_view_is_zoomed(self):
+        """Axes limits should be much smaller than the full Mollweide range."""
+        plan = _make_3x3()
+        ax = plot_mosaic_plan(plan)
+        x_range = ax.get_xlim()[1] - ax.get_xlim()[0]
+        y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
+        # Full Mollweide x spans ~5.66, y spans ~2.83; zoomed should be tiny
+        assert x_range < 1.0
+        assert y_range < 1.0
         plt.close("all")
 
 
@@ -75,7 +102,7 @@ class TestPlotMosaicDec88:
         with pytest.warns(match="near a pole"):
             plan = _make_3x3(center_dec=88.0)
         ax = plot_mosaic_plan(plan)
-        assert len(ax.lines) == 9
+        assert len(_panel_lines(ax)) == 9
         assert len(ax.texts) == 9
         plt.close("all")
 
@@ -101,7 +128,7 @@ class TestPlotMosaicDec88:
 
 class TestCustomAx:
     def test_uses_provided_axes(self):
-        fig, ax = plt.subplots(subplot_kw={"projection": "mollweide"})
+        fig, ax = plt.subplots()
         plan = _make_3x3()
         returned_ax = plot_mosaic_plan(plan, ax=ax)
         assert returned_ax is ax
@@ -112,5 +139,5 @@ class TestCustomFov:
     def test_non_default_fov(self):
         plan = _make_3x3()
         ax = plot_mosaic_plan(plan, fov_width=1.5, fov_height=2.0)
-        assert len(ax.lines) == 9
+        assert len(_panel_lines(ax)) == 9
         plt.close("all")

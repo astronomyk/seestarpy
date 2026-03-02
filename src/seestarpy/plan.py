@@ -325,14 +325,50 @@ def create_mosaic_plan(
     }
 
 
+def _mollweide_xy(lon_rad, lat_rad):
+    """Project longitude and latitude (radians) to Mollweide *x*, *y*."""
+    import numpy as np
+
+    lon = np.asarray(lon_rad, dtype=float)
+    lat = np.asarray(lat_rad, dtype=float)
+
+    # Solve 2θ + sin(2θ) = π·sin(φ) via Newton's method
+    theta = lat.copy()
+    target = np.pi * np.sin(lat)
+    for _ in range(30):
+        denom = 2.0 + 2.0 * np.cos(2.0 * theta)
+        denom = np.where(np.abs(denom) < 1e-15, 1e-15, denom)
+        dt = -(2.0 * theta + np.sin(2.0 * theta) - target) / denom
+        theta += dt
+        if np.all(np.abs(dt) < 1e-12):
+            break
+
+    x = (2.0 * np.sqrt(2.0) / np.pi) * lon * np.cos(theta)
+    y = np.sqrt(2.0) * np.sin(theta)
+    return x, y
+
+
+def _nice_grid_step(extent_deg):
+    """Return a grid step in degrees that gives ~4-6 lines across *extent_deg*."""
+    for step in (0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 45, 90):
+        if step >= extent_deg / 6:
+            return step
+    return 90
+
+
 def plot_mosaic_plan(plan, fov_width=0.75, fov_height=1.33, ax=None):
     """
-    Plot panel borders of a mosaic plan on a Mollweide all-sky projection.
+    Plot panel borders of a mosaic plan on a Mollweide projection.
 
-    Each panel is drawn as a closed rectangle in RA/Dec space, assuming an
-    equatorial mount (panels axis-aligned).  This is useful for visually
-    verifying the output of :func:`create_mosaic_plan` before sending it
-    to the telescope.
+    The view is zoomed to 150 % of the area covered by the panel
+    footprints, with Mollweide grid lines (RA meridians and Dec
+    parallels) drawn for reference.  Each panel is drawn as a closed
+    rectangle in RA/Dec space, assuming an equatorial mount (panels
+    axis-aligned).
+
+    Because matplotlib's built-in Mollweide axes do not support
+    zooming, coordinates are projected manually and drawn on a
+    standard rectilinear axes.
 
     Parameters
     ----------
@@ -347,13 +383,13 @@ def plot_mosaic_plan(plan, fov_width=0.75, fov_height=1.33, ax=None):
         Field-of-view height in degrees (Dec direction).
         Default is 1.33 (Seestar S50).
     ax : matplotlib.axes.Axes or None, optional
-        A Mollweide-projection axes to plot on.  If ``None``, a new figure
-        and axes are created.
+        A rectilinear axes to plot on.  If ``None``, a new figure and
+        axes are created.
 
     Returns
     -------
     matplotlib.axes.Axes
-        The axes with panel outlines and labels plotted.
+        The axes with panel outlines, labels, and grid lines plotted.
 
     Examples
     --------
@@ -369,60 +405,140 @@ def plot_mosaic_plan(plan, fov_width=0.75, fov_height=1.33, ax=None):
     import matplotlib.pyplot as plt
     import numpy as np
 
-    if ax is None:
-        fig, ax = plt.subplots(subplot_kw={"projection": "mollweide"})
-
-    ax.grid(True, alpha=0.3)
+    # --- Collect panel extents in RA/Dec ---
+    ra_edges = []
+    dec_edges = []
+    panels_info = []
 
     for target in plan["list"]:
-        ra_hours, dec_deg = target["target_ra_dec"]
-        cos_dec = math.cos(math.radians(dec_deg))
-
-        # Panel half-extents
+        ra_h, dec_d = target["target_ra_dec"]
+        cos_dec = math.cos(math.radians(dec_d))
         half_dec = fov_height / 2.0
-        half_ra_hours = fov_width / (2.0 * 15.0 * cos_dec)
+        half_ra = fov_width / (2.0 * 15.0 * cos_dec)
+        ra_edges.extend([ra_h - half_ra, ra_h + half_ra])
+        dec_edges.extend([dec_d - half_dec, dec_d + half_dec])
+        panels_info.append((ra_h, dec_d, half_ra, half_dec, target["target_name"]))
 
-        dec_lo = dec_deg - half_dec
-        dec_hi = dec_deg + half_dec
-        ra_lo = ra_hours - half_ra_hours
-        ra_hi = ra_hours + half_ra_hours
+    ra_lo, ra_hi = min(ra_edges), max(ra_edges)
+    dec_lo, dec_hi = min(dec_edges), max(dec_edges)
 
-        # Build the four edges with interpolation for Mollweide curvature
-        n = _N_EDGE_POINTS
-        ra_pts = []
-        dec_pts = []
+    # Expand to 150% of area (sqrt(1.5) per linear dimension)
+    scale = math.sqrt(1.5)
+    ra_margin = max((ra_hi - ra_lo) * (scale - 1) / 2, 0.02)
+    dec_margin = max((dec_hi - dec_lo) * (scale - 1) / 2, 0.1)
 
-        # Bottom edge: (ra_lo→ra_hi, dec_lo)
-        ra_pts.extend(np.linspace(ra_lo, ra_hi, n))
-        dec_pts.extend([dec_lo] * n)
+    view_ra = (ra_lo - ra_margin, ra_hi + ra_margin)
+    view_dec = (dec_lo - dec_margin, dec_hi + dec_margin)
 
-        # Right edge: (ra_hi, dec_lo→dec_hi)
-        ra_pts.extend([ra_hi] * n)
-        dec_pts.extend(np.linspace(dec_lo, dec_hi, n))
+    # --- Create axes ---
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    ax.set_aspect("equal")
 
-        # Top edge: (ra_hi→ra_lo, dec_hi)
-        ra_pts.extend(np.linspace(ra_hi, ra_lo, n))
-        dec_pts.extend([dec_hi] * n)
+    # --- Grid lines ---
+    ra_extent_deg = (view_ra[1] - view_ra[0]) * 15
+    dec_extent_deg = view_dec[1] - view_dec[0]
+    ra_step_h = _nice_grid_step(ra_extent_deg) / 15.0
+    dec_step = _nice_grid_step(dec_extent_deg)
 
-        # Left edge: (ra_lo, dec_hi→dec_lo)
-        ra_pts.extend([ra_lo] * n)
-        dec_pts.extend(np.linspace(dec_hi, dec_lo, n))
+    # RA meridians
+    ra_start = math.floor(view_ra[0] / ra_step_h) * ra_step_h
+    ra_grid_vals = []
+    v = ra_start
+    while v <= view_ra[1] + ra_step_h / 2:
+        ra_grid_vals.append(v)
+        v += ra_step_h
 
-        # Convert to Mollweide coordinates (radians)
-        ra_arr = np.array(ra_pts)
-        dec_arr = np.array(dec_pts)
-        lon_rad = -np.radians(ra_arr * 15 - 180)
-        lat_rad = np.radians(dec_arr)
+    dec_lin = np.linspace(
+        max(view_dec[0], -90), min(view_dec[1], 90), 200,
+    )
+    for ra_h in ra_grid_vals:
+        lon = np.full(200, -np.radians(ra_h * 15 - 180))
+        lat = np.radians(dec_lin)
+        gx, gy = _mollweide_xy(lon, lat)
+        ax.plot(gx, gy, color="gray", linewidth=0.4, alpha=0.5, zorder=1)
 
-        ax.plot(lon_rad, lat_rad, "-", linewidth=0.8)
+    # Dec parallels
+    dec_start = math.floor(view_dec[0] / dec_step) * dec_step
+    dec_grid_vals = []
+    v = dec_start
+    while v <= view_dec[1] + dec_step / 2:
+        dec_grid_vals.append(v)
+        v += dec_step
 
-        # Label at panel centre
-        clon = -math.radians(ra_hours * 15 - 180)
-        clat = math.radians(dec_deg)
-        ax.text(
-            clon, clat, target["target_name"],
-            fontsize=6, ha="center", va="center",
+    ra_lin = np.linspace(view_ra[0], view_ra[1], 200)
+    for dec_d in dec_grid_vals:
+        lon = -np.radians(ra_lin * 15 - 180)
+        lat = np.full(200, np.radians(dec_d))
+        gx, gy = _mollweide_xy(lon, lat)
+        ax.plot(gx, gy, color="gray", linewidth=0.4, alpha=0.5, zorder=1)
+
+    # --- Panel outlines ---
+    n = _N_EDGE_POINTS
+    for ra_h, dec_d, half_ra, half_dec, name in panels_info:
+        ra_l, ra_r = ra_h - half_ra, ra_h + half_ra
+        dec_b, dec_t = dec_d - half_dec, dec_d + half_dec
+
+        ra_pts = np.concatenate([
+            np.linspace(ra_l, ra_r, n),
+            np.full(n, ra_r),
+            np.linspace(ra_r, ra_l, n),
+            np.full(n, ra_l),
+        ])
+        dec_pts = np.concatenate([
+            np.full(n, dec_b),
+            np.linspace(dec_b, dec_t, n),
+            np.full(n, dec_t),
+            np.linspace(dec_t, dec_b, n),
+        ])
+
+        x, y = _mollweide_xy(
+            -np.radians(ra_pts * 15 - 180),
+            np.radians(dec_pts),
         )
+        ax.plot(x, y, "-", linewidth=0.8, zorder=2)
+
+        cx, cy = _mollweide_xy(
+            np.array([-math.radians(ra_h * 15 - 180)]),
+            np.array([math.radians(dec_d)]),
+        )
+        ax.text(
+            cx[0], cy[0], name,
+            fontsize=6, ha="center", va="center", zorder=3,
+        )
+
+    # --- View limits ---
+    corners_ra = np.array([view_ra[0], view_ra[1], view_ra[0], view_ra[1]])
+    corners_dec = np.array([view_dec[0], view_dec[0], view_dec[1], view_dec[1]])
+    vx, vy = _mollweide_xy(
+        -np.radians(corners_ra * 15 - 180),
+        np.radians(corners_dec),
+    )
+    ax.set_xlim(min(vx), max(vx))
+    ax.set_ylim(min(vy), max(vy))
+
+    # --- Tick labels in RA / Dec ---
+    center_dec_rad = np.radians((view_dec[0] + view_dec[1]) / 2)
+    ra_tick_x, _ = _mollweide_xy(
+        -np.radians(np.array(ra_grid_vals) * 15 - 180),
+        np.full(len(ra_grid_vals), center_dec_rad),
+    )
+    ra_fmt = ".2f" if ra_step_h < 0.1 else ".1f" if ra_step_h < 1 else ".0f"
+    ax.set_xticks(ra_tick_x)
+    ax.set_xticklabels([f"{ra:{ra_fmt}}h" for ra in ra_grid_vals], fontsize=7)
+    ax.set_xlabel("RA")
+
+    center_ra_rad = -np.radians(
+        ((view_ra[0] + view_ra[1]) / 2) * 15 - 180,
+    )
+    _, dec_tick_y = _mollweide_xy(
+        np.full(len(dec_grid_vals), center_ra_rad),
+        np.radians(np.array(dec_grid_vals)),
+    )
+    dec_fmt = ".2f" if dec_step < 0.5 else ".1f" if dec_step < 5 else ".0f"
+    ax.set_yticks(dec_tick_y)
+    ax.set_yticklabels([f"{d:{dec_fmt}}\u00b0" for d in dec_grid_vals], fontsize=7)
+    ax.set_ylabel("Dec")
 
     ax.set_title(plan.get("plan_name", ""))
 
