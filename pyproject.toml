@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "seestarpy"
-version = "0.1.3"
+version = "0.1.4"
 authors = [ { name = "Kieran Leschinski", email = "kdleschinski@gmail.com" },]
 description = "Python interface for the SeeStar telescope control system"
 readme = "README.md"
@@ -19,14 +19,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
-    # These three for talking to the Seestar
-    "websockets",       # for html dashboard
-    "pysmb>=1.2.9",     # For SMB file operations
-    "tzlocal",          # For getting the local timezone
-    # For CrowdSky WebDAV uploads
-    "requests",
-    "build>=1.4.0",
-    "twine>=6.2.0",
+    "websockets",       # event listener / html dashboard
+    "pysmb>=1.2.9",     # SMB file operations (data module)
+    "tzlocal",          # local timezone (pi_set_time)
+    "requests",         # CrowdSky WebDAV uploads
+    "click",            # CLI entry point
 ]
 
 [tool.setuptools]
