@@ -1,15 +1,16 @@
-"""Unit tests for CrowdSky time-block stacking functions in crowdsky.py."""
+"""Unit tests for CrowdSky time-block stacking functions in crowdsky/chunks.py."""
 
 from datetime import datetime
 from unittest.mock import patch
 
 import pytest
 
-from seestarpy.crowdsky import (
+from seestarpy.crowdsky.chunks import (
     _floor_to_block,
     _parse_light_filename,
     find_unstacked_blocks,
     list_targets,
+    stack_all,
 )
 
 
@@ -100,7 +101,7 @@ def _make_light_files(target, exposure, filt, times):
 
 
 class TestFindUnstackedBlocks:
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_basic_grouping(self, mock_data):
         """Frames in two 15-min blocks should produce two blocks."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
@@ -114,7 +115,7 @@ class TestFindUnstackedBlocks:
             {},        # stacked files from main folder
         ]
 
-        with patch("seestarpy.crowdsky.datetime") as mock_dt:
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 28, 12, 0, 0)
             mock_dt.strptime = datetime.strptime
             blocks = find_unstacked_blocks("M 81")
@@ -125,7 +126,7 @@ class TestFindUnstackedBlocks:
         assert blocks[1]["block_start"] == datetime(2026, 2, 27, 23, 0, 0)
         assert blocks[1]["frame_count"] == 3
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_current_block_skipped(self, mock_data):
         """The current (incomplete) block should be excluded."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
@@ -134,14 +135,14 @@ class TestFindUnstackedBlocks:
         mock_data.list_folder_contents.side_effect = [raw, {}]
 
         # "now" is within the 22:45 block
-        with patch("seestarpy.crowdsky.datetime") as mock_dt:
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 27, 22, 55, 0)
             mock_dt.strptime = datetime.strptime
             blocks = find_unstacked_blocks("M 81")
 
         assert len(blocks) == 0
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_covered_block_excluded(self, mock_data):
         """Blocks with matching CrowdSky output files should be excluded.
 
@@ -158,7 +159,7 @@ class TestFindUnstackedBlocks:
         }
         mock_data.list_folder_contents.side_effect = [raw, stacked]
 
-        with patch("seestarpy.crowdsky.datetime") as mock_dt:
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 28, 12, 0, 0)
             mock_dt.strptime = datetime.strptime
             blocks = find_unstacked_blocks("M 81")
@@ -167,7 +168,7 @@ class TestFindUnstackedBlocks:
         assert len(blocks) == 1
         assert blocks[0]["block_start"] == datetime(2026, 2, 27, 23, 0, 0)
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_dso_stacked_does_not_mark_coverage(self, mock_data):
         """Plain DSO_Stacked files should NOT mark coverage."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
@@ -179,7 +180,7 @@ class TestFindUnstackedBlocks:
         }
         mock_data.list_folder_contents.side_effect = [raw, stacked]
 
-        with patch("seestarpy.crowdsky.datetime") as mock_dt:
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 28, 12, 0, 0)
             mock_dt.strptime = datetime.strptime
             blocks = find_unstacked_blocks("M 81")
@@ -188,7 +189,7 @@ class TestFindUnstackedBlocks:
         assert len(blocks) == 1
         assert blocks[0]["block_start"] == datetime(2026, 2, 27, 22, 45, 0)
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_crowdsky_exact_match_handles_duplicate_frame_counts(self, mock_data):
         """CrowdSky coverage is by block timestamp, not frame count."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
@@ -203,7 +204,7 @@ class TestFindUnstackedBlocks:
         }
         mock_data.list_folder_contents.side_effect = [raw, stacked]
 
-        with patch("seestarpy.crowdsky.datetime") as mock_dt:
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 28, 12, 0, 0)
             mock_dt.strptime = datetime.strptime
             blocks = find_unstacked_blocks("M 81")
@@ -212,7 +213,7 @@ class TestFindUnstackedBlocks:
         assert len(blocks) == 1
         assert blocks[0]["block_start"] == datetime(2026, 2, 27, 23, 0, 0)
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_mixed_exposure_filter_subgroups(self, mock_data):
         """Frames with different exposure/filter combos produce sub-blocks."""
         raw = {
@@ -221,7 +222,7 @@ class TestFindUnstackedBlocks:
         }
         mock_data.list_folder_contents.side_effect = [raw, {}]
 
-        with patch("seestarpy.crowdsky.datetime") as mock_dt:
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 28, 12, 0, 0)
             mock_dt.strptime = datetime.strptime
             blocks = find_unstacked_blocks("M 81")
@@ -232,13 +233,13 @@ class TestFindUnstackedBlocks:
         filters = {b["filter"] for b in blocks}
         assert filters == {"LP", "IRCUT"}
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_no_raw_files_returns_empty(self, mock_data):
         mock_data.list_folder_contents.return_value = {}
         blocks = find_unstacked_blocks("M 81")
         assert blocks == []
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_files_sorted_within_block(self, mock_data):
         """Files within a block should be sorted by filename (chronological)."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
@@ -246,7 +247,7 @@ class TestFindUnstackedBlocks:
         ])
         mock_data.list_folder_contents.side_effect = [raw, {}]
 
-        with patch("seestarpy.crowdsky.datetime") as mock_dt:
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 28, 12, 0, 0)
             mock_dt.strptime = datetime.strptime
             blocks = find_unstacked_blocks("M 81")
@@ -262,7 +263,7 @@ class TestFindUnstackedBlocks:
 # ---------------------------------------------------------------------------
 
 class TestListTargets:
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_finds_target_pairs(self, mock_data):
         mock_data.list_folders.return_value = {
             "M 81": 3,
@@ -278,7 +279,7 @@ class TestListTargets:
         assert targets[0]["stacked_files"] == 1
         assert targets[1]["target"] == "M 81"
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_orphan_sub_folder_excluded(self, mock_data):
         """A _sub folder without a matching main folder is not a target."""
         mock_data.list_folders.return_value = {
@@ -290,7 +291,139 @@ class TestListTargets:
         assert len(targets) == 1
         assert targets[0]["target"] == "M 81"
 
-    @patch("seestarpy.crowdsky.data")
+    @patch("seestarpy.crowdsky.chunks.data")
     def test_empty_returns_empty(self, mock_data):
         mock_data.list_folders.return_value = {}
         assert list_targets() == []
+
+
+# ---------------------------------------------------------------------------
+# stack_all
+# ---------------------------------------------------------------------------
+
+class TestStackAll:
+    @patch("seestarpy.crowdsky.chunks.stack_blocks")
+    @patch("seestarpy.crowdsky.chunks.list_targets")
+    def test_aggregates_multiple_targets(self, mock_list, mock_stack):
+        mock_list.return_value = [
+            {"target": "M 42", "raw_files": 100, "stacked_files": 1},
+            {"target": "M 81", "raw_files": 200, "stacked_files": 2},
+        ]
+        mock_stack.side_effect = [
+            {
+                "target": "M 42",
+                "blocks_stacked": 2,
+                "blocks_failed": 0,
+                "blocks_skipped": 1,
+                "results": [],
+            },
+            {
+                "target": "M 81",
+                "blocks_stacked": 3,
+                "blocks_failed": 1,
+                "blocks_skipped": 0,
+                "results": [],
+            },
+        ]
+
+        result = stack_all()
+
+        assert result["targets_processed"] == 2
+        assert result["targets_with_work"] == 2
+        assert result["total_blocks_stacked"] == 5
+        assert result["total_blocks_failed"] == 1
+        assert result["total_blocks_skipped"] == 1
+        assert len(result["per_target"]) == 2
+
+    @patch("seestarpy.crowdsky.chunks.stack_blocks")
+    @patch("seestarpy.crowdsky.chunks.list_targets")
+    def test_no_targets(self, mock_list, mock_stack):
+        mock_list.return_value = []
+
+        result = stack_all()
+
+        assert result["targets_processed"] == 0
+        assert result["targets_with_work"] == 0
+        assert result["total_blocks_stacked"] == 0
+        assert result["total_blocks_failed"] == 0
+        assert result["total_blocks_skipped"] == 0
+        assert result["per_target"] == []
+        mock_stack.assert_not_called()
+
+    @patch("seestarpy.crowdsky.chunks.stack_blocks")
+    @patch("seestarpy.crowdsky.chunks.list_targets")
+    def test_one_target_error_continues(self, mock_list, mock_stack):
+        mock_list.return_value = [
+            {"target": "M 42", "raw_files": 100, "stacked_files": 1},
+            {"target": "M 81", "raw_files": 200, "stacked_files": 2},
+        ]
+        mock_stack.side_effect = [
+            RuntimeError("connection lost"),
+            {
+                "target": "M 81",
+                "blocks_stacked": 2,
+                "blocks_failed": 0,
+                "blocks_skipped": 0,
+                "results": [],
+            },
+        ]
+
+        result = stack_all()
+
+        assert result["targets_processed"] == 2
+        assert result["total_blocks_stacked"] == 2
+        # Failed target has error key
+        assert "error" in result["per_target"][0]
+        assert result["per_target"][0]["error"] == "connection lost"
+        # Second target succeeded
+        assert "error" not in result["per_target"][1]
+
+    @patch("seestarpy.crowdsky.chunks.stack_blocks")
+    @patch("seestarpy.crowdsky.chunks.list_targets")
+    def test_targets_with_work_count(self, mock_list, mock_stack):
+        """Targets with zero blocks (stacked+failed+skipped) don't count."""
+        mock_list.return_value = [
+            {"target": "M 42", "raw_files": 100, "stacked_files": 1},
+            {"target": "M 81", "raw_files": 200, "stacked_files": 2},
+        ]
+        mock_stack.side_effect = [
+            {
+                "target": "M 42",
+                "blocks_stacked": 0,
+                "blocks_failed": 0,
+                "blocks_skipped": 0,
+                "results": [],
+            },
+            {
+                "target": "M 81",
+                "blocks_stacked": 1,
+                "blocks_failed": 0,
+                "blocks_skipped": 0,
+                "results": [],
+            },
+        ]
+
+        result = stack_all()
+
+        assert result["targets_processed"] == 2
+        assert result["targets_with_work"] == 1
+
+    @patch("seestarpy.crowdsky.chunks.stack_blocks")
+    @patch("seestarpy.crowdsky.chunks.list_targets")
+    def test_passes_parameters_through(self, mock_list, mock_stack):
+        mock_list.return_value = [
+            {"target": "M 42", "raw_files": 100, "stacked_files": 1},
+        ]
+        mock_stack.return_value = {
+            "target": "M 42",
+            "blocks_stacked": 0,
+            "blocks_failed": 0,
+            "blocks_skipped": 0,
+            "results": [],
+        }
+
+        stack_all(block_minutes=30, min_exptime=120, dry_run=True)
+
+        mock_stack.assert_called_once_with(
+            "M 42", block_minutes=30, min_exptime=120, dry_run=True,
+        )

@@ -22,7 +22,7 @@ dependencies = [
     "websockets",       # event listener / html dashboard
     "pysmb>=1.2.9",     # SMB file operations (data module)
     "tzlocal",          # local timezone (pi_set_time)
-    "requests",         # CrowdSky WebDAV uploads
+    "requests",         # CrowdSky web API
     "click",            # CLI entry point
 ]
 

@@ -14,20 +14,24 @@ Typical workflow::
     # 1. See what's on the Seestar
     crowdsky.list_targets()
 
-    # 2. Preview unstacked blocks
+    # 2. Preview unstacked blocks for one target
     crowdsky.stack_blocks("M 81", dry_run=True)
 
-    # 3. Stack them
+    # 3. Stack one target
     crowdsky.stack_blocks("M 81")
+
+    # 4. Or stack everything at once
+    crowdsky.stack_all(dry_run=True)   # preview
+    crowdsky.stack_all()               # run
 """
 
 import re
 import time
 from datetime import datetime, timedelta
 
-from . import data
-from .connection import multiple_ips
-from .stack import (
+from .. import data
+from ..connection import multiple_ips
+from ..stack import (
     clear_batch_stack,
     get_batch_stack_status,
     set_batch_stack_setting,
@@ -433,3 +437,97 @@ def list_targets():
 
     targets.sort(key=lambda t: t["target"])
     return targets
+
+
+@multiple_ips
+def stack_all(block_minutes=15, min_exptime=240, dry_run=False):
+    """Find and batch-stack all unstacked time blocks for every target.
+
+    Discovers targets via :func:`list_targets`, then calls
+    :func:`stack_blocks` for each one sequentially.  If one target fails,
+    the error is recorded and processing continues with the next target.
+
+    Parameters
+    ----------
+    block_minutes : int
+        Block duration in minutes.  Default 15.
+    min_exptime : float
+        Minimum total effective exposure in seconds.  Default 240.
+    dry_run : bool
+        If ``True``, preview what would be stacked without doing it.
+
+    Returns
+    -------
+    dict
+        Summary with keys: ``targets_processed``, ``targets_with_work``,
+        ``total_blocks_stacked``, ``total_blocks_failed``,
+        ``total_blocks_skipped``, ``per_target``.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import crowdsky
+        >>> crowdsky.stack_all(dry_run=True)
+        >>> result = crowdsky.stack_all()
+
+    """
+    targets = list_targets()
+
+    summary = {
+        "targets_processed": 0,
+        "targets_with_work": 0,
+        "total_blocks_stacked": 0,
+        "total_blocks_failed": 0,
+        "total_blocks_skipped": 0,
+        "per_target": [],
+    }
+
+    if not targets:
+        print("No targets found.")
+        return summary
+
+    for i, t in enumerate(targets, 1):
+        name = t["target"]
+        print(f"[{i}/{len(targets)}] {name}")
+
+        try:
+            result = stack_blocks(
+                name,
+                block_minutes=block_minutes,
+                min_exptime=min_exptime,
+                dry_run=dry_run,
+            )
+        except Exception as exc:
+            print(f"  Error: {exc}")
+            result = {
+                "target": name,
+                "blocks_stacked": 0,
+                "blocks_failed": 0,
+                "blocks_skipped": 0,
+                "results": [],
+                "error": str(exc),
+            }
+
+        summary["targets_processed"] += 1
+        had_work = (
+            result["blocks_stacked"]
+            + result["blocks_failed"]
+            + result["blocks_skipped"]
+        ) > 0
+        if had_work:
+            summary["targets_with_work"] += 1
+        summary["total_blocks_stacked"] += result["blocks_stacked"]
+        summary["total_blocks_failed"] += result["blocks_failed"]
+        summary["total_blocks_skipped"] += result["blocks_skipped"]
+        summary["per_target"].append(result)
+
+    stacked = summary["total_blocks_stacked"]
+    failed = summary["total_blocks_failed"]
+    skipped = summary["total_blocks_skipped"]
+    print(
+        f"Done: {stacked} stacked, {failed} failed, {skipped} skipped "
+        f"across {summary['targets_processed']} targets."
+    )
+
+    return summary
