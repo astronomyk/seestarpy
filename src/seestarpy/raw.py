@@ -19,7 +19,7 @@ def _deprecated(since, message=""):
         return wrapper
     return decorator
 
-from .connection import send_command
+from .connection import send_command, multiple_ips
 
 """
 To implement:
@@ -55,6 +55,7 @@ To implement:
 #     return send_command(params)
 
 
+@multiple_ips
 def get_albums():
     """
     Fetches a list of albums on the Seestar's internal disk
@@ -99,6 +100,10 @@ def get_albums():
          'code': 0,
          'id': 1}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'get_albums'}
     return send_command(params)
@@ -119,6 +124,7 @@ def get_albums():
 #     return send_command(params)
 
 
+@multiple_ips
 def get_camera_info():
     """
     Returns info on the cameras
@@ -147,11 +153,16 @@ def get_camera_info():
      'code': 0,
      'id': 1}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_camera_info"}
     return send_command(params)
 
 
+@multiple_ips
 def get_camera_state():
     """
     Return the name and state of the camera.
@@ -174,11 +185,16 @@ def get_camera_state():
      'code': 0,
      'id': 1}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_camera_state"}
     return send_command(params)
 
 
+@multiple_ips
 def get_device_state(keys=None):
     """
     Returns a massive dictionary of device parameters
@@ -357,6 +373,10 @@ def get_device_state(keys=None):
          'code': 0,
          'id': 1}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     if keys is None:
         keys = []
@@ -365,6 +385,7 @@ def get_device_state(keys=None):
     return send_command(params)
 
 
+@multiple_ips
 def get_disk_volume():
     """
     Returns the information on the internal emmc drive: totalMB and freeMB
@@ -384,6 +405,10 @@ def get_disk_volume():
          'result': {'totalMB': 51854, 'freeMB': 36549},
          'code': 0,
          'id': 1}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_disk_volume"}
     return send_command(params)
@@ -404,6 +429,7 @@ def get_disk_volume():
 #     return send_command(params)
 
 
+@multiple_ips
 def get_focuser_position():
     """
     Returns the position of the focuser in the range (1200, 2600)
@@ -424,11 +450,16 @@ def get_focuser_position():
          'code': 0,
          'id': 1}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_focuser_position"}
     return send_command(params)
 
 
+@multiple_ips
 def get_last_solve_result():
     """
     Get the result of the last plate-solve attempt.
@@ -449,11 +480,16 @@ def get_last_solve_result():
          'error': 'no solve data',
          'code': 215,
          'id': 1}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_last_solve_result"}
     return send_command(params)
 
 
+@multiple_ips
 def get_solve_result():
     """
     Get the current plate-solve result.
@@ -474,11 +510,16 @@ def get_solve_result():
          'error': 'no solve data',
          'code': 215,
          'id': 1}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_solve_result"}
     return send_command(params)
 
 
+@multiple_ips
 def get_stacked_img():
     """
     Get the current stacked image data.
@@ -486,11 +527,16 @@ def get_stacked_img():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_stacked_img"}
     return send_command(params)
 
 
+@multiple_ips
 @_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def get_stack_setting():
     """
@@ -519,11 +565,16 @@ def get_stack_setting():
             },
          'code': 0,
          'id': 1}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_stack_setting"}
     return send_command(params)
 
 
+@multiple_ips
 def get_stack_info():
     """
     Get the dimensions of the current stacked image.
@@ -544,11 +595,16 @@ def get_stack_info():
          'result': {'width': 0, 'height': 0},
          'code': 0,
          'id': 1}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_stack_info"}
     return send_command(params)
 
 
+@multiple_ips
 def get_sensor_calibration():
     """
     Get compass sensor calibration data.
@@ -581,11 +637,16 @@ def get_sensor_calibration():
          'code': 0,
          'id': 1}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_sensor_calibration"}
     return send_command(params)
 
 
+@multiple_ips
 def get_setting():
     """
     Gets the settings dict. No option to select individual keys.
@@ -639,11 +700,16 @@ def get_setting():
           'isp_range_exp_us_scenery': [30, 1000000]},
          'code': 0,
          'id': 1}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_setting"}
     return send_command(params)
 
 
+@multiple_ips
 def get_user_location():
     """
     Get the Lat, Long coords of the Seestar on Earth
@@ -663,11 +729,16 @@ def get_user_location():
          'result': [14.7908, 47.9539],
          'code': 0,
          'id': 1}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'get_user_location'}
     return send_command(params)
 
 
+@multiple_ips
 def get_view_state():
     """
     Return the ``View`` dictionary from the ``iscope_get_app_state`` command
@@ -699,11 +770,16 @@ def get_view_state():
          'code': 0,
          'id': 1}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_view_state"}
     return send_command(params)
 
 
+@multiple_ips
 def get_wheel_position():
     """
     Get the current filter-wheel position.
@@ -711,11 +787,16 @@ def get_wheel_position():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_wheel_position"}
     return send_command(params)
 
 
+@multiple_ips
 def get_wheel_setting():
     """
     Get the filter-wheel configuration settings.
@@ -723,11 +804,16 @@ def get_wheel_setting():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_wheel_setting"}
     return send_command(params)
 
 
+@multiple_ips
 def iscope_get_app_state():
     """
     Get the full application state from the Seestar.
@@ -735,11 +821,16 @@ def iscope_get_app_state():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "iscope_get_app_state"}
     return send_command(params)
 
 
+@multiple_ips
 def iscope_start_view(ra=None, dec=None,
                       target_name="Unknown", lp_filter=False, mode="star",
                       mosaic=None):
@@ -797,6 +888,10 @@ def iscope_start_view(ra=None, dec=None,
         ... }
         >>> raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar", mosaic=mosaic)
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "iscope_start_view",
               "params": {"mode": mode,
@@ -811,6 +906,7 @@ def iscope_start_view(ra=None, dec=None,
     return send_command(params)
 
 
+@multiple_ips
 def iscope_stop_view(stage=None):
     """
     This stops whatever is happening with the Seestar.
@@ -865,12 +961,17 @@ def iscope_stop_view(stage=None):
          'route': []}
 
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "iscope_stop_view",
               "params": {"stage": stage}}
     return send_command(params)
 
 
+@multiple_ips
 def iscope_start_stack(restart=False):
     """
     Start stacking sub-frames on the current target.
@@ -883,6 +984,10 @@ def iscope_start_stack(restart=False):
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "iscope_start_stack",
               "params": {"restart": restart}
@@ -890,6 +995,7 @@ def iscope_start_stack(restart=False):
     return send_command(params)
 
 
+@multiple_ips
 def move_focuser(pos, retry=True):
     """
     Move the focuser to the given position in the range (1200, 2600)
@@ -911,6 +1017,10 @@ def move_focuser(pos, retry=True):
         >>> from seestarpy import raw
         >>> raw.move_focuser(1605)
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "move_focuser",
               "params": {"step": pos,
@@ -919,6 +1029,7 @@ def move_focuser(pos, retry=True):
     return send_command(params)
 
 
+@multiple_ips
 def pi_get_time():
     """
     Get the internal system time from the device.
@@ -936,11 +1047,16 @@ def pi_get_time():
     ::
         >>> from seestarpy import raw
         >>> raw.pi_get_time()
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'pi_get_time'}
     return send_command(params)
 
 
+@multiple_ips
 def pi_set_time(time_zone=None):
     """
     Set the internal system time on the device to the current local time.
@@ -966,6 +1082,10 @@ def pi_set_time(time_zone=None):
         >>> raw.pi_set_time()
         >>> raw.pi_set_time("UTC")
         >>> raw.pi_set_time("Australia/Melbourne")
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     if time_zone is None:
         time_zone = get_localzone_name()
@@ -987,6 +1107,7 @@ def pi_set_time(time_zone=None):
 
 
 
+@multiple_ips
 def pi_reboot():
     """
     Reboot the Seestar
@@ -997,11 +1118,16 @@ def pi_reboot():
         >>> from seestarpy import raw
         >>> raw.pi_reboot()
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'pi_reboot'}
     return send_command(params)
 
 
+@multiple_ips
 def pi_shutdown(force=False):
     """
     Shutdown the Seestar. It will NOT REBOOT after shutdown!
@@ -1021,12 +1147,17 @@ def pi_shutdown(force=False):
         # The previous command will do nothing. To actually shut it down:
         >>> raw.pi_shutdown(force=True)
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
 
     params = {'method': 'pi_shutdown'}
     return send_command(params) if force else "Are you sure you want to shutdown? Then use force=True"
 
 
+@multiple_ips
 def pi_is_verified():
     """
     Check whether the device has been verified.
@@ -1034,11 +1165,16 @@ def pi_is_verified():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'pi_is_verified'}
     return send_command(params)
 
 
+@multiple_ips
 def pi_output_set2(is_dew_on=False, dew_heater_power=0):
     """
     Turn on dew heater
@@ -1054,6 +1190,10 @@ def pi_output_set2(is_dew_on=False, dew_heater_power=0):
     -------
     dict
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'pi_output_set2',
               "params": {"heater": {"state": is_dew_on,
@@ -1063,6 +1203,7 @@ def pi_output_set2(is_dew_on=False, dew_heater_power=0):
     return send_command(params)
 
 
+@multiple_ips
 def scan_iscope():
     """
     Scan for connected Seestar devices.
@@ -1070,11 +1211,16 @@ def scan_iscope():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "scan_iscope"}
     return send_command(params)
 
 
+@multiple_ips
 def play_sound(sound_id):
     """
     Plays a sound from the internal soundboard.
@@ -1094,11 +1240,16 @@ def play_sound(sound_id):
         >>> from seestarpy import raw
         >>> raw.play_sound(80)
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'play_sound', 'params': {"num": sound_id}}
     return send_command(params)
 
 
+@multiple_ips
 def set_control_value(gain=80):
     """
     Used for setting gain parameter at the moment
@@ -1142,11 +1293,14 @@ def set_control_value(gain=80):
       sources like nebulae and galaxy disks, then the HCG mode is better
       suited.  Set the gain value to 80+.
 
+
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "set_control_value", "params": ["gain", gain]}
     return send_command(params)
 
 
+@multiple_ips
 def set_setting(**kwargs):
     """
     Set values in the Seestar settings dictionary.
@@ -1261,11 +1415,16 @@ def set_setting(**kwargs):
         >>> from seestarpy import raw
         >>> raw.set_setting(exp_ms={"stack_l": 20000})
         >>> raw.set_setting(stack_dither={"pix": 50, "interval": 5, "enable": True})
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "set_setting", "params": kwargs}
     return send_command(params)
 
 
+@multiple_ips
 @_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
     """
@@ -1284,6 +1443,10 @@ def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "set_stack_setting",
               "params": {"save_discrete_ok_frame": save_ok_frames,
@@ -1293,6 +1456,7 @@ def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
     return send_command(params)
 
 
+@multiple_ips
 def set_sequence_setting(name):
     """
     Set the sequence (observation group) name.
@@ -1305,12 +1469,17 @@ def set_sequence_setting(name):
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "set_sequence_setting",
               "params": [{"group_name": name}]}
     return send_command(params)
 
 
+@multiple_ips
 def set_sensor_calibration(x, y, z, x11, x12, y11, y12):
     """
     Override device's compass bearing to account for the magnetic declination 
@@ -1326,6 +1495,10 @@ def set_sensor_calibration(x, y, z, x11, x12, y11, y12):
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "set_sensor_calibration",
               "params": {"compassSensor": {"x": x,
@@ -1340,6 +1513,7 @@ def set_sensor_calibration(x, y, z, x11, x12, y11, y12):
     return send_command(params)
 
 
+@multiple_ips
 def set_user_location(lat, lon):
     """
     Set the location on earth of the user
@@ -1359,6 +1533,10 @@ def set_user_location(lat, lon):
         >>> from seestarpy import raw
         >>> raw.set_user_location(48.2, 16.4)   # For Vienna, Austria
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'set_user_location',
               'params': {'lat': lat,
@@ -1367,6 +1545,7 @@ def set_user_location(lat, lon):
     return send_command(params)
 
 
+@multiple_ips
 def set_wheel_position(pos):
     """
     Set the filter-wheel position.
@@ -1381,11 +1560,16 @@ def set_wheel_position(pos):
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "set_wheel_position", "params": [pos]}
     return send_command(params)
 
 
+@multiple_ips
 def scope_get_equ_coord():
     """
     Get the current equatorial coordinates (RA/Dec) from the mount.
@@ -1393,11 +1577,16 @@ def scope_get_equ_coord():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_get_equ_coord'}
     return send_command(params)
 
 
+@multiple_ips
 def scope_get_horiz_coord():
     """
     Get the current horizontal coordinates (Alt/Az) from the mount.
@@ -1405,11 +1594,16 @@ def scope_get_horiz_coord():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_get_horiz_coord'}
     return send_command(params)
 
 
+@multiple_ips
 def scope_get_ra_dec():
     """
     Get the current RA/Dec coordinates from the mount.
@@ -1419,11 +1613,16 @@ def scope_get_ra_dec():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_get_ra_dec'}
     return send_command(params)
 
 
+@multiple_ips
 def scope_get_track_state():
     """
     Get the current tracking state of the mount.
@@ -1433,11 +1632,16 @@ def scope_get_track_state():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_get_track_state'}
     return send_command(params)
 
 
+@multiple_ips
 def scope_goto(ra, dec):
     """
     Move the scope arm to the given ra, dec coordinates.
@@ -1460,11 +1664,16 @@ def scope_goto(ra, dec):
          'state': 'working',
          'lapse_ms': 0}
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_goto', 'params': [ra, dec]}
     return send_command(params)
 
 
+@multiple_ips
 def scope_move_to_horizon():
     """
     Moves the scope arm to the horizontal position.
@@ -1482,11 +1691,16 @@ def scope_move_to_horizon():
         >>> from seestarpy import raw
         >>> raw.scope_move_to_horizon()
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_move_to_horizon'}
     return send_command(params)
 
 
+@multiple_ips
 def scope_park(set_eq_mode=False):
     """
     Moves the scope arm to the park position.
@@ -1511,12 +1725,17 @@ def scope_park(set_eq_mode=False):
         >>> raw.scope_park()
         >>> raw.scope_park(set_eq_mode=True)
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_park',
               "params": {"equ_mode": set_eq_mode}}
     return send_command(params)
 
 
+@multiple_ips
 def scope_set_track_state(flag):
     """
     Turns the Seestar tracking state on/off.
@@ -1535,11 +1754,16 @@ def scope_set_track_state(flag):
         >>> from seestarpy import raw
         >>> raw.scope_set_track_state(True)
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_set_track_state', "params": flag}
     return send_command(params)
 
 
+@multiple_ips
 def scope_sync(in_ra, in_dec):
     """
 
@@ -1558,11 +1782,16 @@ def scope_sync(in_ra, in_dec):
         >>> from seestarpy import raw
         >>> raw.scope_sync(13.4, 54.8)          # Mizar
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_sync', "params": [in_ra, in_dec]}
     return send_command(params)
 
 
+@multiple_ips
 def scope_speed_move(angle, speed, dur_sec):
     """
     Moves the scope as if using a joy-stick to control the movement.
@@ -1616,12 +1845,17 @@ def scope_speed_move(angle, speed, dur_sec):
         # Az (Base-motor) speed is 1.72 deg/sec and Alt (Arm-motor) speed is 1 deg/sec
         >>> raw.scope_speed_move(speed=480, angle=30, dur_sec=5)   # Move down
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "scope_speed_move",
               "params": {"speed": speed, "angle": angle, "dur_sec": dur_sec}}
     return send_command(params)
 
 
+@multiple_ips
 def start_auto_focuse():
     """
     Start the auto-focus routine.
@@ -1629,11 +1863,16 @@ def start_auto_focuse():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "start_auto_focuse"}
     return send_command(params)
 
 
+@multiple_ips
 def start_create_dark():
     """
     Start creating a dark-frame library.
@@ -1641,11 +1880,16 @@ def start_create_dark():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "start_create_dark"}
     return send_command(params)
 
 
+@multiple_ips
 def start_polar_align(restart=True, dec_pos_index=3):
     """
     Run the polar alignment sequence
@@ -1661,6 +1905,10 @@ def start_polar_align(restart=True, dec_pos_index=3):
     -------
     dict
 
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "start_polar_align",
               "params": {"restart": restart,
@@ -1669,6 +1917,7 @@ def start_polar_align(restart=True, dec_pos_index=3):
     return send_command(params)
 
 
+@multiple_ips
 def start_scan_planet():
     """
     Start scanning for planets.
@@ -1676,11 +1925,16 @@ def start_scan_planet():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "start_scan_planet"}
     return send_command(params)
 
 
+@multiple_ips
 def start_solve():
     """
     Start a plate-solve on the current field.
@@ -1688,11 +1942,16 @@ def start_solve():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "start_solve"}
     return send_command(params)
 
 
+@multiple_ips
 def stop_auto_focuse():
     """
     Stop the auto-focus routine.
@@ -1700,11 +1959,16 @@ def stop_auto_focuse():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "stop_auto_focuse"}
     return send_command(params)
 
 
+@multiple_ips
 def stop_create_dark():
     """
     Stop dark-frame library creation.
@@ -1712,11 +1976,16 @@ def stop_create_dark():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "stop_create_dark"}
     return send_command(params)
 
 
+@multiple_ips
 def stop_goto_target():
     """
     Stop the current goto-target slew.
@@ -1724,11 +1993,16 @@ def stop_goto_target():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "stop_goto_target"}
     return send_command(params)
 
 
+@multiple_ips
 def stop_polar_align():
     """
     Stop the polar-alignment sequence.
@@ -1736,11 +2010,16 @@ def stop_polar_align():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "stop_polar_align"}
     return send_command(params)
 
 
+@multiple_ips
 def stop_solve():
     """
     Stop the current plate-solve.
@@ -1748,11 +2027,16 @@ def stop_solve():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "stop_solve"}
     return send_command(params)
 
 
+@multiple_ips
 def stop_scheduler():
     """
     Stop the observation scheduler.
@@ -1760,11 +2044,16 @@ def stop_scheduler():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "stop_scheduler"}
     return send_command(params)
 
 
+@multiple_ips
 def test_connection():
     """
     Test the connection to the Seestar.
@@ -1772,11 +2061,16 @@ def test_connection():
     Returns
     -------
     dict
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'test_connection'}
     return send_command(params)
 
 
+@multiple_ips
 def random_command(method, params=None):
     """
     Send an arbitrary command to the Seestar.
@@ -1791,5 +2085,9 @@ def random_command(method, params=None):
     Returns
     -------
     dict or str
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     return send_command({"method": method, "params": params})
