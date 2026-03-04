@@ -75,8 +75,8 @@ def status_bar(return_type="str"):
 
     t41 = f'{app.get("DarkLibrary", {}).get("percent", "---"):^14}'
     t42 = f'{app.get("FocuserMove", {}).get("position", "---"):^14}'
-    t43 = f'{app.get("PlateSolve", view.get("Stack", {}).get("PlateSolve",{})).get("state", "---"):^14}'
-    t44 = f'{app.get("PlateSolve", view.get("Stack", {}).get("PlateSolve",{})).get("error", "---"):^14}'
+    t43 = f'{app.get("PlateSolve", view.get("PlateSolve", {}).get("PlateSolve",{})).get("state", "---"):^14}'
+    t44 = f'{app.get("PlateSolve", view.get("PlateSolve", {}).get("PlateSolve",{})).get("error", "---"):^14}'
 
     t51 = f'{str(dev.get("pi_status", {}).get("battery_capacity"))+"%":^7}'
     t52 = f'{dev.get("storage", {}).get("storage_volume", [{}])[0].get("free_mb", "---"):^8}'
