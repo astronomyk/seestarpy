@@ -1,6 +1,7 @@
 from . import raw
 from . import connection as conn
 from .connection import multiple_ips
+from .plan import resolve_name
 from .status import get_filter, is_eq_mode
 
 
@@ -279,7 +280,7 @@ def focuser(pos: int | str | None = None):
 
 
 @multiple_ips
-def goto_target(target_name, ra, dec, lp_filter=False):
+def goto_target(target_name, ra=None, dec=None, lp_filter=False):
     """
     Slew to a target by name and coordinates, then start viewing.
 
@@ -287,21 +288,39 @@ def goto_target(target_name, ra, dec, lp_filter=False):
     given coordinates, runs a plate-solve loop, and then enters
     ``ContinuousExposure`` mode.
 
+    If *ra* and *dec* are omitted, the coordinates are resolved
+    automatically from *target_name* using the CDS Sesame name resolver
+    (SIMBAD/NED/VizieR).  This supports standard designations such as
+    Messier (``"M42"``), NGC/IC, HD, HIP, Bayer names, etc.
+
     Parameters
     ----------
     target_name : str
-        Name of the target. Also used as the directory name on the
-        Seestar's internal storage.
-    ra : float
-        Right Ascension in decimal hours.
-    dec : float
-        Declination in decimal degrees.
+        Name of the target (e.g. ``"M42"``, ``"NGC 884"``).  Also used
+        as the directory name on the Seestar's internal storage.  When
+        *ra* and *dec* are ``None``, this name is passed to
+        :func:`~seestarpy.plan.resolve_name` to look up coordinates.
+    ra : float or None, optional
+        Right Ascension in decimal hours.  If ``None`` (default),
+        resolved from *target_name*.
+    dec : float or None, optional
+        Declination in decimal degrees.  If ``None`` (default),
+        resolved from *target_name*.
     lp_filter : bool, optional
         Use the light-pollution filter. Default is ``False``.
 
     Returns
     -------
     dict
+
+    Raises
+    ------
+    LookupError
+        If *ra*/*dec* are ``None`` and *target_name* cannot be resolved.
+    ConnectionError
+        If the CDS Sesame service is unreachable.
+    ValueError
+        If only one of *ra*/*dec* is provided.
 
     Notes
     -----
@@ -312,10 +331,18 @@ def goto_target(target_name, ra, dec, lp_filter=False):
     --------
 
         >>> import seestarpy as ssp
-        >>> ssp.goto_target("Mizar", ra=13.4, dec=54.9)
-        >>> ssp.goto_target("M8", ra=18.06, dec=-24.38, lp_filter=True)
+        >>> ssp.goto_target("M42")                                # name resolved
+        >>> ssp.goto_target("M8", lp_filter=True)                 # name + LP filter
+        >>> ssp.goto_target("Mizar", ra=13.4, dec=54.9)           # explicit coords
+        >>> ssp.goto_target("M31", ips="all")                     # all Seestars
 
     """
+    if ra is None and dec is None:
+        ra, dec = resolve_name(target_name)
+    elif ra is None or dec is None:
+        raise ValueError(
+            "Provide both ra and dec, or omit both to resolve from target_name."
+        )
     return raw.iscope_start_view(ra, dec, target_name, lp_filter)
 
 
@@ -369,7 +396,7 @@ def start_stack(restart=True):
     --------
 
         >>> import seestarpy as ssp
-        >>> ssp.goto_target("M31", ra=0.712, dec=41.27)
+        >>> ssp.goto_target("M31")
         >>> ssp.start_stack()
         >>> ssp.start_stack(ips="all")  # Start stacking on all Seestars
 

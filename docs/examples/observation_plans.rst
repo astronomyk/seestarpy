@@ -268,3 +268,217 @@ Panels are traversed in **boustrophedon** (snake) order — even rows go
 left-to-right in RA, odd rows go right-to-left — to minimise slew time
 between consecutive panels.  RA spacing is automatically corrected for
 ``cos(dec)`` so panels cover equal angular extents on the sky.
+
+
+Polygon plans
+-------------
+
+:func:`~seestarpy.plan.create_polygon_plan` generalises the mosaic
+concept to **arbitrary sky regions**.  Instead of an axis-aligned
+rectangle, you define the boundary with 3 or more RA/Dec corner points
+(ordered clockwise or counter-clockwise, non-self-intersecting).  The
+function uses a gnomonic tangent-plane projection internally, so
+``cos(dec)`` correction and RA wraparound near 0 h/24 h are handled
+automatically.
+
+**Quadrilateral** — a tilted rectangle that doesn't align with the
+equatorial grid:
+
+.. code-block:: python
+
+    from seestarpy import plan
+
+    quad = plan.create_polygon_plan(
+        plan_name="Veil Nebula",
+        corners=[
+            (20.75, 30.0),   # bottom-left
+            (20.95, 30.0),   # bottom-right
+            (20.95, 32.0),   # top-right
+            (20.75, 32.0),   # top-left
+        ],
+        delta_ra=0.5,        # grid spacing in degrees
+        delta_dec=0.5,
+        t_total=120,         # 2 hours total
+        start_min=1320,      # 22:00
+    )
+
+    plan.set_view_plan(quad)
+
+**Triangle** — useful for irregularly shaped nebulae:
+
+.. code-block:: python
+
+    tri = plan.create_polygon_plan(
+        plan_name="Triangular Region",
+        corners=[
+            (12.0, 0.0),
+            (12.2, 0.0),
+            (12.1, 1.5),
+        ],
+        delta_ra=0.4,
+        delta_dec=0.4,
+        t_total=90,
+        start_min=1380,      # 23:00
+    )
+
+**Pentagon or more** — any simple polygon works:
+
+.. code-block:: python
+
+    penta = plan.create_polygon_plan(
+        plan_name="Five-sided region",
+        corners=[
+            (12.0, 0.0),
+            (12.1, -0.5),
+            (12.2, 0.0),
+            (12.15, 0.5),
+            (12.05, 0.5),
+        ],
+        delta_ra=0.3,
+        delta_dec=0.3,
+        t_total=90,
+        start_min=1320,
+    )
+
+Only grid points that fall **inside** the polygon boundary are included
+in the plan.  If the grid spacing is larger than the entire region, a
+single pointing at the centroid is generated.
+
+The panels use the same boustrophedon traversal and ``cos(dec)``-aware
+spacing as :func:`~seestarpy.plan.create_mosaic_plan`.
+
+.. note::
+    ``create_quadrilateral_plan`` is available as an alias for
+    ``create_polygon_plan``.
+
+
+Named plans
+-----------
+
+:func:`~seestarpy.plan.create_named_plan` is the quickest way to build
+a plan — just list your targets by name and start time:
+
+.. code-block:: python
+
+    from seestarpy import plan
+
+    p = plan.create_named_plan(
+        plan_name="Friday Night",
+        targets=[
+            ("M42",     "21:00"),
+            ("NGC 884", "22:30"),
+            ("M31",     "23:45"),
+        ],
+        end_time="01:00",
+    )
+
+    plan.set_view_plan(p)
+
+Each target observes from its start time until the next target begins.
+The last target (M31) observes until ``end_time`` (01:00).  In this
+example, M42 gets 90 min, NGC 884 gets 75 min, and M31 gets 75 min.
+
+Target coordinates are resolved automatically using the
+`CDS Sesame <https://cds.u-strasbg.fr/cgi-bin/Sesame>`_ name resolver,
+which queries SIMBAD, NED, and VizieR.  Standard designations all work:
+Messier (M42), NGC/IC (NGC 884), HD (HD 126675), HIP, Bayer names, etc.
+An internet connection is required for name resolution.
+
+
+Mixing names and coordinates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The target specifier can be either a **name string** or an explicit
+**(ra_hours, dec_deg) pair**.  You can freely mix both in the same plan:
+
+.. code-block:: python
+
+    p = plan.create_named_plan(
+        plan_name="Mixed Session",
+        targets=[
+            ("M42", "21:00"),                   # resolved via Sesame
+            ((0.712, 41.27), "22:30"),           # explicit RA/Dec
+            ("NGC 7000", "23:30", True),         # with LP filter
+        ],
+        end_time="01:00",
+    )
+
+Explicit coordinates skip the network call entirely, which is useful for
+custom pointings or when working offline.
+
+
+Per-target light-pollution filter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each target tuple can optionally include a third element to control the
+LP filter individually.  Targets without the third element use the
+function-level ``lp_filter`` default (``False``):
+
+.. code-block:: python
+
+    p = plan.create_named_plan(
+        plan_name="LP Filter Mix",
+        targets=[
+            ("M42", "21:00", True),     # LP filter ON
+            ("M31", "22:30", False),    # LP filter OFF
+            ("M51", "23:30"),           # uses default (False)
+        ],
+        end_time="01:00",
+        lp_filter=False,               # default for targets without override
+    )
+
+
+Midnight wraparound
+^^^^^^^^^^^^^^^^^^^^
+
+Times are expected in 24-hour ``"hh:mm"`` format.  If a start time is
+earlier than the previous target's, it is automatically treated as
+post-midnight (next calendar day):
+
+.. code-block:: python
+
+    p = plan.create_named_plan(
+        plan_name="Late Night",
+        targets=[
+            ("M42", "23:00"),       # 23:00 tonight
+            ("M31", "01:30"),       # 01:30 tomorrow — auto-detected
+        ],
+        end_time="03:00",           # 03:00 tomorrow
+    )
+
+    # M42: start_min=1380, duration=150 min
+    # M31: start_min=1530, duration=90 min
+
+
+Resolving a single target
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can also use the name resolver standalone with
+:func:`~seestarpy.plan.resolve_name`:
+
+.. code-block:: python
+
+    from seestarpy.plan import resolve_name
+
+    ra, dec = resolve_name("M42")
+    print(f"RA = {ra:.4f} h, Dec = {dec:.2f}°")
+    # RA = 5.5881 h, Dec = -5.39°
+
+This returns ``(ra_hours, dec_deg)`` — the same convention used
+throughout seestarpy.
+
+
+Visualising plans
+-----------------
+
+All plan types (mosaic, polygon, named) produce the same plan dictionary
+format, so :func:`~seestarpy.plan.plot_mosaic_plan` works with any of
+them:
+
+.. code-block:: python
+
+    plan.plot_mosaic_plan(quad)    # polygon plan
+    plan.plot_mosaic_plan(p)      # named plan
+
+This shows panel footprints on a Mollweide projection with RA/Dec grid
+lines.  Requires ``matplotlib`` and ``numpy``.

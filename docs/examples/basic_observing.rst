@@ -1,93 +1,125 @@
-Basic commands to start stacking exposures
-==========================================
+Observing with seestarpy
+========================
 
-Absolute minimum number of commands to start observing
-------------------------------------------------------
+This page walks through the essentials: slewing to a target, stacking
+exposures, and shutting down cleanly.
 
-Assuming you have already set up your Seestar (see below), these are the minimum
-commands needed to get things up and running with ``seestarpy``:
 
-.. code-block:: python
+Quickstart — three commands
+---------------------------
 
-    from seestarpy import raw
-    raw.scope_move_to_horizon()
-    raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar")
-    raw.iscope_start_stack()
-
-Notes:
-- ``iscope_start_view`` will trigger a plate-solve action.
-- ``iscope_start_stack`` will trigger the create-dark-frame and auto-focus commands
-
-To stop imaging you will need:
+Assuming you have already connected (see :doc:`basic_connection`):
 
 .. code-block:: python
 
-    raw.iscope_stop_view("Stack")
-    raw.iscope_stop_view(None)
-    raw.pi_shutdown(True)       # force=True, to avoid mistakenly calling this
+   import seestarpy as ssp
 
-Note:
-- ``iscope_stop_view("Stack")`` will gracefully stop the stacking process and
-  save both the last frame and the stacked image to disk. It leaves the camera
-  on in the ``ContinuousExposure`` viewing mode.
-- ``iscope_stop_view(None)`` turns off the camera completely, however it does
-  not do anything if the Seestar is currently stacking.
+   ssp.open()
+   ssp.goto_target("M42")
+   ssp.start_stack()
+
+``goto_target`` resolves the coordinates automatically via the
+`CDS Sesame <https://cds.u-strasbg.fr/cgi-bin/Sesame>`_ name resolver
+(SIMBAD/NED/VizieR), slews to the target, and runs a plate-solve loop.
+``start_stack`` then begins stacking sub-exposures.
 
 
-Set up commands
----------------
+Using explicit coordinates
+--------------------------
 
-The basic assumption here is that you have already once connected via the app
-to your Seestar and put the Seestar into station mode. Through doing this, it
-should already have updated its system time and earth location. You may also
-have already set the Seestar to equatorial mode if you plan to mount it on a
-wedge.
-
-However if you would like to set these parameters programmatically, here is the
-minimal set of commands to do this:
+If you prefer to specify coordinates yourself, or are working offline:
 
 .. code-block:: python
 
-    raw.pi_set_time()
-    raw.set_user_location(lat=47.9, long=14.8)
+   ssp.goto_target("Mizar", ra=13.4, dec=54.9)
 
-    raw.scope_move_to_horizon()
-    raw.scope_park(True)        # set_eq_mode=True
+RA is in decimal hours [0, 24) and Dec is in decimal degrees [-90, 90].
 
 
-More explicit commands
+Light-pollution filter
 ----------------------
 
-Here are a list of more explicit commands that do the individual steps of the
-Seestar initialisation workflow:
+Enable the LP filter for a target:
 
 .. code-block:: python
 
-    raw.scope_move_to_horizon()
+   ssp.goto_target("M42", lp_filter=True)
 
-    raw.scope_park(set_eq_mode=True)
-    raw.scope_move_to_horizon()
+Or toggle the filter wheel directly:
 
-    raw.start_create_dark()
-    raw.start_auto_focuse()
+.. code-block:: python
 
-    raw.get_focuser_position()
-    raw.move_focuser(1605)
+   ssp.filter_wheel("lp")       # LP / narrow-band filter
+   ssp.filter_wheel("ircut")    # open / IR-cut filter
+   ssp.filter_wheel()           # read current position
 
-    raw.scope_get_track_state()
-    raw.scope_set_track_state(True)
 
-    raw.iscope_get_app_state()
+Stopping and parking
+--------------------
 
-    raw.scope_goto(12, 88)
-    raw.scope_get_equ_coord()
+.. code-block:: python
 
-    raw.iscope_start_view()
-    raw.get_view_state()
+   # Stop stacking (saves the last frame and stacked image)
+   ssp.raw.iscope_stop_view("Stack")
 
-    raw.iscope_start_stack()
-    raw.get_view_state()
+   # Turn off the camera completely
+   ssp.stop_view()
 
-    raw.iscope_stop_view("Stack")
-    raw.iscope_stop_view(None)
+   # Park the arm
+   ssp.close()
 
+   # Or shut down the Seestar entirely
+   ssp.raw.pi_shutdown(True)       # force=True to confirm
+
+
+Initial setup commands
+----------------------
+
+The first time you use seestarpy (or after a firmware update), you may
+need to sync the Seestar's clock and location:
+
+.. code-block:: python
+
+   ssp.raw.pi_set_time()
+   ssp.raw.set_user_location(lat=48.2, long=16.4)    # Vienna, Austria
+
+If you use an equatorial wedge:
+
+.. code-block:: python
+
+   ssp.set_eq_mode(True)      # park into EQ mode
+   ssp.open()                 # raise the arm again
+
+
+Exposure and focus
+------------------
+
+.. code-block:: python
+
+   ssp.exposure()                   # read current exposure time
+   ssp.exposure(10)                 # set to 10 seconds
+   ssp.exposure(30, which="stack_l")
+
+   ssp.focuser()                    # read current focuser position
+   ssp.focuser("auto")              # run auto-focus
+   ssp.focuser(pos=1605)            # set manual position
+
+
+Low-level commands
+------------------
+
+The ``raw`` module gives direct access to every JSON-RPC command the
+Seestar supports.  The high-level functions above are wrappers around
+these:
+
+.. code-block:: python
+
+   from seestarpy import raw
+
+   raw.scope_move_to_horizon()
+   raw.iscope_start_view(ra=13.4, dec=54.9, target_name="Mizar")
+   raw.iscope_start_stack()
+   raw.scope_goto(12, 88)
+   raw.scope_get_equ_coord()
+
+See the :doc:`../api/raw` API reference for the full list.

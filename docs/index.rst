@@ -11,48 +11,103 @@ Welcome to SeeStar-Py's Documentation!
    :target: https://pypi.org/project/seestarpy/
 
 
-Description
------------
-**SeeStar-Py** is a light-weight Python interface designed for controlling the
-SeeStar telescope system.
+**seestarpy** is a Python SDK for controlling ZWO Seestar S50 smart
+telescopes over your local network.  It wraps the Seestar's JSON-RPC
+command interface and binary image streaming protocol into a clean
+Python API — no phone app required.
 
-.. warning:: 2025-07-13 :
-   This is the first push of seestar-py to pypi and rtd. Things could change rapidly, bigly, and without warning.
 
-Quickstart
-----------
-Install ``seestarpy`` using pip:
+Installation
+------------
 
 .. code-block:: bash
 
    pip install seestarpy
 
-Usage example:
+
+Getting started
+---------------
+
+The shortest path from install to imaging:
 
 .. code-block:: python
 
-   from seestarpy import connection as conn
-   from seestarpy import raw
+   import seestarpy as ssp
 
-   # replace this with the IP of your Seestar
-   conn.DEFAULT_IP = "192.168.1.243"
-   raw.test_connection()
+   # 1. Connect — the Seestar is auto-discovered via mDNS
+   ssp.connection.test_connection()
+
+   # 2. Open the arm
+   ssp.open()
+
+   # 3. Goto a target (coordinates resolved automatically)
+   ssp.goto_target("M42")
+
+   # 4. Start stacking
+   ssp.start_stack()
+
+That's it — the Seestar will slew to M42, plate-solve, and begin
+stacking sub-exposures.
+
+If auto-discovery doesn't find your Seestar, set the IP manually:
+
+.. code-block:: python
+
+   ssp.connection.DEFAULT_IP = "192.168.1.246"
+
+You can find your Seestar's IP in the official phone app under the
+station-mode settings.
+
+
+Controlling multiple Seestars
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Most commands accept an ``ips`` keyword to broadcast to multiple
+Seestars at once:
+
+.. code-block:: python
+
+   # Discover all Seestars on the network
+   ssp.connection.find_available_ips(n_ip=3)
+
+   # Open all arms simultaneously
+   ssp.open(ips="all")
+
+   # Goto the same target on all Seestars
+   ssp.goto_target("M42", ips="all")
+
+See the :doc:`examples/basic_connection` page for more details.
+
+
+When you're done
+^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   ssp.stop_view()
+   ssp.close()
 
 
 Contents
 --------
+
 .. toctree::
    :maxdepth: 2
-   :caption: Main Contents
+   :caption: Tutorials
 
    examples/basic_connection
    examples/basic_observing
    examples/basic_status_checks
    examples/changing_seestar_settings
    examples/changing_gain
-   examples/live_streaming
    examples/observation_plans
+   examples/live_streaming
    examples/crowdsky_stacking
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
+
    info/errors
    info/image_stream_protocol
    api/api_index
@@ -60,7 +115,6 @@ Contents
 
 Feedback
 --------
-Found an issue or have a feature request?
-`GitHub Issues page <https://github.com/yourusername/seestarpy/issues>`_.
 
-Enjoy (good luck) using ``seestarpy``!
+Found an issue or have a feature request?
+`Open an issue on GitHub <https://github.com/astronomyk/seestarpy/issues>`_.
