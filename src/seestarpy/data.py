@@ -1,6 +1,7 @@
-# seestar_smb_utils.py
+# seestar_data_utils.py
 # Utilities for listing, deleting, and downloading data from a Seestar S50
-# Listing/deleting uses pysmb over direct SMB (port 445)
+# File listing uses JSON-RPC over port 4700 (paginated)
+# Deleting uses pysmb over direct SMB (port 445)
 # Downloading uses mounted SMB paths on Unix; Windows uses native SMB paths
 
 import os
@@ -9,7 +10,7 @@ from typing import Dict
 from smb.SMBConnection import SMBConnection
 from smb.smb_structs import OperationFailure
 from .connection import multiple_ips
-from .raw import get_albums
+from .raw import get_albums, get_img_file_page_number, get_img_file_page_name
 
 SHARE_NAME = "EMMC Images"
 ROOT_DIR = "MyWorks"
@@ -89,6 +90,9 @@ def list_folder_contents(folder: str, filetype: str = "*") -> Dict[str, int]:
     """
     List every file inside an observation folder on the Seestar's eMMC.
 
+    Uses the paginated JSON-RPC file listing API (port 4700), which is
+    significantly faster than the previous SMB-based approach.
+
     Parameters
     ----------
     folder : str
@@ -123,33 +127,45 @@ def list_folder_contents(folder: str, filetype: str = "*") -> Dict[str, int]:
     if filetype not in _valid:
         raise ValueError(f"filetype must be one of {_valid}, got {filetype!r}")
 
-    conn = _connect_smb()
-    contents = {}
+    # Step 1: Set directory context and get total page count
+    response = get_img_file_page_number(f"{ROOT_DIR}/{folder}")
+    total_pages = response.get("result", 0)
+    if not isinstance(total_pages, int) or total_pages <= 0:
+        return {}
 
-    try:
-        entries = conn.listPath(SHARE_NAME, f"{ROOT_DIR}/{folder}")
+    # Step 2: Fetch all pages
+    contents = {}
+    for page in range(total_pages):
+        page_response = get_img_file_page_name(page)
+        entries = page_response.get("result", [])
+        if not isinstance(entries, list):
+            continue
+
         for entry in entries:
-            if not entry.isDirectory and entry.filename not in {".", ".."}:
-                name = entry.filename
-                if filetype == "*":
-                    pass
-                elif filetype == "fit":
-                    if not name.endswith(".fit"):
-                        continue
-                elif filetype == "thn.jpg":
-                    if not name.endswith("_thn.jpg"):
-                        continue
-                elif filetype == "*jpg":
-                    if not name.endswith(".jpg"):
-                        continue
-                elif filetype == "jpg":
-                    if not name.endswith(".jpg") or name.endswith("_thn.jpg"):
-                        continue
-                contents[name] = entry.file_size
-    except OperationFailure:
-        pass
-    finally:
-        conn.close()
+            if entry.get("is_dir", False):
+                continue
+            name = entry.get("name", "")
+            if not name:
+                continue
+
+            # Apply filetype filter
+            if filetype == "*":
+                pass
+            elif filetype == "fit":
+                if not name.endswith(".fit"):
+                    continue
+            elif filetype == "thn.jpg":
+                if not name.endswith("_thn.jpg"):
+                    continue
+            elif filetype == "*jpg":
+                if not name.endswith(".jpg"):
+                    continue
+            elif filetype == "jpg":
+                if not name.endswith(".jpg") or name.endswith("_thn.jpg"):
+                    continue
+
+            # Convert KB to bytes for backward compatibility
+            contents[name] = entry.get("size_k", 0) * 1024
 
     return contents
 

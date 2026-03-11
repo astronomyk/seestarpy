@@ -109,6 +109,86 @@ def get_albums():
     return send_command(params)
 
 
+@multiple_ips
+def get_img_file_page_number(directory, skip_avi=False):
+    """
+    Get the total number of pages for files in a directory on the Seestar.
+
+    This sets the directory context on the firmware. Subsequent calls to
+    :func:`get_img_file_page_name` page through that context. Each page
+    contains up to 20 items.
+
+    Parameters
+    ----------
+    directory : str
+        Path relative to the eMMC root (e.g. ``"MyWorks/M 81_sub"``).
+    skip_avi : bool, optional
+        If ``True``, exclude AVI video files from the listing.
+        Default is ``False``.
+
+    Returns
+    -------
+    dict
+        Response with ``result`` as an integer page count.
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.get_img_file_page_number("MyWorks/M 81_sub")
+        {'result': 3, 'code': 0, ...}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    params = {"method": "get_img_file_page_number",
+              "params": {"dir": directory, "skip_avi": skip_avi}}
+    return send_command(params)
+
+
+@multiple_ips
+def get_img_file_page_name(page=0):
+    """
+    Get the file listing for a specific page (up to 20 items per page).
+
+    Must be called after :func:`get_img_file_page_number`, which sets the
+    directory context on the firmware.
+
+    Parameters
+    ----------
+    page : int, optional
+        Zero-indexed page number. Default is ``0``.
+
+    Returns
+    -------
+    dict
+        Response with ``result`` as a list of file entries, each containing:
+
+        - ``name`` (str) — filename
+        - ``date`` (str) — modification date
+        - ``size_k`` (int) — size in KB
+        - ``is_dir`` (bool) — directory flag
+        - ``file_cnt`` (int) — child count (for directories)
+        - ``avi_duration_sec`` (Number or null) — video duration
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.get_img_file_page_number("MyWorks/M 81_sub")
+        >>> raw.get_img_file_page_name(0)
+        {'result': [{'name': 'Light_M 81_10.0s_...fit', 'size_k': 4050, ...}, ...]}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    params = {"method": "get_img_file_page_name",
+              "params": {"page": page}}
+    return send_command(params)
+
+
 # def get_annotated_result():
 #     """
 #     TODO: Is this to begin streaming the video feed
