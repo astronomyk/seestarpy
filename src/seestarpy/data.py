@@ -354,7 +354,7 @@ def download_file(folder: str, filename: str, dest: str = ".") -> str:
                     break
                 f.write(chunk)
                 total += len(chunk)
-        print(f"  {filename} ({total / 1024 / 1024:.2f} MB) ✓")
+        print(f"  {filename} ({total / 1024 / 1024:.2f} MB) OK")
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             raise FileNotFoundError(
@@ -394,9 +394,9 @@ def download_folder(folder: str = "", dest: str = "") -> None:
         >>> from seestarpy import data
         >>> data.download_folder("M 81_sub", dest="/home/user/astro")
         Downloading 37 files from 'M 81_sub' (150.0 MB)...
-          [1/37] Light_M 81_10.0s_IRCUT_20250607-221746.fit (4.05 MB) ✓
+          [1/37] Light_M 81_10.0s_IRCUT_20250607-221746.fit (4.05 MB) OK
           ...
-        ✓ Download complete: 37 files
+        OK Download complete: 37 files
 
     """
     os.makedirs(dest, exist_ok=True)
@@ -409,7 +409,7 @@ def download_folder(folder: str = "", dest: str = "") -> None:
     total_files = len(files)
     total_size = sum(files.values())
     print(
-        f"📁 Downloading {total_files} files from '{folder}' ({total_size / 1024 / 1024:.1f} MB)...")
+        f"Downloading {total_files} files from '{folder}' ({total_size / 1024 / 1024:.1f} MB)...")
 
     conn = _connect_smb()
     try:
@@ -421,7 +421,7 @@ def download_folder(folder: str = "", dest: str = "") -> None:
                 end="", flush=True)
             with open(local_path, "wb") as f:
                 conn.retrieveFile(SHARE_NAME, remote_path, f)
-            print(" ✓")
-        print(f"✓ Download complete: {total_files} files")
+            print(" OK")
+        print(f"OK Download complete: {total_files} files")
     finally:
         conn.close()

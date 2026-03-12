@@ -142,7 +142,7 @@ def upload_stack(fits_path, thumbnail=None, n_frames_input=None,
     if not fits_path.exists():
         raise FileNotFoundError(f"FITS file not found: {fits_path}")
 
-    files = {"fits_file": (fits_path.name, fits_path.open("rb"))}
+    files = {"file": (fits_path.name, fits_path.open("rb"))}
     if thumbnail is not None:
         thumb_path = Path(thumbnail)
         files["thumbnail"] = (thumb_path.name, thumb_path.open("rb"))
