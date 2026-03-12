@@ -27,7 +27,12 @@ Typical workflow::
 
 import re
 import time
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from tzlocal import get_localzone
 
 from .. import data
 from ..connection import multiple_ips
@@ -37,6 +42,7 @@ from ..stack import (
     set_batch_stack_setting,
     start_batch_stack,
 )
+from .healpix import radec_to_healpix
 
 _LIGHT_RE = re.compile(
     r"^Light_(.+)_(\d+\.\d+s)_([A-Za-z]+)_(\d{8}-\d{6})\.fit$"
@@ -44,10 +50,13 @@ _LIGHT_RE = re.compile(
 _DSO_STACKED_RE = re.compile(
     r"^DSO_Stacked_(\d+)_(.+)_(\d+\.\d+s)_(\d{8})_(\d{6})\.fit$"
 )
-# CrowdSky output files encode the block boundary timestamp and filter
-# for deterministic coverage detection:
-#   CrowdSky_<N>_<target>_<exposure>_<filter>_<YYYYMMDD>-<HHMMSS>.fit
+# CrowdSky output files encode a UTC chunk key and HEALPix pixel:
+#   CrowdSky_<N>_<target>_<exposure>_<filter>_<YYYYMMDD.CC>_HP<nnnnnn>.fit
 _CROWDSKY_RE = re.compile(
+    r"^CrowdSky_(\d+)_(.+)_(\d+\.\d+s)_([A-Za-z]+)_(\d{8}\.\d{1,2})_HP(\d{6})\.fit$"
+)
+# Legacy format (pre-HEALPix): CrowdSky_<N>_<target>_<exp>_<filt>_<YYYYMMDD-HHMMSS>.fit
+_CROWDSKY_RE_LEGACY = re.compile(
     r"^CrowdSky_(\d+)_(.+)_(\d+\.\d+s)_([A-Za-z]+)_(\d{8}-\d{6})\.fit$"
 )
 
@@ -95,6 +104,66 @@ def _floor_to_block(dt, block_minutes):
     )
 
 
+def _read_fits_ra_dec(remote_path):
+    """Read RA/Dec from a FITS header on the Seestar via HTTP Range request.
+
+    Fetches the first 5760 bytes (two FITS header blocks of 2880 bytes each)
+    and parses 80-byte FITS cards for ``RA`` and ``DEC`` keywords.
+
+    Parameters
+    ----------
+    remote_path : str
+        Path relative to the HTTP root, e.g. ``"MyWorks/M 81/file.fit"``.
+
+    Returns ``(ra_deg, dec_deg)`` or ``(None, None)`` on failure.
+    """
+    try:
+        from .. import connection
+
+        path = urllib.parse.quote(remote_path, safe="/")
+        url = f"http://{connection.DEFAULT_IP}/{path}"
+        req = urllib.request.Request(url, headers={"Range": "bytes=0-5759"})
+        resp = urllib.request.urlopen(req, timeout=10)
+        header_bytes = resp.read().decode("ascii", errors="replace")
+        ra = dec = None
+        for i in range(0, len(header_bytes), 80):
+            card = header_bytes[i : i + 80]
+            if card.startswith("RA      ="):
+                ra = float(card.split("=")[1].split("/")[0].strip())
+            elif card.startswith("DEC     ="):
+                dec = float(card.split("=")[1].split("/")[0].strip())
+            if ra is not None and dec is not None:
+                return (ra, dec)
+    except Exception:
+        pass
+    return (None, None)
+
+
+def _local_dt_to_chunk_str(dt_local):
+    """Convert a naive local datetime to a ``YYYYMMDD.CC`` UTC chunk string.
+
+    ``CC`` is the 15-minute chunk index (0–95) within the UTC day.
+    """
+    local_tz = get_localzone()
+    utc_dt = dt_local.replace(tzinfo=local_tz).astimezone(ZoneInfo("UTC"))
+    date_str = utc_dt.strftime("%Y%m%d")
+    chunk_index = (utc_dt.hour * 3600 + utc_dt.minute * 60) // 900
+    return f"{date_str}.{chunk_index}"
+
+
+def _compute_chunk_key(block_start, ra_deg, dec_deg):
+    """Build a CrowdSky chunk key from a local block start and sky position.
+
+    Returns a string like ``"20250115.78_HP049152"``.
+    """
+    chunk_str = _local_dt_to_chunk_str(block_start)
+    if ra_deg is not None and dec_deg is not None:
+        hp_str = f"HP{radec_to_healpix(ra_deg, dec_deg):06d}"
+    else:
+        hp_str = "HP000000"
+    return f"{chunk_str}_{hp_str}"
+
+
 def _rename_output(target, block, status):
     """Rename a DSO_Stacked output to CrowdSky format with block metadata.
 
@@ -120,15 +189,20 @@ def _rename_output(target, block, status):
     m = _DSO_STACKED_RE.match(old_fit)
     frame_count = m.group(1) if m else str(block["frame_count"])
 
-    block_ts = block["block_start"].strftime("%Y%m%d-%H%M%S")
-    new_stem = (
-        f"CrowdSky_{frame_count}_{target}_{block['exposure']}"
-        f"_{block['filter']}_{block_ts}"
-    )
     old_stem = old_fit.removesuffix(".fit")
-
     folder = f"MyWorks/{target}"
+
     try:
+        # Read RA/Dec via HTTP Range request (no SMB needed)
+        ra, dec = _read_fits_ra_dec(f"{folder}/{old_fit}")
+        chunk_key = _compute_chunk_key(block["block_start"], ra, dec)
+
+        new_stem = (
+            f"CrowdSky_{frame_count}_{target}_{block['exposure']}"
+            f"_{block['filter']}_{chunk_key}"
+        )
+
+        # SMB connection only needed for the rename operation
         conn = data._connect_smb()
         try:
             for ext in (".fit", ".jpg", "_thn.jpg"):
@@ -238,18 +312,23 @@ def find_unstacked_blocks(target, block_minutes=15):
     covered = set()
     for fname in stacked_files:
         m = _CROWDSKY_RE.match(fname)
-        if not m:
+        if m:
+            # New format: (YYYYMMDD.CC, exposure, filter)
+            covered.add((m.group(5), m.group(3), m.group(4)))
             continue
-        exposure_str = m.group(3)
-        filt = m.group(4)
-        dt = datetime.strptime(m.group(5), "%Y%m%d-%H%M%S")
-        covered.add((dt, exposure_str, filt))
+        m = _CROWDSKY_RE_LEGACY.match(fname)
+        if m:
+            # Legacy format: convert local timestamp to UTC chunk string
+            dt = datetime.strptime(m.group(5), "%Y%m%d-%H%M%S")
+            covered.add((_local_dt_to_chunk_str(dt), m.group(3), m.group(4)))
 
     # 5. Filter out covered blocks
     sorted_keys = sorted(blocks.keys())
     result = []
     for key in sorted_keys:
-        if key not in covered:
+        block_start, exposure, filt = key
+        chunk_str = _local_dt_to_chunk_str(block_start)
+        if (chunk_str, exposure, filt) not in covered:
             result.append(blocks[key])
 
     return result
@@ -530,4 +609,65 @@ def stack_all(block_minutes=15, min_exptime=240, dry_run=False):
         f"across {summary['targets_processed']} targets."
     )
 
+    return summary
+
+
+@multiple_ips
+def purge_crowdsky_stacks(folder=None):
+    """Delete all ``CrowdSky_*`` files from observation folders on the Seestar.
+
+    Parameters
+    ----------
+    folder : str or None
+        - A specific folder name (e.g. ``"M 81"``) — purge only that folder.
+        - ``"all"`` or ``None`` — scan every non-``_sub`` folder and purge all.
+
+    Returns
+    -------
+    dict
+        ``{"folders_scanned": int, "files_deleted": int, "deleted": [str]}``
+    """
+    if folder is None or folder == "all":
+        folders_to_scan = [
+            name for name in data.list_folders()
+            if not name.endswith("_sub")
+        ]
+    else:
+        folders_to_scan = [folder]
+
+    summary = {"folders_scanned": 0, "files_deleted": 0, "deleted": []}
+    to_delete = []
+
+    for target_folder in folders_to_scan:
+        summary["folders_scanned"] += 1
+        try:
+            files = data.list_folder_contents(target_folder)
+        except Exception:
+            continue
+        for fname in files:
+            if fname.startswith("CrowdSky_"):
+                to_delete.append((target_folder, fname))
+
+    if not to_delete:
+        print("No CrowdSky files found.")
+        return summary
+
+    conn = data._connect_smb()
+    try:
+        for target_folder, fname in to_delete:
+            remote_path = f"{data.ROOT_DIR}/{target_folder}/{fname}"
+            try:
+                conn.deleteFiles(data.SHARE_NAME, remote_path)
+                summary["files_deleted"] += 1
+                summary["deleted"].append(remote_path)
+                print(f"  Deleted: {remote_path}")
+            except Exception as exc:
+                print(f"  Failed to delete {remote_path}: {exc}")
+    finally:
+        conn.close()
+
+    print(
+        f"Purged {summary['files_deleted']} CrowdSky files "
+        f"from {summary['folders_scanned']} folder(s)."
+    )
     return summary

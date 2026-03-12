@@ -5,15 +5,20 @@
 # Downloading uses mounted SMB paths on Unix; Windows uses native SMB paths
 
 import os
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Dict
 
 from smb.SMBConnection import SMBConnection
 from smb.smb_structs import OperationFailure
+from . import connection
 from .connection import multiple_ips
 from .raw import get_albums, get_img_file_page_number, get_img_file_page_name
 
 SHARE_NAME = "EMMC Images"
 ROOT_DIR = "MyWorks"
+HTTP_PORT = 80
 
 
 def _connect_smb() -> SMBConnection:
@@ -33,8 +38,6 @@ def _connect_smb() -> SMBConnection:
     ConnectionError
         If the connection to the Seestar fails.
     """
-    from . import connection
-
     ip = connection.DEFAULT_IP
     conn = SMBConnection(
         username='',
@@ -235,6 +238,137 @@ def _delete_folder_recursive(conn: SMBConnection, folder: str) -> None:
             conn.deleteFiles(SHARE_NAME, full_path)
 
     conn.deleteDirectory(SHARE_NAME, path)
+
+
+@multiple_ips
+def delete_files(folder: str, filenames: list[str]) -> dict[str, bool]:
+    """
+    Delete specific files from an observation folder via SMB.
+
+    .. warning::
+        This permanently removes data from the Seestar's internal eMMC
+        storage. There is no undo.
+
+    Parameters
+    ----------
+    folder : str
+        Name of the folder under ``MyWorks`` (e.g. ``"M 81"``).
+    filenames : list of str
+        File names to delete within the folder.
+
+    Returns
+    -------
+    dict of {str: bool}
+        Mapping of each filename to ``True`` if deleted successfully,
+        ``False`` if the file was not found or deletion failed.
+
+    Examples
+    --------
+
+        >>> from seestarpy import data
+        >>> data.delete_files("M 81", ["old_stack.fit", "old_stack.jpg"])
+        {'old_stack.fit': True, 'old_stack.jpg': True}
+
+    """
+    results = {}
+    conn = _connect_smb()
+    try:
+        for fname in filenames:
+            remote_path = f"{ROOT_DIR}/{folder}/{fname}"
+            try:
+                conn.deleteFiles(SHARE_NAME, remote_path)
+                results[fname] = True
+            except OperationFailure:
+                results[fname] = False
+    finally:
+        conn.close()
+    return results
+
+
+def _build_http_url(remote_path):
+    """Build an HTTP URL for a file on the Seestar's built-in web server.
+
+    Parameters
+    ----------
+    remote_path : str
+        Path relative to the HTTP root, e.g. ``"MyWorks/M 81/file.fit"``.
+
+    Returns
+    -------
+    str
+        Full URL like ``"http://192.168.1.246/MyWorks/M%2081/file.fit"``.
+    """
+    path = urllib.parse.quote(remote_path, safe="/")
+    return f"http://{connection.DEFAULT_IP}/{path}"
+
+
+@multiple_ips
+def download_file(folder: str, filename: str, dest: str = ".") -> str:
+    """Download a single file from the Seestar via HTTP.
+
+    The Seestar runs an HTTP file server on port 80.  This function
+    streams the file to a local directory in 64 KB chunks.
+
+    Parameters
+    ----------
+    folder : str
+        Folder under ``MyWorks``, e.g. ``"M 81"`` or ``"M 81_sub"``.
+    filename : str
+        Name of the file to download, e.g.
+        ``"DSO_Stacked_33_M 81_20.0s_20260311_213509.fit"``.
+    dest : str
+        Local directory to save the file in.  Created if it doesn't
+        exist.  Default ``"."``.
+
+    Returns
+    -------
+    str
+        Absolute path to the downloaded file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist on the Seestar (HTTP 404).
+    ConnectionError
+        If the Seestar cannot be reached or another HTTP error occurs.
+
+    Examples
+    --------
+
+        >>> from seestarpy import data
+        >>> data.download_file("M 81", "DSO_Stacked_33_M 81_20.0s_20260311_213509.fit")
+        './DSO_Stacked_33_M 81_20.0s_20260311_213509.fit'
+
+    """
+    url = _build_http_url(f"{ROOT_DIR}/{folder}/{filename}")
+    os.makedirs(dest, exist_ok=True)
+    local_path = os.path.join(dest, filename)
+
+    try:
+        resp = urllib.request.urlopen(url, timeout=30)
+        total = 0
+        with open(local_path, "wb") as f:
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+                total += len(chunk)
+        print(f"  {filename} ({total / 1024 / 1024:.2f} MB) ✓")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise FileNotFoundError(
+                f"File not found on Seestar: {folder}/{filename}"
+            ) from exc
+        raise ConnectionError(
+            f"HTTP {exc.code} downloading {folder}/{filename}: {exc.reason}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise ConnectionError(
+            f"Cannot reach Seestar: {exc.reason}"
+        ) from exc
+
+    return os.path.abspath(local_path)
 
 
 @multiple_ips

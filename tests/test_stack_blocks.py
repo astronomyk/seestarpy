@@ -2,16 +2,22 @@
 
 from datetime import datetime
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from seestarpy.crowdsky.chunks import (
+    _compute_chunk_key,
     _floor_to_block,
+    _local_dt_to_chunk_str,
     _parse_light_filename,
     find_unstacked_blocks,
     list_targets,
     stack_all,
 )
+
+# All tests use Europe/Vienna (UTC+1 in winter) for deterministic timezone conversion
+_VIENNA = ZoneInfo("Europe/Vienna")
 
 
 # ---------------------------------------------------------------------------
@@ -101,8 +107,9 @@ def _make_light_files(target, exposure, filt, times):
 
 
 class TestFindUnstackedBlocks:
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     @patch("seestarpy.crowdsky.chunks.data")
-    def test_basic_grouping(self, mock_data):
+    def test_basic_grouping(self, mock_data, mock_tz):
         """Frames in two 15-min blocks should produce two blocks."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
             # Block 22:45
@@ -142,20 +149,21 @@ class TestFindUnstackedBlocks:
 
         assert len(blocks) == 0
 
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     @patch("seestarpy.crowdsky.chunks.data")
-    def test_covered_block_excluded(self, mock_data):
+    def test_covered_block_excluded(self, mock_data, mock_tz):
         """Blocks with matching CrowdSky output files should be excluded.
 
-        CrowdSky filenames encode the block-start timestamp and filter
-        for exact coverage matching.
+        CrowdSky filenames encode the UTC chunk key and HEALPix pixel.
+        Coverage matching uses (YYYYMMDD.CC, exposure, filter).
         """
         raw = _make_light_files("M 81", "20.0s", "LP", [
             (22, 45, 10), (22, 50, 20), (22, 55, 30),
             (23, 0, 10), (23, 5, 20),
         ])
+        # 22:45 local Vienna = 21:45 UTC → chunk 87
         stacked = {
-            # CrowdSky file covers the 22:45 block exactly
-            "CrowdSky_3_M 81_20.0s_LP_20260227-224500.fit": 10000,
+            "CrowdSky_3_M 81_20.0s_LP_20260227.87_HP000000.fit": 10000,
         }
         mock_data.list_folder_contents.side_effect = [raw, stacked]
 
@@ -168,8 +176,9 @@ class TestFindUnstackedBlocks:
         assert len(blocks) == 1
         assert blocks[0]["block_start"] == datetime(2026, 2, 27, 23, 0, 0)
 
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     @patch("seestarpy.crowdsky.chunks.data")
-    def test_dso_stacked_does_not_mark_coverage(self, mock_data):
+    def test_dso_stacked_does_not_mark_coverage(self, mock_data, mock_tz):
         """Plain DSO_Stacked files should NOT mark coverage."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
             (22, 45, 10), (22, 50, 20), (22, 55, 30),
@@ -189,9 +198,10 @@ class TestFindUnstackedBlocks:
         assert len(blocks) == 1
         assert blocks[0]["block_start"] == datetime(2026, 2, 27, 22, 45, 0)
 
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     @patch("seestarpy.crowdsky.chunks.data")
-    def test_crowdsky_exact_match_handles_duplicate_frame_counts(self, mock_data):
-        """CrowdSky coverage is by block timestamp, not frame count."""
+    def test_crowdsky_exact_match_handles_duplicate_frame_counts(self, mock_data, mock_tz):
+        """CrowdSky coverage is by chunk key, not frame count."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
             # Block 22:45 — 3 frames
             (22, 45, 10), (22, 50, 20), (22, 55, 30),
@@ -199,8 +209,8 @@ class TestFindUnstackedBlocks:
             (23, 0, 10), (23, 5, 20), (23, 10, 30),
         ])
         stacked = {
-            # Only the 22:45 block is covered (exact timestamp match)
-            "CrowdSky_3_M 81_20.0s_LP_20260227-224500.fit": 10000,
+            # Only the 22:45 block is covered (22:45 Vienna = 21:45 UTC → chunk 87)
+            "CrowdSky_3_M 81_20.0s_LP_20260227.87_HP000000.fit": 10000,
         }
         mock_data.list_folder_contents.side_effect = [raw, stacked]
 
@@ -213,8 +223,9 @@ class TestFindUnstackedBlocks:
         assert len(blocks) == 1
         assert blocks[0]["block_start"] == datetime(2026, 2, 27, 23, 0, 0)
 
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     @patch("seestarpy.crowdsky.chunks.data")
-    def test_mixed_exposure_filter_subgroups(self, mock_data):
+    def test_mixed_exposure_filter_subgroups(self, mock_data, mock_tz):
         """Frames with different exposure/filter combos produce sub-blocks."""
         raw = {
             **_make_light_files("M 81", "20.0s", "LP", [(22, 45, 10), (22, 50, 20)]),
@@ -239,8 +250,9 @@ class TestFindUnstackedBlocks:
         blocks = find_unstacked_blocks("M 81")
         assert blocks == []
 
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     @patch("seestarpy.crowdsky.chunks.data")
-    def test_files_sorted_within_block(self, mock_data):
+    def test_files_sorted_within_block(self, mock_data, mock_tz):
         """Files within a block should be sorted by filename (chronological)."""
         raw = _make_light_files("M 81", "20.0s", "LP", [
             (22, 55, 30), (22, 45, 10), (22, 50, 20),
@@ -256,6 +268,63 @@ class TestFindUnstackedBlocks:
         # Files should be sorted
         for i in range(len(blocks[0]["files"]) - 1):
             assert blocks[0]["files"][i] < blocks[0]["files"][i + 1]
+
+
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
+    @patch("seestarpy.crowdsky.chunks.data")
+    def test_legacy_crowdsky_file_marks_coverage(self, mock_data, mock_tz):
+        """Old-format CrowdSky files (pre-HEALPix) should still mark coverage."""
+        raw = _make_light_files("M 81", "20.0s", "LP", [
+            (22, 45, 10), (22, 50, 20), (22, 55, 30),
+        ])
+        stacked = {
+            # Legacy format: 22:45 local Vienna = 21:45 UTC → chunk 87
+            "CrowdSky_3_M 81_20.0s_LP_20260227-224500.fit": 10000,
+        }
+        mock_data.list_folder_contents.side_effect = [raw, stacked]
+
+        with patch("seestarpy.crowdsky.chunks.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 2, 28, 12, 0, 0)
+            mock_dt.strptime = datetime.strptime
+            blocks = find_unstacked_blocks("M 81")
+
+        # Legacy file covers the 22:45 block — no unstacked blocks remain
+        assert len(blocks) == 0
+
+
+# ---------------------------------------------------------------------------
+# _local_dt_to_chunk_str / _compute_chunk_key
+# ---------------------------------------------------------------------------
+
+class TestChunkKey:
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
+    def test_local_dt_to_chunk_str(self, mock_tz):
+        """22:45 Vienna (UTC+1) = 21:45 UTC → chunk 87."""
+        dt = datetime(2026, 2, 27, 22, 45, 0)
+        assert _local_dt_to_chunk_str(dt) == "20260227.87"
+
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
+    def test_midnight_boundary(self, mock_tz):
+        """00:30 Vienna (UTC+1) = 23:30 UTC previous day → chunk 94."""
+        dt = datetime(2026, 2, 28, 0, 30, 0)
+        # 23:30 UTC = (23*3600 + 30*60) // 900 = 84600 // 900 = 94
+        assert _local_dt_to_chunk_str(dt) == "20260227.94"
+
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
+    def test_compute_chunk_key_with_coords(self, mock_tz):
+        dt = datetime(2026, 2, 27, 22, 45, 0)
+        key = _compute_chunk_key(dt, 83.82, -5.39)
+        # Format: "YYYYMMDD.CC_HPnnnnnn"
+        assert key.startswith("20260227.87_HP")
+        hp_part = key.split("_HP")[1]
+        assert len(hp_part) == 6
+        assert hp_part.isdigit()
+
+    @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
+    def test_compute_chunk_key_no_coords(self, mock_tz):
+        dt = datetime(2026, 2, 27, 22, 45, 0)
+        key = _compute_chunk_key(dt, None, None)
+        assert key == "20260227.87_HP000000"
 
 
 # ---------------------------------------------------------------------------

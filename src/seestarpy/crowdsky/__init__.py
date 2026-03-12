@@ -8,6 +8,7 @@ from .chunks import (
     stack_blocks,
     stack_all,
     list_targets,
+    purge_crowdsky_stacks,
 )
 
 # Re-export public functions from server
