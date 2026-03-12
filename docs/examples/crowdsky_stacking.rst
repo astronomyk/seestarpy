@@ -9,8 +9,8 @@ from many Seestars.
 Raw sub-frames are grouped into clock-aligned time blocks (default 15
 minutes) and each block is batch-stacked independently on the Seestar.
 Output files are renamed to a ``CrowdSky_*`` naming convention that
-encodes the block boundary timestamp and filter, making re-runs fully
-idempotent.
+encodes the UTC chunk key, HEALPix sky pixel, and filter, making re-runs
+fully idempotent.
 
 
 Discovering targets
@@ -90,13 +90,13 @@ Output::
 
     Stacking block 21:15-21:30 (33 frames, 10.0s LP)...
       Complete: 33 frames stacked
-      Renamed -> CrowdSky_33_IC 434_10.0s_LP_20260227-211500.fit
+      Renamed -> CrowdSky_33_IC 434_10.0s_LP_20260227.81_HP049152.fit
     Stacking block 21:30-21:45 (69 frames, 10.0s LP)...
       Complete: 69 frames stacked
-      Renamed -> CrowdSky_69_IC 434_10.0s_LP_20260227-213000.fit
+      Renamed -> CrowdSky_69_IC 434_10.0s_LP_20260227.82_HP049152.fit
     Stacking block 21:45-22:00 (56 frames, 10.0s LP)...
       Complete: 56 frames stacked
-      Renamed -> CrowdSky_56_IC 434_10.0s_LP_20260227-214500.fit
+      Renamed -> CrowdSky_56_IC 434_10.0s_LP_20260227.83_HP049152.fit
 
 The return value is a summary dict:
 
@@ -117,14 +117,24 @@ Output filename convention
 Output files on the Seestar are renamed from the firmware's
 ``DSO_Stacked_*`` format to::
 
-    CrowdSky_<N>_<target>_<exposure>_<filter>_<YYYYMMDD>-<HHMMSS>.fit
+    CrowdSky_<N>_<target>_<exposure>_<filter>_<YYYYMMDD.CC>_HP<nnnnnn>.fit
 
-Where ``<YYYYMMDD>-<HHMMSS>`` is the **block boundary start time** (not
-the stacking completion time).  For example::
+Where:
 
-    CrowdSky_33_IC 434_10.0s_LP_20260227-211500.fit
-             ^^          ^^^^  ^^  ^^^^^^^^^^^^^^^
-         frames      exposure filt  block start
+- ``<YYYYMMDD.CC>`` is the **UTC chunk key** — the UTC date plus a
+  chunk index (0--95) representing which 15-minute slot of the day the
+  block falls in.
+- ``HP<nnnnnn>`` is the **HEALPix pixel** (NSIDE=64, nested) derived
+  from the RA/Dec in the stacked FITS header.  This encodes the sky
+  position so that stacks from different Seestars pointing at the same
+  area can be matched.  If RA/Dec cannot be read, it falls back to
+  ``HP000000``.
+
+For example::
+
+    CrowdSky_33_IC 434_10.0s_LP_20260227.81_HP049152.fit
+             ^^          ^^^^  ^^  ^^^^^^^^^^  ^^^^^^^^
+         frames      exposure filt  UTC chunk   HEALPix
 
 This encoding makes coverage detection deterministic and idempotent,
 even when multiple blocks have the same frame count.
@@ -147,6 +157,70 @@ Parameters
 
     # Use 10-minute blocks, skip blocks with less than 2 minutes of data
     result = crowdsky.stack_blocks("M 81", block_minutes=10, min_exptime=120)
+
+
+Stacking all targets at once
+-----------------------------
+
+Use :func:`~seestarpy.crowdsky.stack_all` to process every target that
+has raw sub-frames, without having to name them individually:
+
+.. code-block:: python
+
+    result = crowdsky.stack_all(dry_run=True)    # preview first
+    result = crowdsky.stack_all()                # then run
+
+    print(f"Stacked: {result['total_blocks_stacked']}  "
+          f"Failed: {result['total_blocks_failed']}  "
+          f"Skipped: {result['total_blocks_skipped']}  "
+          f"across {result['targets_processed']} targets")
+
+The same ``block_minutes``, ``min_exptime``, and ``dry_run`` parameters
+are passed through to each target.
+
+
+Purging CrowdSky stacks
+-------------------------
+
+If you need to re-stack from scratch (e.g. after changing block size),
+use :func:`~seestarpy.crowdsky.purge_crowdsky_stacks` to delete all
+``CrowdSky_*`` files from the Seestar:
+
+.. code-block:: python
+
+    # Purge one target
+    crowdsky.purge_crowdsky_stacks("IC 434")
+
+    # Purge all targets
+    crowdsky.purge_crowdsky_stacks()
+
+After purging, :func:`~seestarpy.crowdsky.stack_blocks` will see all
+blocks as unstacked again.
+
+
+CrowdSky server
+---------------
+
+The ``crowdsky`` module also supports uploading stacked chunks to a
+CrowdSky collaboration server for aggregation with other observers.
+
+.. code-block:: python
+
+    from seestarpy import crowdsky
+
+    # Set your credentials
+    crowdsky.set_credentials("username", "password")
+
+    # Upload a stacked FITS file
+    crowdsky.upload_stack("CrowdSky_33_IC 434_10.0s_LP_20260227.81_HP049152.fit")
+
+    # List your uploaded stacks
+    stacks = crowdsky.list_stacks()
+    for s in stacks:
+        print(s)
+
+    # Download stacks by chunk key
+    crowdsky.download_stack(["20260227.81_HP049152"], dest="./downloads")
 
 
 Full workflow example

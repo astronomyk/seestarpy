@@ -6,7 +6,7 @@ High vs Low Conversion Gain modes (HCG vs LCG)
 .. code-block:: python
 
     from seestarpy import raw
-    raw.set_control_value(gain=80):
+    raw.set_control_value(gain=80)
 
 
 According to the docs on the IMX462 chip, it has two internal capacitors

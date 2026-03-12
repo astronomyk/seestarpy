@@ -101,6 +101,7 @@ Contents
    examples/changing_seestar_settings
    examples/changing_gain
    examples/observation_plans
+   examples/data_management
    examples/live_streaming
    examples/crowdsky_stacking
 
