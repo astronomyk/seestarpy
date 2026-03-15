@@ -130,8 +130,9 @@ def upload_stack(fits_path, thumbnail=None, n_frames_input=None,
     Returns
     -------
     dict
-        Server response with keys like ``ok``, ``stack_id``, ``chunk_key``,
-        ``telescope_id``.
+        Server response with keys ``ok``, ``job_id``, ``chunk_key``,
+        ``status`` (``"queued"``).  The file is queued for worker
+        post-processing rather than stored directly.
 
     Raises
     ------
