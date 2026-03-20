@@ -109,7 +109,7 @@ def list_stacks(object_name=None):
 
 def upload_stack(fits_path, thumbnail=None, n_frames_input=None,
                  n_frames_aligned=None, date_obs_start=None,
-                 date_obs_end=None):
+                 date_obs_end=None, scrub_location=None):
     """Upload a stacked FITS file to the CrowdSky server.
 
     Parameters
@@ -126,6 +126,8 @@ def upload_stack(fits_path, thumbnail=None, n_frames_input=None,
         ISO 8601 timestamp of the first sub-frame.
     date_obs_end : str, optional
         ISO 8601 timestamp of the last sub-frame.
+    scrub_location : int, optional
+        If 1, strip SITELONG/SITELAT from the output FITS and DB.
 
     Returns
     -------
@@ -157,6 +159,8 @@ def upload_stack(fits_path, thumbnail=None, n_frames_input=None,
         data["date_obs_start"] = date_obs_start
     if date_obs_end is not None:
         data["date_obs_end"] = date_obs_end
+    if scrub_location is not None:
+        data["scrub_location"] = str(scrub_location)
 
     resp = _request("POST", "/api/upload_stack.php", files=files, data=data)
     return resp.json()
