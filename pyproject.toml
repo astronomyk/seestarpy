@@ -23,7 +23,6 @@ dependencies = [
     "pysmb>=1.2.9",     # SMB file operations (data module)
     "tzlocal",          # local timezone (pi_set_time)
     "requests",         # CrowdSky web API
-    "click",            # CLI entry point
 ]
 
 [tool.setuptools]
@@ -58,5 +57,3 @@ markers = [
 ]
 addopts = "-v --tb=short"
 
-[project.scripts]
-seestar = "seestarpy.cli:main"
