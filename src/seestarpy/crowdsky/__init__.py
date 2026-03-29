@@ -11,6 +11,19 @@ from .chunks import (
     purge_crowdsky_stacks,
 )
 
+# Re-export core functions (pure logic, no Seestar I/O)
+from .chunks import (
+    parse_light_filename,
+    group_frames_into_blocks,
+    parse_coverage_from_filenames,
+    filter_covered_blocks,
+    local_dt_to_chunk_str,
+    compute_chunk_key,
+    LIGHT_RE,
+    CROWDSKY_RE,
+    CROWDSKY_RE_LEGACY,
+)
+
 # Re-export public functions from server
 from .server import (
     set_credentials,

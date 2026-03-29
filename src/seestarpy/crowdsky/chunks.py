@@ -44,7 +44,7 @@ from ..stack import (
 )
 from .healpix import radec_to_healpix
 
-_LIGHT_RE = re.compile(
+LIGHT_RE = re.compile(
     r"^Light_(.+)_(\d+\.\d+s)_([A-Za-z]+)_(\d{8}-\d{6})\.fit$"
 )
 _DSO_STACKED_RE = re.compile(
@@ -52,16 +52,21 @@ _DSO_STACKED_RE = re.compile(
 )
 # CrowdSky output files encode a UTC chunk key and HEALPix pixel:
 #   CrowdSky_<N>_<target>_<exposure>_<filter>_<YYYYMMDD.CC>_HP<nnnnnn>.fit
-_CROWDSKY_RE = re.compile(
+CROWDSKY_RE = re.compile(
     r"^CrowdSky_(\d+)_(.+)_(\d+\.\d+s)_([A-Za-z]+)_(\d{8}\.\d{1,2})_HP(\d{6})\.fit$"
 )
 # Legacy format (pre-HEALPix): CrowdSky_<N>_<target>_<exp>_<filt>_<YYYYMMDD-HHMMSS>.fit
-_CROWDSKY_RE_LEGACY = re.compile(
+CROWDSKY_RE_LEGACY = re.compile(
     r"^CrowdSky_(\d+)_(.+)_(\d+\.\d+s)_([A-Za-z]+)_(\d{8}-\d{6})\.fit$"
 )
 
+# Backward-compat aliases
+_LIGHT_RE = LIGHT_RE
+_CROWDSKY_RE = CROWDSKY_RE
+_CROWDSKY_RE_LEGACY = CROWDSKY_RE_LEGACY
 
-def _parse_light_filename(filename):
+
+def parse_light_filename(filename):
     """Parse a raw light frame filename into its components.
 
     Parameters
@@ -79,12 +84,12 @@ def _parse_light_filename(filename):
     --------
     ::
 
-        >>> _parse_light_filename("Light_M 81_20.0s_LP_20260227-225203.fit")
+        >>> parse_light_filename("Light_M 81_20.0s_LP_20260227-225203.fit")
         {'target': 'M 81', 'exposure': '20.0s', 'filter': 'LP',
          'datetime': datetime(2026, 2, 27, 22, 52, 3)}
 
     """
-    m = _LIGHT_RE.match(filename)
+    m = LIGHT_RE.match(filename)
     if not m:
         return None
     return {
@@ -93,6 +98,10 @@ def _parse_light_filename(filename):
         "filter": m.group(3),
         "datetime": datetime.strptime(m.group(4), "%Y%m%d-%H%M%S"),
     }
+
+
+# Backward-compat alias
+_parse_light_filename = parse_light_filename
 
 
 def _floor_to_block(dt, block_minutes):
@@ -139,7 +148,7 @@ def _read_fits_ra_dec(remote_path):
     return (None, None)
 
 
-def _local_dt_to_chunk_str(dt_local):
+def local_dt_to_chunk_str(dt_local):
     """Convert a naive local datetime to a ``YYYYMMDD.CC`` UTC chunk string.
 
     ``CC`` is the 15-minute chunk index (0–95) within the UTC day.
@@ -148,20 +157,28 @@ def _local_dt_to_chunk_str(dt_local):
     utc_dt = dt_local.replace(tzinfo=local_tz).astimezone(ZoneInfo("UTC"))
     date_str = utc_dt.strftime("%Y%m%d")
     chunk_index = (utc_dt.hour * 3600 + utc_dt.minute * 60) // 900
-    return f"{date_str}.{chunk_index}"
+    return f"{date_str}.{chunk_index:02d}"
 
 
-def _compute_chunk_key(block_start, ra_deg, dec_deg):
+# Backward-compat alias
+_local_dt_to_chunk_str = local_dt_to_chunk_str
+
+
+def compute_chunk_key(block_start, ra_deg, dec_deg):
     """Build a CrowdSky chunk key from a local block start and sky position.
 
     Returns a string like ``"20250115.78_HP049152"``.
     """
-    chunk_str = _local_dt_to_chunk_str(block_start)
+    chunk_str = local_dt_to_chunk_str(block_start)
     if ra_deg is not None and dec_deg is not None:
         hp_str = f"HP{radec_to_healpix(ra_deg, dec_deg):06d}"
     else:
         hp_str = "HP000000"
     return f"{chunk_str}_{hp_str}"
+
+
+# Backward-compat alias
+_compute_chunk_key = compute_chunk_key
 
 
 def _rename_output(target, block, status):
@@ -195,7 +212,7 @@ def _rename_output(target, block, status):
     try:
         # Read RA/Dec via HTTP Range request (no SMB needed)
         ra, dec = _read_fits_ra_dec(f"{folder}/{old_fit}")
-        chunk_key = _compute_chunk_key(block["block_start"], ra, dec)
+        chunk_key = compute_chunk_key(block["block_start"], ra, dec)
 
         new_stem = (
             f"CrowdSky_{frame_count}_{target}_{block['exposure']}"
@@ -216,6 +233,102 @@ def _rename_output(target, block, status):
         return f"{new_stem}.fit"
     except Exception:
         return None
+
+
+def group_frames_into_blocks(parsed_frames, block_minutes=15):
+    """Group parsed frame dicts into clock-aligned time blocks.
+
+    Parameters
+    ----------
+    parsed_frames : list[dict]
+        Each dict must have at least keys ``filename``, ``exposure``,
+        ``filter``, ``datetime`` (as returned by :func:`parse_light_filename`
+        with ``filename`` added).
+    block_minutes : int
+        Block duration in minutes.  Default 15.
+
+    Returns
+    -------
+    dict
+        Keyed by ``(block_start, exposure, filter)`` tuples.  Values are
+        dicts with keys: ``block_start``, ``block_end``, ``exposure``,
+        ``filter``, ``files`` (sorted list), ``frame_count``.
+    """
+    block_delta = timedelta(minutes=block_minutes)
+    blocks = {}
+    for p in parsed_frames:
+        block_start = _floor_to_block(p["datetime"], block_minutes)
+        key = (block_start, p["exposure"], p["filter"])
+        if key not in blocks:
+            blocks[key] = {
+                "block_start": block_start,
+                "block_end": block_start + block_delta,
+                "exposure": p["exposure"],
+                "filter": p["filter"],
+                "files": [],
+            }
+        blocks[key]["files"].append(p["filename"])
+
+    for block in blocks.values():
+        block["files"].sort()
+        block["frame_count"] = len(block["files"])
+
+    return blocks
+
+
+def parse_coverage_from_filenames(filenames):
+    """Extract coverage tuples from ``CrowdSky_*`` filenames.
+
+    Handles both the current format (with HEALPix pixel) and the legacy
+    format (with local timestamp).
+
+    Parameters
+    ----------
+    filenames : iterable of str
+        Filenames to scan for ``CrowdSky_*`` patterns.
+
+    Returns
+    -------
+    set[tuple[str, str, str]]
+        Set of ``(chunk_str, exposure, filter)`` tuples representing
+        blocks that are already covered.
+    """
+    covered = set()
+    for fname in filenames:
+        m = CROWDSKY_RE.match(fname)
+        if m:
+            covered.add((m.group(5), m.group(3), m.group(4)))
+            continue
+        m = CROWDSKY_RE_LEGACY.match(fname)
+        if m:
+            dt = datetime.strptime(m.group(5), "%Y%m%d-%H%M%S")
+            covered.add((local_dt_to_chunk_str(dt), m.group(3), m.group(4)))
+    return covered
+
+
+def filter_covered_blocks(blocks, covered):
+    """Remove blocks whose UTC chunk key is in the *covered* set.
+
+    Parameters
+    ----------
+    blocks : dict
+        As returned by :func:`group_frames_into_blocks`.
+    covered : set[tuple[str, str, str]]
+        ``(chunk_str, exposure, filter)`` tuples.
+
+    Returns
+    -------
+    list[dict]
+        Sorted list of uncovered block dicts.
+    """
+    sorted_keys = sorted(blocks.keys())
+    result = []
+    for key in sorted_keys:
+        block_start, exposure, filt = key
+        chunk_str = local_dt_to_chunk_str(block_start)
+        if (chunk_str, exposure, filt) not in covered:
+            result.append(blocks[key])
+    return result
 
 
 @multiple_ips
@@ -258,11 +371,10 @@ def find_unstacked_blocks(target, block_minutes=15):
         ...     print(f"{b['block_start']:%H:%M}  {b['frame_count']} frames")
 
     """
-    # 1. Get raw files and parse light frames
     raw_files = data.list_folder_contents(f"{target}_sub")
     parsed = []
     for fname in raw_files:
-        info = _parse_light_filename(fname)
+        info = parse_light_filename(fname)
         if info:
             info["filename"] = fname
             parsed.append(info)
@@ -270,68 +382,22 @@ def find_unstacked_blocks(target, block_minutes=15):
     if not parsed:
         return []
 
-    # 2. Group into clock-aligned blocks by (block_start, exposure, filter)
-    block_delta = timedelta(minutes=block_minutes)
-    blocks = {}
-    for p in parsed:
-        block_start = _floor_to_block(p["datetime"], block_minutes)
-        key = (block_start, p["exposure"], p["filter"])
-        if key not in blocks:
-            blocks[key] = {
-                "block_start": block_start,
-                "block_end": block_start + block_delta,
-                "exposure": p["exposure"],
-                "filter": p["filter"],
-                "files": [],
-            }
-        blocks[key]["files"].append(p["filename"])
+    blocks = group_frames_into_blocks(parsed, block_minutes)
 
-    for block in blocks.values():
-        block["files"].sort()
-        block["frame_count"] = len(block["files"])
-
-    # 3. Skip the current (incomplete) block
+    # Skip the current (incomplete) block
     now = datetime.now()
     blocks = {k: v for k, v in blocks.items() if v["block_end"] <= now}
-
     if not blocks:
         return []
 
-    # 4. Determine which blocks are already covered.
-    #
-    # CrowdSky output files encode the block-start timestamp and filter
-    # directly in the filename, so coverage is an exact match on
-    # (block_start, exposure, filter).  We ignore plain DSO_Stacked files
-    # for coverage since their timestamps reflect stacking time, not
-    # observation time, making block mapping unreliable.
+    # Coverage from local CrowdSky_* files on the Seestar
     try:
         stacked_files = data.list_folder_contents(target)
     except Exception:
         stacked_files = {}
+    covered = parse_coverage_from_filenames(stacked_files)
 
-    covered = set()
-    for fname in stacked_files:
-        m = _CROWDSKY_RE.match(fname)
-        if m:
-            # New format: (YYYYMMDD.CC, exposure, filter)
-            covered.add((m.group(5), m.group(3), m.group(4)))
-            continue
-        m = _CROWDSKY_RE_LEGACY.match(fname)
-        if m:
-            # Legacy format: convert local timestamp to UTC chunk string
-            dt = datetime.strptime(m.group(5), "%Y%m%d-%H%M%S")
-            covered.add((_local_dt_to_chunk_str(dt), m.group(3), m.group(4)))
-
-    # 5. Filter out covered blocks
-    sorted_keys = sorted(blocks.keys())
-    result = []
-    for key in sorted_keys:
-        block_start, exposure, filt = key
-        chunk_str = _local_dt_to_chunk_str(block_start)
-        if (chunk_str, exposure, filt) not in covered:
-            result.append(blocks[key])
-
-    return result
+    return filter_covered_blocks(blocks, covered)
 
 
 @multiple_ips
