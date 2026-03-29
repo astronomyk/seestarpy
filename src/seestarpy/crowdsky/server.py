@@ -3,8 +3,9 @@
 This module wraps the CrowdSky server's HTTP Basic Auth endpoints:
 
 - **GET /api/my_stacks.php** — list user's uploaded stacks
-- **POST /api/upload_stack.php** — upload a stacked FITS file
+- **POST /api/upload_stack.php** — upload a pre-stacked FITS file
 - **GET /api/download_stack.php** — download a stacked FITS by chunk_key
+- **POST /api/raw_upload.php** — batch-upload raw sub-frames (start / file / finalize)
 
 Credentials can be set via environment variables (``CROWDSKY_USERNAME``,
 ``CROWDSKY_PASSWORD``) or at runtime with :func:`set_credentials`.
@@ -14,9 +15,24 @@ Example::
     from seestarpy.crowdsky import server
 
     server.set_credentials("alice", "s3cret")
+
+    # List existing stacks
     stacks = server.list_stacks()
+
+    # Upload a pre-stacked result
     server.upload_stack("CrowdSky_38_M81_20.0s_LP_20260227-224500.fit")
-    server.download_stack("abc123", dest="./downloads")
+
+    # Upload raw sub-frames
+    token = server.raw_start_session()
+    for path in raw_fits_files:
+        server.raw_upload_file(token, path)
+    result = server.raw_finalize(token)
+
+    # Re-upload raw files, replacing any existing stack for the same chunk-key
+    token = server.raw_start_session()
+    for path in raw_fits_files:
+        server.raw_upload_file(token, path)
+    result = server.raw_finalize(token, overwrite=True)
 """
 
 import os
@@ -208,3 +224,125 @@ def download_stack(chunk_keys, dest="."):
         downloaded.append(out_path)
 
     return downloaded
+
+
+# ---------------------------------------------------------------------------
+# Raw sub-frame upload (three-step: start / file / finalize)
+# ---------------------------------------------------------------------------
+
+def raw_start_session():
+    """Create a new raw-upload session on the server.
+
+    Returns
+    -------
+    str
+        The ``session_token`` for this upload session, which must be passed
+        to :func:`raw_upload_file` and :func:`raw_finalize`.
+
+    Raises
+    ------
+    RuntimeError
+        If credentials are not set or the server returns an error.
+    """
+    resp = _request("POST", "/api/raw_upload.php", params={"action": "start"})
+    data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"raw_start_session failed: {data['error']}")
+    return data["session_token"]
+
+
+def raw_upload_file(session_token, fits_path):
+    """Upload one raw FITS sub-frame to an open upload session.
+
+    The file must have a valid ``DATE-OBS`` FITS header keyword; the server
+    returns a 400 error if it is absent.
+
+    Parameters
+    ----------
+    session_token : str
+        Token returned by :func:`raw_start_session`.
+    fits_path : str or Path
+        Local path to the raw ``.fit`` / ``.fits`` sub-frame.
+
+    Returns
+    -------
+    dict
+        Server response with keys ``ok``, ``filename``, ``chunk_key``,
+        ``date_obs``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If *fits_path* does not exist.
+    RuntimeError
+        If the server returns an error for this file.
+    """
+    fits_path = Path(fits_path)
+    if not fits_path.exists():
+        raise FileNotFoundError(f"FITS file not found: {fits_path}")
+
+    resp = _request(
+        "POST", "/api/raw_upload.php",
+        params={"action": "file"},
+        data={"session_token": session_token},
+        files={"file": (fits_path.name, fits_path.open("rb"))},
+        timeout=120,
+    )
+    data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"raw_upload_file failed for {fits_path.name}: {data['error']}")
+    return data
+
+
+def raw_finalize(session_token, scrub_location=False, overwrite=False):
+    """Finalize a raw-upload session and create stacking jobs.
+
+    Groups all uploaded files by ``chunk_key + telescope_id`` and inserts
+    ``stacking_jobs`` rows.  The worker will pick them up and stack them.
+
+    Parameters
+    ----------
+    session_token : str
+        Token returned by :func:`raw_start_session`.
+    scrub_location : bool
+        If ``True``, strip ``SITELONG``/``SITELAT`` from the stacked output
+        FITS and database record.  Default ``False``.
+    overwrite : bool
+        If ``True``, delete any existing ``stacked_frames`` row (and its
+        u:cloud files) for each duplicate chunk-key before creating the new
+        stacking job.  If ``False`` (default), duplicate chunk-keys are
+        skipped and returned in the ``skipped`` list.
+
+    Returns
+    -------
+    dict
+        Server response with keys:
+
+        - ``ok`` (bool)
+        - ``jobs`` (int): number of stacking jobs created
+        - ``job_ids`` (list[int]): IDs of the created jobs
+        - ``chunks`` (list[str]): chunk-keys that were queued
+        - ``skipped`` (list[str]): chunk-keys skipped because a stack
+          already existed (only populated when *overwrite* is ``False``)
+
+    Raises
+    ------
+    RuntimeError
+        If the server returns an error.
+    """
+    data = {
+        "session_token": session_token,
+        "scrub_location": "1" if scrub_location else "0",
+    }
+    if overwrite:
+        data["overwrite"] = "1"
+
+    resp = _request(
+        "POST", "/api/raw_upload.php",
+        params={"action": "finalize"},
+        data=data,
+    )
+    result = resp.json()
+    if "error" in result:
+        raise RuntimeError(f"raw_finalize failed: {result['error']}")
+    return result
