@@ -262,6 +262,11 @@ def send_command(params):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((DEFAULT_IP, DEFAULT_PORT))
 
+    # Authenticate if a key is configured (firmware 7.18+).
+    from .auth import authenticate, KEY_PATH as _AUTH_KEY
+    if _AUTH_KEY is not None:
+        authenticate(s)
+
     # params = {"method":"scope_park","params":{"equ_mode":self.is_EQ_mode}}
     cmd = {"id": 1, "verify": True}
     cmd.update(params)

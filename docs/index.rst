@@ -109,6 +109,7 @@ Contents
    :maxdepth: 2
    :caption: Reference
 
+   info/authentication
    info/errors
    info/image_stream_protocol
    api/api_index

@@ -70,6 +70,11 @@ async def run():
             reader, writer = await asyncio.open_connection(DEFAULT_IP, DEFAULT_PORT)
             print(f"Connected to {DEFAULT_IP}:{DEFAULT_PORT}")
 
+            # Authenticate if a key is configured (firmware 7.18+).
+            from ..auth import authenticate_async, KEY_PATH as _AUTH_KEY
+            if _AUTH_KEY is not None:
+                await authenticate_async(reader, writer)
+
             hb_task = asyncio.create_task(heartbeat(writer))
 
             while not _shutdown_event.is_set():

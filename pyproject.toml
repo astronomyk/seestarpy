@@ -30,8 +30,12 @@ package-dir = {"" = "src"}
 packages = ["seestarpy"]
 
 [project.optional-dependencies]
+auth = [
+    "cryptography>=41.0",  # RSA signing for firmware 7.18+ authentication
+]
 dev = [
-    "pytest>=7.0"  # For testing
+    "pytest>=7.0",
+    "cryptography>=41.0",
 ]
 docs = [
     "sphinx",
