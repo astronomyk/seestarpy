@@ -55,13 +55,7 @@ You need two things:
 
 2. **The RSA private key** in PEM format.
 
-   Extract it from the official ZWO Seestar Android APK using the
-   ``extract_pem.py`` script from the
-   `seestar-api-research <https://github.com/astronomyk/seestar-api-research>`_
-   repository::
-
-      python scripts/extract_pem.py --apk Seestar_v3.1.2.apk
-
+   Extract it from the official ZWO Seestar Android APK.
    Then copy the resulting ``.pem`` file to one of the auto-discovery
    locations listed below.
 
@@ -124,9 +118,7 @@ three auto-discovery locations.
 About the RSA key
 -----------------
 
-The key is **not unique per device or per user**.  It is embedded as a
-plain-text string inside ``libopenssllib.so``, a compiled shared library
-shipped inside ZWO's official Android APK.  Every copy of the app
+The key is **not unique per device or per user**. Every copy of the app
 contains the same key, and it has remained identical across APK versions
 (verified with v3.0.2 and v3.1.2).
 
