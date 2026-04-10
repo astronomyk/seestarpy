@@ -6,6 +6,14 @@
 Welcome to SeeStar-Py's Documentation!
 ======================================
 
+.. danger::
+
+   **Firmware 7.18+ requires authentication.**
+   If your Seestar is running firmware 7.18 or later, seestarpy will not
+   be able to connect without an RSA key file.  Authentication support is
+   available on the ``feature/firmware-auth`` branch and will be included
+   in the next release.
+
 .. image:: https://img.shields.io/pypi/v/seestarpy
    :alt: PyPI Version
    :target: https://pypi.org/project/seestarpy/
