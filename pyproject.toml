@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "seestarpy"
-version = "0.2.2"
+version = "0.3.0"
 authors = [ { name = "Kieran Leschinski", email = "kdleschinski@gmail.com" },]
 description = "Python interface for the SeeStar telescope control system"
 readme = "README.md"
@@ -12,7 +12,9 @@ requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -24,10 +26,6 @@ dependencies = [
     "tzlocal",          # local timezone (pi_set_time)
     "requests",         # CrowdSky web API
 ]
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["seestarpy"]
 
 [project.optional-dependencies]
 auth = [
