@@ -248,7 +248,9 @@ def _run_handshake(send_recv, key_path):
 
     if resp.get("code") != 0:
         raise AuthenticationError(
-            f"Telescope rejected verify_client (code={resp.get('code')})"
+            f"Telescope rejected verify_client (code={resp.get('code')}). "
+            f"Your signing key may be stale or from an incompatible APK version. "
+            f"Re-extract with: python -m seestarpy.extract_pem <path_to_apk>"
         )
 
     # Step 3 — confirm
@@ -351,7 +353,9 @@ async def authenticate_async(reader, writer, key_path=None):
 
     if resp.get("code") != 0:
         raise AuthenticationError(
-            f"Telescope rejected verify_client (code={resp.get('code')})"
+            f"Telescope rejected verify_client (code={resp.get('code')}). "
+            f"Your signing key may be stale or from an incompatible APK version. "
+            f"Re-extract with: python -m seestarpy.extract_pem <path_to_apk>"
         )
 
     # Step 3 — confirm

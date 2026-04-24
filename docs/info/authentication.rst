@@ -53,11 +53,33 @@ You need two things:
    If ``cryptography`` is not installed, seestarpy falls back to
    shelling out to the ``openssl`` command-line tool.
 
-2. **The RSA private key** in PEM format.
+2. **The RSA private key** in PEM format.  seestarpy ships with a
+   built-in extractor that pulls the key out of a Seestar APK you
+   have obtained.
 
-   Extract it from the official ZWO Seestar Android APK.
-   Then copy the resulting ``.pem`` file to one of the auto-discovery
-   locations listed below.
+Extracting the key from an APK
+------------------------------
+
+Obtain the official ZWO Seestar Android APK yourself (for example
+from an APK mirror site such as APKPure), then run::
+
+   python -m seestarpy.extract_pem /path/to/Seestar_v3.1.2.apk
+
+On success the key is written to ``~/.seestarpy/seestar.pem``, which
+is one of the locations seestarpy auto-discovers on every connection.
+
+Useful flags:
+
+- ``-o PATH`` --- write to a custom location.
+- ``--stdout`` --- print the key(s) to stdout instead of writing a
+  file.  Handy if the APK contains multiple keys.
+- ``-q`` --- suppress progress messages.
+
+The extractor is a generic utility: it opens the APK as a ZIP,
+reads the native library ``lib/arm64-v8a/libopenssllib.so`` (or the
+``armeabi-v7a`` variant), runs a ``strings(1)``-style scan, and
+matches any ``-----BEGIN PRIVATE KEY-----`` block it finds.  It has
+no ZWO-specific logic and ships no key of its own.
 
 
 Key auto-discovery
@@ -69,24 +91,7 @@ seestarpy searches for the key in this order:
    exists).
 2. ``seestar.pem`` in the current working directory.
 3. ``~/.seestarpy/seestar.pem`` (i.e. a ``.seestarpy`` folder in your
-   home directory).
-
-The recommended location is **option 3** --- it works from any
-working directory and persists across projects:
-
-**Linux / macOS:**
-
-.. code-block:: bash
-
-   mkdir -p ~/.seestarpy
-   cp seestar_apk_3.1.2.pem ~/.seestarpy/seestar.pem
-
-**Windows (PowerShell):**
-
-.. code-block:: powershell
-
-   mkdir $env:USERPROFILE\.seestarpy
-   copy seestar_apk_3.1.2.pem $env:USERPROFILE\.seestarpy\seestar.pem
+   home directory) --- this is where the extractor writes by default.
 
 On Windows, ``~/.seestarpy/`` resolves to
 ``C:\Users\<you>\.seestarpy\``.
