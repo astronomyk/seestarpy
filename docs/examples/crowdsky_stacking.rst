@@ -211,7 +211,7 @@ CrowdSky collaboration server for aggregation with other observers.
     # Set your credentials
     crowdsky.set_credentials("username", "password")
 
-    # Upload a stacked FITS file
+    # Upload a single stacked FITS file
     crowdsky.upload_stack("CrowdSky_33_IC 434_10.0s_LP_20260227.81_HP049152.fit")
 
     # List your uploaded stacks
@@ -223,21 +223,52 @@ CrowdSky collaboration server for aggregation with other observers.
     crowdsky.download_stack(["20260227.81_HP049152"], dest="./downloads")
 
 
+Bulk uploading stacks
+---------------------
+
+Use :func:`~seestarpy.crowdsky.upload_all_stacks` to upload all
+``CrowdSky_*.fit`` files from one or more observation folders on the
+Seestar to the CrowdSky server in one call.  Files that have already
+been uploaded (matched by chunk key) are skipped automatically.
+
+.. code-block:: python
+
+    from seestarpy import crowdsky
+
+    crowdsky.set_credentials("username", "password")
+
+    # Preview what would be uploaded
+    crowdsky.upload_all_stacks("IC 434", dry_run=True)
+
+    # Upload all stacks from one target (downloads to ./downloads/ first)
+    crowdsky.upload_all_stacks("IC 434", dest="./downloads")
+
+    # Upload from all targets at once
+    crowdsky.upload_all_stacks(dest="./downloads")
+
+If you have already downloaded stacks to a local directory, you can
+upload from there directly without needing a Seestar connection:
+
+.. code-block:: python
+
+    crowdsky.upload_all_stacks(local_dir="./my_stacks")
+
+
 Full workflow example
 ---------------------
 
-A complete script that connects to a Seestar and processes all targets:
+A complete script that connects to a Seestar, stacks all targets, and
+uploads the results to the CrowdSky server:
 
 .. code-block:: python
 
     from seestarpy import connection, crowdsky
 
     connection.DEFAULT_IP = "192.168.1.83"
+    crowdsky.set_credentials("username", "password")
 
-    # Discover targets
-    for t in crowdsky.list_targets():
-        print(f"\n--- {t['target']} ({t['raw_files']} raw frames) ---")
-        result = crowdsky.stack_blocks(t["target"])
-        print(f"Stacked: {result['blocks_stacked']}  "
-              f"Failed: {result['blocks_failed']}  "
-              f"Skipped: {result['blocks_skipped']}")
+    # Stack all targets
+    crowdsky.stack_all()
+
+    # Upload everything to CrowdSky
+    crowdsky.upload_all_stacks(dest="./downloads")

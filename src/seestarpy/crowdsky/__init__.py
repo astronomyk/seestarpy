@@ -30,5 +30,6 @@ from .server import (
     set_base_url,
     list_stacks,
     upload_stack,
+    upload_all_stacks,
     download_stack,
 )

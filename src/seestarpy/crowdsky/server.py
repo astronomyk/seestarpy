@@ -40,6 +40,9 @@ from pathlib import Path
 
 import requests
 
+from .. import data as _data_mod
+from .chunks import CROWDSKY_RE, CROWDSKY_RE_LEGACY
+
 BASE_URL = "https://crowdsky.univie.ac.at"
 USERNAME = os.environ.get("CROWDSKY_USERNAME", "")
 PASSWORD = os.environ.get("CROWDSKY_PASSWORD", "")
@@ -346,3 +349,180 @@ def raw_finalize(session_token, scrub_location=False, overwrite=False):
     if "error" in result:
         raise RuntimeError(f"raw_finalize failed: {result['error']}")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Bulk upload from Seestar or local directory
+# ---------------------------------------------------------------------------
+
+def _parse_chunk_key(filename):
+    """Extract a chunk key from a CrowdSky filename, or return None."""
+    m = CROWDSKY_RE.match(filename)
+    if m:
+        return f"{m.group(5)}_HP{m.group(6)}"
+    m = CROWDSKY_RE_LEGACY.match(filename)
+    if m:
+        return m.group(5)
+    return None
+
+
+def upload_all_stacks(target=None, local_dir=None, dest=".",
+                      skip_existing=True, dry_run=False):
+    """Upload all CrowdSky-ready stacks to the CrowdSky server.
+
+    Finds ``CrowdSky_*.fit`` files either on the Seestar's eMMC or in a
+    local directory, and uploads each one via :func:`upload_stack`.
+
+    Parameters
+    ----------
+    target : str, list[str], or None
+        Which observation folders to scan on the Seestar:
+
+        - A target name (e.g. ``"M 81"``) — that folder only.
+        - A list of names — those folders.
+        - ``None`` or ``"all"`` — every non-``_sub`` folder.
+
+        Ignored when *local_dir* is set.
+    local_dir : str, Path, or None
+        If given, scan this local directory (recursively) for
+        ``CrowdSky_*.fit`` files instead of downloading from the Seestar.
+    dest : str or Path
+        Local directory where files downloaded from the Seestar are saved.
+        Files are kept after upload.  Default ``"."``.  Ignored when
+        *local_dir* is set.
+    skip_existing : bool
+        If ``True`` (default), query the server first and skip files whose
+        chunk key has already been uploaded.
+    dry_run : bool
+        If ``True``, list what would be uploaded without transferring data.
+
+    Returns
+    -------
+    dict
+        Summary with keys ``folders_scanned``, ``files_uploaded``,
+        ``files_skipped``, ``files_failed``, ``uploaded``, ``skipped``,
+        ``failed``.
+
+    Examples
+    --------
+    Upload stacks from a specific target on the Seestar::
+
+        >>> from seestarpy.crowdsky import server
+        >>> server.set_credentials("alice", "s3cret")
+        >>> server.upload_all_stacks("AM Leo", dest="./downloads")
+
+    Upload from a local directory (no Seestar needed)::
+
+        >>> server.upload_all_stacks(local_dir="./my_stacks")
+
+    Preview without uploading::
+
+        >>> server.upload_all_stacks(dry_run=True)
+    """
+    summary = {
+        "folders_scanned": 0,
+        "files_uploaded": 0,
+        "files_skipped": 0,
+        "files_failed": 0,
+        "uploaded": [],
+        "skipped": [],
+        "failed": [],
+    }
+
+    # ---- Collect candidate files ----
+    # Each item: (local_path_or_None, folder_or_None, filename)
+    candidates = []
+
+    if local_dir is not None:
+        local_dir = Path(local_dir)
+        for path in sorted(local_dir.rglob("CrowdSky_*.fit")):
+            candidates.append((path, None, path.name))
+        summary["folders_scanned"] = 1
+        print(f"Found {len(candidates)} CrowdSky file(s) in {local_dir}")
+    else:
+        folders = _data_mod.list_folders()
+        if target is None or (isinstance(target, str) and target.lower() == "all"):
+            folder_names = [n for n in folders if not n.endswith("_sub")]
+        elif isinstance(target, str):
+            folder_names = [target]
+        else:
+            folder_names = list(target)
+
+        for folder_name in folder_names:
+            summary["folders_scanned"] += 1
+            try:
+                files = _data_mod.list_folder_contents(folder_name, filetype="fit")
+            except Exception as exc:
+                print(f"  Skipping {folder_name}: {exc}")
+                continue
+            for fname in sorted(files):
+                if fname.startswith("CrowdSky_"):
+                    candidates.append((None, folder_name, fname))
+
+        print(
+            f"Found {len(candidates)} CrowdSky file(s) across "
+            f"{summary['folders_scanned']} folder(s)"
+        )
+
+    if not candidates:
+        return summary
+
+    # ---- Dedup against server ----
+    existing_keys = set()
+    if skip_existing:
+        try:
+            stacks = list_stacks()
+            existing_keys = {s.get("chunk_key") for s in stacks}
+            existing_keys.discard(None)
+        except Exception as exc:
+            print(f"  Warning: could not fetch existing stacks: {exc}")
+
+    to_upload = []
+    for local_path, folder, fname in candidates:
+        chunk_key = _parse_chunk_key(fname)
+        if chunk_key and chunk_key in existing_keys:
+            summary["files_skipped"] += 1
+            summary["skipped"].append(fname)
+            continue
+        to_upload.append((local_path, folder, fname))
+
+    if summary["files_skipped"]:
+        print(f"  Skipping {summary['files_skipped']} already-uploaded file(s)")
+
+    if not to_upload:
+        print("Nothing to upload.")
+        return summary
+
+    # ---- Dry run ----
+    if dry_run:
+        print(f"Dry run: {len(to_upload)} file(s) would be uploaded:")
+        for _, folder, fname in to_upload:
+            src = folder or "local"
+            print(f"  [{src}] {fname}")
+        return summary
+
+    # ---- Upload ----
+    dest = Path(dest)
+    for local_path, folder, fname in to_upload:
+        try:
+            if local_path is not None:
+                fits_path = local_path
+            else:
+                fits_path = Path(
+                    _data_mod.download_file(folder, fname, str(dest / folder))
+                )
+
+            print(f"  Uploading {fname}...", end="", flush=True)
+            upload_stack(fits_path)
+            print(" OK")
+            summary["files_uploaded"] += 1
+            summary["uploaded"].append(fname)
+        except Exception as exc:
+            print(f" FAILED: {exc}")
+            summary["files_failed"] += 1
+            summary["failed"].append(fname)
+
+    uploaded = summary["files_uploaded"]
+    failed = summary["files_failed"]
+    print(f"Done: {uploaded} uploaded, {failed} failed.")
+    return summary

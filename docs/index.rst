@@ -6,6 +6,29 @@
 Welcome to SeeStar-Py's Documentation!
 ======================================
 
+.. danger::
+
+   **Firmware 7.18+ requires authentication.**
+
+   Yet again, ZWO is trying to alienate the astro-tinkerer community.
+
+   The reason a lot of us chose the Seestars over the competitor smart-telescopes
+   was due to the ability to be able to access and control the seestars in ways
+   that ZWO does not offer via their own software. This "open-source" feature
+   was one of the **Seestar's greatest USPs** and, if embraced properly, would allow
+   **the Seestar user community to leverage their endless creativity to come up
+   with project beyond the wildest imagination of the corporate heads at ZWO**.
+
+   Alas, **ZWO's greed is shutting down this effort before it really had a chance
+   to grow**, turning what could have been a real game-changer smart-telescope
+   into just another piece of consumer electronics that will be surpassed by
+   other superior products.
+
+   If your Seestar is running firmware 7.18 or later, seestarpy will not
+   be able to connect without a key file.  Authentication support is
+   available on the ``feature/firmware-auth`` branch if you can get your hands
+   on the key file. Please contact me via discord if you want help with this.
+
 .. image:: https://img.shields.io/pypi/v/seestarpy
    :alt: PyPI Version
    :target: https://pypi.org/project/seestarpy/
