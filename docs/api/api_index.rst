@@ -14,3 +14,4 @@ Python API index
    data
    status
    events
+   auth

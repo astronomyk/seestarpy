@@ -103,6 +103,34 @@ def status_bar(return_type="str"):
 
 
 @multiple_ips
+def get_firmware_version():
+    """
+    Get the Seestar firmware version string.
+
+    Returns
+    -------
+    str
+        Firmware version, e.g. ``"7.18"``.
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_firmware_version()
+        '7.18'
+
+    """
+    return (raw.get_device_state(["device"])
+            .get("result", {})
+            .get("device", {})
+            .get("firmware_ver_string"))
+
+
+@multiple_ips
 def get_mount_state():
     """
     Get the full mount state dictionary from the Seestar.
