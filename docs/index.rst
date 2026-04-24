@@ -25,9 +25,15 @@ Welcome to SeeStar-Py's Documentation!
    other superior products.
 
    If your Seestar is running firmware 7.18 or later, seestarpy will not
-   be able to connect without a key file.  Authentication support is
-   available on the ``feature/firmware-auth`` branch if you can get your hands
-   on the key file. Please contact me via discord if you want help with this.
+   be able to connect without a key file.  The ``feature/firmware-auth``
+   branch now ships a built-in extractor: obtain the official ZWO Seestar
+   Android APK yourself (e.g. from an APK mirror) and run::
+
+      python -m seestarpy.extract_pem /path/to/Seestar_v3.1.2.apk
+
+   The key is written to ``~/.seestarpy/seestar.pem`` where seestarpy
+   auto-discovers it on every connection.  See :doc:`info/authentication`
+   for the full setup and the legal basis for interoperability.
 
 .. image:: https://img.shields.io/pypi/v/seestarpy
    :alt: PyPI Version
