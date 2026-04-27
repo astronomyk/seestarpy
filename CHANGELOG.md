@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.3.1 — 2026-04-27
+
+### Bug fixes
+
+- **`stream.get_live_image()`** — skip past zero-dimension ack/keepalive
+  frames the Seestar sends in response to image requests. Previously a
+  one-shot grab would frequently return an empty header, causing
+  `decode_payload` / `save_image` to raise
+  `ValueError: Zero-dimension frame (ack/keepalive)` even when the
+  scope was actively stacking. The function now loops on the socket up
+  to `max_ack_frames` (default 10) until a frame with real dimensions
+  arrives.
+
+### New parameters on `get_live_image()`
+
+- `max_ack_frames` (default 10) — bound the ack-skipping loop.
+- `fallback` (default True) — if `get_stacked_img` yields no real
+  frames (e.g. the scope just woke and stacking hasn't started), retry
+  once on the same socket with `get_current_img` so callers always get
+  *something* renderable when available.
+- `read_timeout` (default 8.0 s) — bound per-recv waits so a silent
+  Seestar can't strand a caller indefinitely.
+
 ## v0.2.0 — 2026-03-02
 
 ### New modules

@@ -476,12 +476,14 @@ def _consume_json_line(sock, first_byte):
 # ---------------------------------------------------------------------------
 
 def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
-                   filename=None):
+                   filename=None, *, max_ack_frames=10, fallback=True,
+                   read_timeout=8.0):
     """Connect, grab a single image frame, and disconnect.
 
     This is the simplest way to get the current live-stacked image from
-    the Seestar.  It opens a TCP connection, requests one frame, reads
-    the binary response, and closes the socket.
+    the Seestar.  It opens a TCP connection, requests a frame, reads
+    past any zero-dimension ack/keepalive frames the Seestar interleaves,
+    and closes the socket.
 
     If *filename* is given the image is also saved to disk.  PNG and
     JPEG files get an automatic stretch to bring out faint nebulosity.
@@ -505,14 +507,36 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
     filename : str, optional
         If provided, save the image to this path.  The extension
         determines the format (``.png``, ``.jpg``, ``.fits``, etc.).
+    max_ack_frames : int, optional
+        Maximum number of zero-dimension ack/keepalive frames to skip
+        past while waiting for a real image frame (default ``10``).
+        The Seestar typically sends one or two acks before the actual
+        image, so 10 is generous.
+    fallback : bool, optional
+        If ``True`` (default) and *method* is ``"get_stacked_img"`` but
+        no stacked image is ready (e.g. the scope just woke), retry
+        once with ``"get_current_img"`` on the same socket so callers
+        always get *something* renderable when one is available.
+    read_timeout : float, optional
+        Per-recv socket timeout in seconds (default ``8.0``).  Bounds
+        how long we'll wait for any single frame; raises
+        ``socket.timeout`` if the Seestar goes silent.
 
     Returns
     -------
     tuple[dict, bytes]
         ``(header, payload)`` where *header* is the parsed 34-byte
-        header dict and *payload* is the raw (compressed) image payload.
-        Pass both to :func:`decode_payload` to get a NumPy array, or
-        to :func:`save_image` to write a file.
+        header dict (with non-zero ``width`` and ``height``) and
+        *payload* is the raw (compressed) image payload.  Pass both to
+        :func:`decode_payload` to get a NumPy array, or to
+        :func:`save_image` to write a file.
+
+    Raises
+    ------
+    RuntimeError
+        If no image-bearing frame is received within the per-method
+        ``max_ack_frames`` budget (and, if *fallback* is True, the
+        fallback method also produced nothing).
 
     Examples
     --------
@@ -527,9 +551,31 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
     if ip is None:
         ip = DEFAULT_IP
     sock = _make_socket(ip, port)
+    sock.settimeout(read_timeout)
     try:
-        _send_json(sock, method)
-        header, payload = _read_frame(sock)
+        # Try the requested method first; fall back to "get_current_img"
+        # on the same socket if asked and the first method yields nothing.
+        methods = [method]
+        if fallback and method == "get_stacked_img":
+            methods.append("get_current_img")
+
+        last_header = None
+        for m in methods:
+            _send_json(sock, m)
+            for _ in range(max_ack_frames):
+                header, payload = _read_frame(sock)
+                last_header = header
+                if header.get('width') and header.get('height'):
+                    break
+            else:
+                continue  # exhausted budget for this method — try the next
+            break
+        else:
+            raise RuntimeError(
+                f"No image-bearing frame received after "
+                f"{max_ack_frames} reads for {methods!r}; last header "
+                f"width={getattr(last_header, 'get', lambda *_: None)('width')}"
+            )
     finally:
         sock.close()
 
