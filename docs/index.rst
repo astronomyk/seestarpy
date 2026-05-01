@@ -78,6 +78,16 @@ The shortest path from install to imaging:
 That's it — the Seestar will slew to M42, plate-solve, and begin
 stacking sub-exposures.
 
+To see what the Seestar is currently looking at, grab the latest stacked
+frame and pop it up in a matplotlib window:
+
+.. code-block:: python
+
+   from seestarpy import stream
+
+   stream.show_current_stack()              # one Seestar
+   stream.show_current_stack(ips="all")     # all Seestars in a subplot grid
+
 If auto-discovery doesn't find your Seestar, set the IP manually:
 
 .. code-block:: python

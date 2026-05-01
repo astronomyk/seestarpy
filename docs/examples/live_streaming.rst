@@ -6,6 +6,39 @@ progressively-improving image available over a binary socket on port 4800.
 The ``stream`` module lets you grab single frames or stream them in real time.
 
 
+Peek at the current stack
+-------------------------
+
+The lowest-friction way to see what the Seestar is currently imaging —
+one line, no file written, just a matplotlib window:
+
+.. code-block:: python
+
+    from seestarpy import stream
+
+    stream.show_current_stack()
+
+The frame is auto-stretched with a midtone transfer function so faint
+nebulosity is visible.  The window title shows the Seestar IP,
+resolution, frame number, and whether it's a stacked or preview image.
+
+For multiple Seestars, pass ``ips="all"`` (or a list) and all frames are
+fetched in parallel and tiled into a single subplot-grid figure:
+
+.. code-block:: python
+
+    from seestarpy import connection as conn
+
+    conn.find_available_ips(3)
+    stream.show_current_stack(ips="all")
+    stream.show_current_stack(ips=[1, 2])         # specific scopes
+    stream.show_current_stack(port=stream.IMAGE_PORT_WIDE)  # wide camera
+
+Returns ``(header, arr8)`` for a single scope or
+``{ip: (header, arr8)}`` for many — handy if you want to keep the
+displayed pixels for further processing.
+
+
 Grabbing a single live image
 ----------------------------
 
