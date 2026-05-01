@@ -48,6 +48,40 @@ DEFAULT_IP = seestar_ip if seestar_ip else "10.0.0.1"
 AVAILABLE_IPS = {'seestar.local': DEFAULT_IP}
 
 
+def resolve_ips(call_time_ips):
+    """Resolve the ``ips=`` kwarg to a flat list of IP-address strings.
+
+    Accepts the same shapes as :func:`multiple_ips`: ``None`` (current
+    :data:`DEFAULT_IP`), an int (``2`` → ``seestar-2.local``), a hostname
+    or IP string, the literal ``"all"``, or a list mixing any of these.
+    Unknown entries are dropped (with a warning printed) so the result
+    is always a non-empty list of resolved IPs when input is valid.
+    """
+    def _resolve(ip):
+        if isinstance(ip, list):
+            return [_resolve(i) for i in ip]
+        elif isinstance(ip, str):
+            if ip in AVAILABLE_IPS:
+                return AVAILABLE_IPS[ip]
+            elif ip in AVAILABLE_IPS.values():
+                return ip
+            else:
+                print(f"{ip} is not a valid IP address")
+                return None
+        elif isinstance(ip, int):
+            name = f"seestar-{ip}.local" if ip > 1 else "seestar.local"
+            return _resolve(name)
+        elif ip is None:
+            return DEFAULT_IP
+
+    if isinstance(call_time_ips, str) and call_time_ips.lower() == "all":
+        call_time_ips = list(AVAILABLE_IPS.values())
+    if not isinstance(call_time_ips, list):
+        call_time_ips = [call_time_ips]
+    resolved = _resolve(call_time_ips)
+    return [ip for ip in resolved if ip is not None]
+
+
 def multiple_ips(func):
     """
     Decorator that allows a function to run against multiple IP addresses.
@@ -58,31 +92,7 @@ def multiple_ips(func):
         global DEFAULT_IP
         # Extract the ips list from call arguments
         call_time_ips = kwargs.pop('ips', None)
-
-        def resolve_ip(ip):
-            print(ip)
-            # Use provided IPs or default to current DEFAULT_IP
-            if isinstance(ip, list):
-                return [resolve_ip(ip) for ip in ip]
-            elif isinstance(ip, str):
-                if ip in AVAILABLE_IPS:
-                    return AVAILABLE_IPS[ip]
-                elif ip in AVAILABLE_IPS.values():
-                    return ip
-                else:
-                    print(f"{ip} is not a valid IP address")
-                    return None
-            elif isinstance(ip, int):
-                name = f"seestar-{ip}.local" if ip > 1 else "seestar.local"
-                return resolve_ip(name)
-            elif ip is None:
-                return DEFAULT_IP
-
-        if isinstance(call_time_ips, str) and call_time_ips.lower() == "all":
-            call_time_ips = list(AVAILABLE_IPS.values())
-        if not isinstance(call_time_ips, list):
-            call_time_ips = [call_time_ips]
-        ips = resolve_ip(call_time_ips)
+        ips = resolve_ips(call_time_ips)
 
         def call_with_ip(ip):
             """Helper function to call the original function with a specific IP"""

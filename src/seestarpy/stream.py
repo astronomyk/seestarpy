@@ -62,7 +62,8 @@ import threading
 import time
 import zlib
 
-from .connection import DEFAULT_IP
+from . import connection
+from .connection import DEFAULT_IP, multiple_ips
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -477,7 +478,7 @@ def _consume_json_line(sock, first_byte):
 
 def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
                    filename=None, *, max_ack_frames=10, fallback=True,
-                   read_timeout=8.0):
+                   read_timeout=30.0):
     """Connect, grab a single image frame, and disconnect.
 
     This is the simplest way to get the current live-stacked image from
@@ -518,9 +519,10 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
         once with ``"get_current_img"`` on the same socket so callers
         always get *something* renderable when one is available.
     read_timeout : float, optional
-        Per-recv socket timeout in seconds (default ``8.0``).  Bounds
+        Per-recv socket timeout in seconds (default ``30.0``).  Bounds
         how long we'll wait for any single frame; raises
-        ``socket.timeout`` if the Seestar goes silent.
+        ``socket.timeout`` if the Seestar goes silent.  The default is
+        sized to comfortably cover the 8MP S30 Pro frames over Wi-Fi.
 
     Returns
     -------
@@ -583,6 +585,133 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
         save_image(payload, header, filename)
 
     return header, payload
+
+
+# ---------------------------------------------------------------------------
+# One-shot matplotlib display
+# ---------------------------------------------------------------------------
+
+def _grab_one(ip, port, stretch):
+    """Fetch a frame from one Seestar and return ``(header, arr8)``."""
+    import numpy as np
+
+    header, payload = get_live_image(ip=ip, port=port)
+    arr = decode_payload(payload, header)
+    if arr.ndim == 2:
+        arr = np.stack([arr, arr, arr], axis=2)
+    arr8 = _auto_stretch(arr) if stretch else (arr >> 8).astype(np.uint8)
+    return header, arr8
+
+
+def _frame_label(ip, header):
+    return (
+        f"{ip}  |  "
+        f"{header['width']}x{header['height']}  |  "
+        f"frame {header['image_id']}  |  "
+        f"{'stacked' if header['img_type'] == IMG_TYPE_STACKED else 'preview'}"
+    )
+
+
+def show_current_stack(stretch=True, port=IMAGE_PORT, block=True, ips=None):
+    """Grab the latest stacked image(s) and show them in matplotlib.
+
+    Low-friction one-liner for "show me what the Seestar is seeing right
+    now".  When *ips* selects a single scope a single figure is shown.
+    With multiple scopes (e.g. ``ips="all"`` or ``ips=[1, 2]``) the
+    frames are fetched in parallel and tiled into a subplot grid on a
+    single figure.
+
+    Parameters
+    ----------
+    stretch : bool, optional
+        Apply the aggressive midtone stretch from :func:`_auto_stretch`
+        to bring out faint nebulosity (default ``True``).  Set to
+        ``False`` for a simple linear 16-to-8-bit scale.
+    port : int, optional
+        Image stream port.  Default is :data:`IMAGE_PORT` (4800,
+        telephoto).  Use :data:`IMAGE_PORT_WIDE` (4804) for the
+        wide-angle camera.
+    block : bool, optional
+        If ``True`` (default), :func:`matplotlib.pyplot.show` blocks
+        until the window is closed.
+    ips : str, int, or list, optional
+        Target Seestar(s).  Accepts the same shapes as elsewhere in the
+        package: ``None`` (the current ``DEFAULT_IP``), an int
+        (``2`` → ``seestar-2.local``), a hostname/IP string, the literal
+        ``"all"``, or a list mixing any of these.
+
+    Returns
+    -------
+    tuple[dict, numpy.ndarray] or dict
+        For a single scope: ``(header, arr8)``.  For multiple scopes:
+        a dict ``{ip: (header, arr8)}`` (failures map to the raised
+        exception instance instead).
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import stream
+        >>> stream.show_current_stack()
+        >>> stream.show_current_stack(port=stream.IMAGE_PORT_WIDE)
+        >>> stream.show_current_stack(ips="all")
+        >>> stream.show_current_stack(ips=[1, 2])
+    """
+    import math
+    import matplotlib.pyplot as plt
+    from concurrent.futures import ThreadPoolExecutor
+
+    resolved = connection.resolve_ips(ips)
+    if not resolved:
+        raise ValueError(f"Could not resolve any Seestars from ips={ips!r}")
+
+    if len(resolved) == 1:
+        ip = resolved[0]
+        header, arr8 = _grab_one(ip, port, stretch)
+        fig, ax = plt.subplots()
+        ax.imshow(arr8)
+        ax.set_axis_off()
+        fig.suptitle(f"Seestar {_frame_label(ip, header)}")
+        fig.tight_layout(pad=0)
+        plt.show(block=block)
+        return header, arr8
+
+    # Multi-IP: parallel fetch, then a single subplot-grid figure on the
+    # main thread (matplotlib's pyplot is not thread-safe).
+    results = {}
+    with ThreadPoolExecutor(max_workers=len(resolved)) as ex:
+        futures = {ex.submit(_grab_one, ip, port, stretch): ip
+                   for ip in resolved}
+        for fut in futures:
+            ip = futures[fut]
+            try:
+                results[ip] = fut.result()
+            except Exception as exc:
+                results[ip] = exc
+
+    n = len(resolved)
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    fig, axes = plt.subplots(rows, cols,
+                             figsize=(6 * cols, 4 * rows),
+                             squeeze=False)
+    for ax in axes.flat:
+        ax.set_axis_off()
+
+    for idx, ip in enumerate(resolved):
+        ax = axes.flat[idx]
+        result = results[ip]
+        if isinstance(result, Exception):
+            ax.text(0.5, 0.5, f"{ip}\n{type(result).__name__}: {result}",
+                    ha='center', va='center', transform=ax.transAxes)
+            continue
+        header, arr8 = result
+        ax.imshow(arr8)
+        ax.set_title(_frame_label(ip, header), fontsize=9)
+
+    fig.tight_layout()
+    plt.show(block=block)
+    return results
 
 
 # ---------------------------------------------------------------------------
