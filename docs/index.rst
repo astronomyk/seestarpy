@@ -25,7 +25,7 @@ Welcome to SeeStar-Py's Documentation!
    other superior products.
 
    If your Seestar is running firmware 7.18 or later, seestarpy will not
-   be able to connect without a key file.  The ``feature/firmware-auth``
+   be able to connect without a key file.  The ``main``
    branch now ships a built-in extractor: obtain the official ZWO Seestar
    Android APK yourself (e.g. from an APK mirror) and run::
 
@@ -53,6 +53,11 @@ Installation
 
    pip install seestarpy
 
+or if you need the dependencies for the PEM extraction:
+
+.. code-block:: bash
+
+   pip install seestarpy[auth]
 
 Getting started
 ---------------
