@@ -44,18 +44,15 @@ All three steps happen behind the scenes.  Your code simply calls
 Setup
 -----
 
-You need two things:
+All you need is **the RSA private key** in PEM format.  seestarpy ships
+with a built-in extractor that pulls the key out of a Seestar APK you
+have obtained, and the ``cryptography`` signing library is now a
+standard dependency installed alongside seestarpy.
 
-1. **The ``cryptography`` library** (or ``openssl`` on PATH)::
-
-      pip install seestarpy[auth]
-
-   If ``cryptography`` is not installed, seestarpy falls back to
-   shelling out to the ``openssl`` command-line tool.
-
-2. **The RSA private key** in PEM format.  seestarpy ships with a
-   built-in extractor that pulls the key out of a Seestar APK you
-   have obtained.
+.. note::
+   If ``cryptography`` somehow fails to import, seestarpy falls back
+   to shelling out to the ``openssl`` command-line tool, so signing
+   still works on systems where that tool is on PATH.
 
 Extracting the key from an APK
 ------------------------------

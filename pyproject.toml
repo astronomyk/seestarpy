@@ -21,19 +21,16 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
-    "websockets",       # event listener / html dashboard
-    "pysmb>=1.2.9",     # SMB file operations (data module)
-    "tzlocal",          # local timezone (pi_set_time)
-    "requests",         # CrowdSky web API
+    "websockets",          # event listener / html dashboard
+    "pysmb>=1.2.9",        # SMB file operations (data module)
+    "tzlocal",             # local timezone (pi_set_time)
+    "requests",            # CrowdSky web API
+    "cryptography>=41.0",  # RSA signing for firmware 7.18+ authentication
 ]
 
 [project.optional-dependencies]
-auth = [
-    "cryptography>=41.0",  # RSA signing for firmware 7.18+ authentication
-]
 dev = [
     "pytest>=7.0",
-    "cryptography>=41.0",
 ]
 docs = [
     "sphinx",

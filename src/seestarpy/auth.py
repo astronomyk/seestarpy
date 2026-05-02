@@ -164,7 +164,8 @@ def sign_challenge(key_path, challenge):
     except FileNotFoundError:
         raise ImportError(
             "RSA signing requires either the 'cryptography' package "
-            "(pip install seestarpy[auth]) or the 'openssl' CLI on PATH."
+            "(a standard seestarpy dependency — try 'pip install -U "
+            "seestarpy') or the 'openssl' CLI on PATH."
         )
 
 

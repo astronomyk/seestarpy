@@ -53,12 +53,6 @@ Installation
 
    pip install seestarpy
 
-or if you need the dependencies for the PEM extraction:
-
-.. code-block:: bash
-
-   pip install seestarpy[auth]
-
 Getting started
 ---------------
 
