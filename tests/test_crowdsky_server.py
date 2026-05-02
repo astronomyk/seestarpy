@@ -87,7 +87,7 @@ class TestRequestHelper:
         mock_req.assert_called_once_with(
             "GET",
             "https://crowdsky.univie.ac.at/api/my_stacks.php",
-            timeout=30,
+            timeout=(30, 300),
             auth=("alice", "s3cret"),
         )
 
