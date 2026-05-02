@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.4.0 — 2026-05-02
+
+### New features
+
+- **`stream.show_current_stack()`** — Low-friction one-shot matplotlib
+  viewer. Grabs the latest stacked frame and pops up an auto-stretched
+  window in a single line:
+
+  ```python
+  from seestarpy import stream
+  stream.show_current_stack()
+  ```
+
+  With `ips="all"` (or `ips=[1, 2]`) frames are fetched in parallel
+  from all selected Seestars and tiled into a subplot grid on a single
+  figure. Returns `(header, arr8)` for one scope or
+  `{ip: (header, arr8)}` for many.
+
+- **`connection.resolve_ips()`** — IP-resolution logic factored out of
+  the `@multiple_ips` decorator into a public helper, so other code
+  paths (like `show_current_stack`) can share the same `ips=`
+  semantics without going through the decorator.
+
+### Packaging
+
+- **`cryptography` is now a standard dependency.** Firmware 7.18+
+  authentication is the common case rather than the exception, so the
+  separate `seestarpy[auth]` install variant has been removed. A plain
+  `pip install seestarpy` now ships everything you need to authenticate
+  against modern firmware. The openssl CLI fallback in `auth` stays as
+  a runtime safety net.
+
+### Behaviour changes
+
+- **`stream.get_live_image()`** — Default `read_timeout` raised from
+  8.0 s to 30.0 s to comfortably cover the 8MP S30 Pro frames over
+  Wi-Fi.
+
 ## v0.3.1 — 2026-04-27
 
 ### Bug fixes
