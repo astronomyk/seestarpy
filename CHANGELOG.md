@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.1 — 2026-05-02
+
+### Bug fixes
+
+- **`crowdsky` uploads** — A flat 30 s HTTP timeout was insufficient
+  for ~12 MB stack uploads over slow or long-haul uplinks (e.g. AU
+  residential to crowdsky.univie.ac.at). The internal `_request`
+  helper now passes `requests` a `(connect, read)` timeout tuple of
+  `(30, 300)`, keeping a fast connect bound while giving big uploads
+  room to complete.
+
 ## v0.4.0 — 2026-05-02
 
 ### New features
