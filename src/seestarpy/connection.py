@@ -278,41 +278,64 @@ def send_command(params):
         authenticate(s)
 
     # params = {"method":"scope_park","params":{"equ_mode":self.is_EQ_mode}}
-    cmd = {"id": 1, "verify": True}
+    cmd_id = 1
+    cmd = {"id": cmd_id, "verify": True}
     cmd.update(params)
 
     message = json.dumps(cmd) + "\r\n"
     if VERBOSE_LEVEL >= 1: print(f"\nSending: {message.strip()}")
     s.sendall(message.encode())
 
-    # Read until we get a complete message (ends with \r\n)
-    response = ""
-    while "\r\n" not in response:
-        chunk = s.recv(4096).decode("utf-8")
-        if not chunk:
-            break
-        response += chunk
-
-    if VERBOSE_LEVEL >= 1: print(f"\nRecieved: {response}")
-    s.close()
-
+    # Read frames until we find the one matching cmd_id. The Seestar can
+    # interleave unsolicited events ("Event":"PiStatus", "temp", ...) onto
+    # the same socket, and an event may arrive before the JSON-RPC reply.
+    s.settimeout(10)
+    buf = ""
+    parsed = None
+    last_raw = ""
     try:
-        parsed = json.loads(response.split("\r\n")[0])
-        method = parsed.get("method")
-        result = parsed.get("result")
-        code = parsed.get("code")
-        error = parsed.get("error")
+        while True:
+            while "\r\n" not in buf:
+                chunk = s.recv(4096).decode("utf-8")
+                if not chunk:
+                    break
+                buf += chunk
+            if "\r\n" not in buf:
+                break  # socket closed without a full frame
+            line, buf = buf.split("\r\n", 1)
+            if not line:
+                continue
+            last_raw = line
+            try:
+                frame = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(frame, dict) and frame.get("id") == cmd_id:
+                parsed = frame
+                break
+            # else: unsolicited event — drop and keep reading
+            if VERBOSE_LEVEL >= 2:
+                print(f"  (skipped event: {frame.get('Event') or frame.get('method')})")
+    finally:
+        s.close()
 
-        if VERBOSE_LEVEL >= 2:
-            print("\n✅ Response:")
-            print(f"  method: {method}")
-            print(f"  result: {json.dumps(result, indent=2)}")
-            print(f"  code  : {code}")
-            print(f"  error : {error}")
-        return parsed
+    if parsed is None:
+        if VERBOSE_LEVEL >= 1:
+            print(f"\nRecieved (no matching reply): {last_raw}")
+        if last_raw:
+            try:
+                return json.loads(last_raw)
+            except json.JSONDecodeError:
+                return last_raw
+        return ""
 
-    except json.JSONDecodeError:
-        print("⚠️ Could not parse response as JSON.")
-        print("Raw response:\n", response)
+    if VERBOSE_LEVEL >= 1:
+        print(f"\nRecieved: {json.dumps(parsed)}")
 
-        return response
+    if VERBOSE_LEVEL >= 2:
+        print("\n✅ Response:")
+        print(f"  method: {parsed.get('method')}")
+        print(f"  result: {json.dumps(parsed.get('result'), indent=2)}")
+        print(f"  code  : {parsed.get('code')}")
+        print(f"  error : {parsed.get('error')}")
+    return parsed
