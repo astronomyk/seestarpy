@@ -87,7 +87,7 @@ class TestRequestHelper:
         mock_req.assert_called_once_with(
             "GET",
             "https://crowdsky.univie.ac.at/api/my_stacks.php",
-            timeout=(30, 300),
+            timeout=30,
             auth=("alice", "s3cret"),
         )
 
@@ -162,6 +162,16 @@ class TestUploadStack:
     def test_missing_file_raises(self):
         with pytest.raises(FileNotFoundError, match="FITS file not found"):
             server.upload_stack("/nonexistent/path.fit")
+
+    @patch("seestarpy.crowdsky.server._request")
+    def test_overrides_timeout_for_large_upload(self, mock_req, tmp_path):
+        fits_file = tmp_path / "test.fit"
+        fits_file.write_bytes(b"FITS DATA")
+        mock_req.return_value = MagicMock(json=lambda: {"ok": True})
+
+        server.upload_stack(str(fits_file))
+
+        assert mock_req.call_args.kwargs["timeout"] == (30, 300)
 
 
 # ---------------------------------------------------------------------------

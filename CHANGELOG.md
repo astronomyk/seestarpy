@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.2 — 2026-05-04
+
+### Bug fixes / behaviour
+
+- **`crowdsky._request`** — Reverted the shared timeout default to a
+  flat 30 s. The 0.4.1 change had pushed the long `(30, 300)` tuple
+  into every call site, including small reads like `list_stacks()`
+  and `raw_start_session()`, which would now hang for up to 5 minutes
+  on a stuck server before failing.
+- **`crowdsky.upload_stack`** — Now overrides the timeout locally with
+  `(30, 300)`, so the long read window only applies to the actual
+  ~12 MB FITS upload that needs it. Other crowdsky calls fail fast
+  again on hangs.
+
 ## v0.4.1 — 2026-05-02
 
 ### Bug fixes

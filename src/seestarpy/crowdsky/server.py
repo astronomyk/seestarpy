@@ -88,14 +88,13 @@ def _get_auth():
 def _request(method, endpoint, **kwargs):
     """Send an authenticated request to the CrowdSky API.
 
-    Injects HTTP Basic Auth, prepends BASE_URL, applies (30 s connect,
-    300 s read) timeouts, and translates 401 responses into a clear
-    RuntimeError. The long read timeout accommodates ~12 MB stack
-    uploads over slow / long-haul uplinks (e.g. AU residential →
-    crowdsky.univie.ac.at, where 30 s was insufficient).
+    Injects HTTP Basic Auth, prepends BASE_URL, sets a 30 s default
+    timeout, and translates 401 responses into a clear RuntimeError.
+    Callers that need a longer window (e.g. large uploads) should
+    override by passing ``timeout=...`` explicitly.
     """
     url = f"{BASE_URL}{endpoint}"
-    kwargs.setdefault("timeout", (30, 300))
+    kwargs.setdefault("timeout", 30)
     kwargs["auth"] = _get_auth()
 
     resp = requests.request(method, url, **kwargs)
@@ -184,7 +183,11 @@ def upload_stack(fits_path, thumbnail=None, n_frames_input=None,
     if scrub_location is not None:
         data["scrub_location"] = str(scrub_location)
 
-    resp = _request("POST", "/api/upload_stack.php", files=files, data=data)
+    # Long read timeout: ~12 MB FITS uploads over slow / long-haul
+    # uplinks (e.g. AU residential → crowdsky.univie.ac.at) routinely
+    # need more than the 30 s default.
+    resp = _request("POST", "/api/upload_stack.php",
+                    files=files, data=data, timeout=(30, 300))
     return resp.json()
 
 
