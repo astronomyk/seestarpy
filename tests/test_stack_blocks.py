@@ -495,4 +495,5 @@ class TestStackAll:
 
         mock_stack.assert_called_once_with(
             "M 42", block_minutes=30, min_exptime=120, dry_run=True,
+            max_wait_sec=3600,
         )
