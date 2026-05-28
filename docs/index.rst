@@ -10,37 +10,40 @@ Welcome to SeeStar-Py's Documentation!
 
    **Firmware 7.18+ requires authentication.**
 
-   Yet again, ZWO is trying to alienate the astro-tinkerer community.
-
-   The reason a lot of us chose the Seestars over the competitor smart-telescopes
-   was due to the ability to be able to access and control the seestars in ways
-   that ZWO does not offer via their own software. This "open-source" feature
-   was one of the **Seestar's greatest USPs** and, if embraced properly, would allow
-   **the Seestar user community to leverage their endless creativity to come up
-   with project beyond the wildest imagination of the corporate heads at ZWO**.
-
-   Alas, **ZWO's greed is shutting down this effort before it really had a chance
-   to grow**, turning what could have been a real game-changer smart-telescope
-   into just another piece of consumer electronics that will be surpassed by
-   other superior products.
-
-   If your Seestar is running firmware 7.18 or later, seestarpy will not
-   be able to connect without a key file.  The ``main``
-   branch now ships a built-in extractor: obtain the official ZWO Seestar
-   Android APK yourself (e.g. from an APK mirror) and run::
-
-      python -m seestarpy.extract_pem /path/to/Seestar_v3.1.2.apk
-
-   The key is written to ``~/.seestarpy/seestar.pem`` where seestarpy
-   auto-discovers it on every connection.  See :doc:`info/authentication`
-   for the full setup and the legal basis for interoperability.
+   See :doc:`info/authentication` for more details and the legal basis for
+   interoperability.
 
 .. image:: https://img.shields.io/pypi/v/seestarpy
    :alt: PyPI Version
    :target: https://pypi.org/project/seestarpy/
 
+..
+    Yet again, ZWO is trying to alienate the astro-tinkerer community.
 
-**seestarpy** is a Python SDK for controlling ZWO Seestar S50 smart
+    The reason a lot of us chose the Seestars over the competitor smart-telescopes
+    was due to the ability to be able to access and control the seestars in ways
+    that ZWO does not offer via their own software. This "open-source" feature
+    was one of the **Seestar's greatest USPs** and, if embraced properly, would allow
+    **the Seestar user community to leverage their endless creativity to come up
+    with project beyond the wildest imagination of the corporate heads at ZWO**.
+
+    Alas, **ZWO's greed is shutting down this effort before it really had a chance
+    to grow**, turning what could have been a real game-changer smart-telescope
+    into just another piece of consumer electronics that will be surpassed by
+    other superior products.
+
+    If your Seestar is running firmware 7.18 or later, seestarpy will not
+    be able to connect without a key file.  The ``main``
+    branch now ships a built-in extractor: obtain the official ZWO Seestar
+    Android APK yourself (e.g. from an APK mirror) and run::
+
+      python -m seestarpy.extract_pem /path/to/Seestar_v3.1.2.apk
+
+    The key is written to ``~/.seestarpy/seestar.pem`` where seestarpy
+    auto-discovers it on every connection.
+
+
+**seestarpy** is a Python SDK for driving ZWO Seestar smart
 telescopes over your local network.  It wraps the Seestar's JSON-RPC
 command interface and binary image streaming protocol into a clean
 Python API — no phone app required.
