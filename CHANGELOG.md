@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Bug fixes — CrowdSky output rename
+
+- **`crowdsky._rename_output`** — No longer fails silently. The
+  idempotency-critical ``.fit`` rename is attempted first and treated as
+  fatal on failure (returns ``None`` and warns that the block is *not*
+  covered and will be re-stacked), while ``.jpg`` / ``_thn.jpg`` companions
+  are now best-effort: a missing companion no longer aborts the whole
+  rename and undoes a good ``.fit`` rename. SMB-connect failures and the
+  ``HP000000`` HEALPix placeholder (from an unreadable RA/Dec header) now
+  emit explicit warnings. `stack_blocks` records a ``rename_failed`` flag in
+  each completed block's result.
+- **`crowdsky._read_fits_ra_dec`** — Reads 8 FITS header blocks (23040 B)
+  instead of 2, so RA/Dec parsing is robust to larger headers.
+
 ### Bug fixes — firmware v7.75 onboard stacking
 
 - **`stack.set_batch_stack_setting`** — Firmware v7.75 no longer resolves
