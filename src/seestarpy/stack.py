@@ -38,8 +38,19 @@ def set_batch_stack_setting(path, files):
     This must be called before :func:`start_batch_stack`.  The files
     are FITS sub-frames stored on the Seestar's SD card.
 
-    .. note:: Confirmed via traffic capture from the official Seestar app
-       v3.0.2 on 2026-02-24.
+    .. note:: Firmware v7.75 requires each file entry to carry a **full
+       relative path from the SD-card root** (e.g.
+       ``"MyWorks/M 101_sub/Light_M 101_10.0s_LP_....fit"``).  Passing a
+       bare filename makes the firmware fail immediately with
+       ``state="fail"``, ``error="no image"``, ``code=267``.  This
+       function therefore prefixes bare filenames with *path*
+       automatically; entries that already contain a ``/`` are sent
+       unchanged.  Method name and ``params`` shape are unchanged from
+       v3.0.2 — only the file-name resolution changed.
+
+       Confirmed via traffic capture from the official Seestar app v3.0.2
+       on 2026-02-24; full-path requirement confirmed live on firmware
+       v7.75 (Seestar S30 Pro) on 2026-06-15.
 
     Parameters
     ----------
@@ -47,9 +58,10 @@ def set_batch_stack_setting(path, files):
         Folder on the Seestar containing the sub-frames, e.g.
         ``"MyWorks/M 101_sub"``.  Use forward slashes.
     files : list[str]
-        List of FITS filenames to stack.  Each filename follows the
-        Seestar naming convention:
-        ``Light_<target>_<exposure>_<filter>_<YYYYMMDD>-<HHMMSS>.fit``
+        List of FITS sub-frames to stack.  Pass bare filenames
+        (``Light_<target>_<exposure>_<filter>_<YYYYMMDD>-<HHMMSS>.fit``)
+        and they are prefixed with *path* automatically, or pass full
+        relative paths and they are sent unchanged.
 
     Returns
     -------
@@ -74,7 +86,9 @@ def set_batch_stack_setting(path, files):
         'method': 'set_batch_stack_setting',
         'params': {
             'path': path,
-            'files': [{'name': f} for f in files],
+            'files': [
+                {'name': f if '/' in f else f'{path}/{f}'} for f in files
+            ],
         },
     }
     return send_command(params)
@@ -142,8 +156,12 @@ def clear_batch_stack():
     The official app sends this as ``clear_app_state`` with
     ``{"name": "BatchStack"}`` after a batch stack finishes.
 
-    .. note:: Confirmed via traffic capture from the official Seestar app
-       v3.0.2 on 2026-02-24.
+    .. note:: Firmware v7.75 exposes ``clear_batch_stack`` as a direct
+       JSON-RPC method (confirmed live on a Seestar S30 Pro on
+       2026-06-15; returns ``code=0``).  This function calls it directly
+       and falls back to the older ``clear_app_state`` approach if the
+       firmware does not recognise the method (``code=103``), so it works
+       on both old and new firmware.
 
     Returns
     -------
@@ -157,8 +175,12 @@ def clear_batch_stack():
         >>> stack.clear_batch_stack()
 
     """
-    params = {'method': 'clear_app_state', 'params': {'name': 'BatchStack'}}
-    return send_command(params)
+    resp = send_command({'method': 'clear_batch_stack'})
+    if isinstance(resp, dict) and resp.get('code') == 103:
+        resp = send_command(
+            {'method': 'clear_app_state', 'params': {'name': 'BatchStack'}}
+        )
+    return resp
 
 
 @multiple_ips

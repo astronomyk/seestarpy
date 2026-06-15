@@ -185,3 +185,21 @@ class TestAuthenticate:
         assert auth.authenticate(sock, key_path=tmp_key) is True
         captured = capsys.readouterr()
         assert "WARNING" in captured.out
+
+    def test_handshake_skips_interleaved_events(self, tmp_key):
+        """Events interleaved on the socket must not be parsed as replies.
+
+        Firmware v7.75 streams unsolicited events (``PiStatus`` etc.) onto
+        the command socket, especially while a batch stack is running.  The
+        handshake must match replies by ``id`` and skip events, otherwise it
+        intermittently fails with ``code=None`` (observed live).
+        """
+        sock = _make_mock_socket([
+            {"Event": "PiStatus", "temp": 39.4},               # noise
+            {"id": 1001, "code": 0, "result": {"str": "chal"}},  # real reply
+            {"Event": "temp", "value": 38.9},                  # noise
+            {"id": 1002, "code": 0, "result": 0},              # real reply
+            {"Event": "PiStatus", "temp": 39.5},               # noise
+            {"id": 1003, "code": 0, "result": True},           # real reply
+        ])
+        assert auth.authenticate(sock, key_path=tmp_key) is True

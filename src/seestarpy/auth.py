@@ -177,25 +177,56 @@ _ID_PI_VERIFIED = 1003
 
 
 def _send_recv(sock, msg):
-    """Send a JSON-RPC message and read one ``\\r\\n``-terminated response."""
+    """Send a JSON-RPC message and read the reply whose ``id`` matches.
+
+    The Seestar interleaves unsolicited events (``PiStatus``, ``temp``, …)
+    onto the same socket, so the first ``\\r\\n``-terminated frame after a
+    command is not necessarily its reply.  This is especially common while
+    a batch stack is running and the device emits a steady stream of status
+    events.  We therefore read frames until one carries the same ``id`` we
+    sent, skipping events and any stale frames in between.  Without this,
+    the handshake intermittently parses an event as the ``verify_client``
+    reply and fails with ``code=None`` (observed live on firmware v7.75).
+    """
+    want = msg.get("id")
     payload = json.dumps(msg) + "\r\n"
     sock.sendall(payload.encode())
     buf = ""
-    while "\r\n" not in buf:
-        chunk = sock.recv(4096).decode("utf-8")
-        if not chunk:
-            raise ConnectionError("Connection closed during auth handshake")
-        buf += chunk
-    return json.loads(buf.split("\r\n")[0])
+    while True:
+        while "\r\n" not in buf:
+            chunk = sock.recv(4096).decode("utf-8")
+            if not chunk:
+                raise ConnectionError("Connection closed during auth handshake")
+            buf += chunk
+        line, buf = buf.split("\r\n", 1)
+        if not line:
+            continue
+        try:
+            frame = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if want is None or (isinstance(frame, dict) and frame.get("id") == want):
+            return frame
+        # else: interleaved event or unrelated frame — keep reading
 
 
 async def _async_send_recv(reader, writer, msg):
-    """Async version of :func:`_send_recv`."""
+    """Async version of :func:`_send_recv` that also matches on ``id``."""
+    want = msg.get("id")
     payload = json.dumps(msg) + "\r\n"
     writer.write(payload.encode())
     await writer.drain()
-    line = await reader.readuntil(separator=b"\r\n")
-    return json.loads(line.decode().strip())
+    while True:
+        line = await reader.readuntil(separator=b"\r\n")
+        text = line.decode().strip()
+        if not text:
+            continue
+        try:
+            frame = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if want is None or (isinstance(frame, dict) and frame.get("id") == want):
+            return frame
 
 
 # ── Authentication handshake ─────────────────────────────────────────────────
@@ -291,10 +322,19 @@ def authenticate(sock, key_path=None):
     if key_path is None:
         return True  # no key configured — skip auth
 
+    # Guard against a never-arriving reply (the id-matching loop in
+    # _send_recv would otherwise block forever on a quiet socket).
+    prev_timeout = sock.gettimeout()
+    if prev_timeout is None:
+        sock.settimeout(15)
+
     def send_recv(msg):
         return _send_recv(sock, msg)
 
-    return _run_handshake(send_recv, key_path)
+    try:
+        return _run_handshake(send_recv, key_path)
+    finally:
+        sock.settimeout(prev_timeout)
 
 
 async def authenticate_async(reader, writer, key_path=None):

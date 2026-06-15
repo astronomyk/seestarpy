@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Bug fixes — firmware v7.75 onboard stacking
+
+- **`stack.set_batch_stack_setting`** — Firmware v7.75 no longer resolves
+  bare sub-frame filenames; it requires each ``files`` entry's ``name`` to
+  be a **full relative path from the SD-card root** (e.g.
+  ``"MyWorks/NGC 7000_sub/Light_....fit"``). Bare names made the firmware
+  fail instantly with ``state="fail"``, ``error="no image"``, ``code=267``.
+  Bare filenames are now prefixed with ``path`` automatically; entries that
+  already contain a ``/`` are sent unchanged, so callers don't have to
+  change. The JSON-RPC method name and ``params`` shape are unchanged from
+  v3.0.2 — only the file-name resolution changed. Confirmed live on a
+  Seestar S30 Pro (firmware 7.75) on 2026-06-15.
+- **`stack.clear_batch_stack`** — Now calls the firmware's direct
+  ``clear_batch_stack`` JSON-RPC method (present and returning ``code=0``
+  on v7.75), falling back to the legacy ``clear_app_state`` /
+  ``{"name": "BatchStack"}`` approach if the firmware returns ``code=103``.
+- **`auth` handshake** — The challenge/response reader now matches replies
+  by JSON-RPC ``id`` and skips interleaved unsolicited events
+  (``PiStatus``, ``temp``, …). Previously the first ``\r\n`` frame after a
+  command was assumed to be its reply, so events streamed during an active
+  batch stack were occasionally parsed as the ``verify_client`` reply,
+  causing intermittent ``AuthenticationError (code=None)`` failures while
+  polling stack progress.
+- **`crowdsky.stack_blocks` / `stack_all`** — Hardened the per-block loop:
+  clears stale ``BatchStack`` state before configuring, checks the
+  ``start_batch_stack`` response code, surfaces the firmware error string
+  on failure, handles unexpected states, and adds a ``max_wait_sec``
+  (default 3600 s) timeout so a wedged block can no longer hang the run.
+
 ## v0.4.2 — 2026-05-04
 
 ### Bug fixes / behaviour

@@ -401,7 +401,8 @@ def find_unstacked_blocks(target, block_minutes=15):
 
 
 @multiple_ips
-def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False):
+def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False,
+                 max_wait_sec=3600):
     """Find and batch-stack all unstacked time blocks for a target.
 
     This is the main CrowdSky orchestrator.  It discovers unstacked
@@ -424,6 +425,9 @@ def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False):
         in seconds for a block to be worth stacking.  Default 240.
     dry_run : bool
         If ``True``, print what would be stacked without actually doing it.
+    max_wait_sec : float
+        Maximum seconds to wait for a single block to finish stacking
+        before treating it as a failure.  Default 3600.
 
     Returns
     -------
@@ -493,11 +497,31 @@ def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False):
             f"{block['exposure']} {block['filter']})..."
         )
 
+        # Clear any stale BatchStack state left by a previous run before
+        # configuring this block (the firmware keeps the last result until
+        # explicitly cleared, which can confuse the poll loop below).
+        clear_batch_stack()
         set_batch_stack_setting(f"MyWorks/{target}_sub", block["files"])
-        start_batch_stack()
+        resp = start_batch_stack()
+        if isinstance(resp, dict) and resp.get('code', 0) != 0:
+            print(
+                f"  start_batch_stack failed: code={resp.get('code')}, "
+                f"error={resp.get('error')} — skipping block"
+            )
+            clear_batch_stack()
+            summary["blocks_failed"] += 1
+            summary["results"].append({
+                "block_start": block["block_start"],
+                "block_end": block["block_end"],
+                "exposure": block["exposure"],
+                "filter": block["filter"],
+                "status": "error",
+            })
+            continue
 
-        # Poll until terminal state
-        while True:
+        # Poll until terminal state or timeout
+        deadline = time.monotonic() + max_wait_sec
+        while time.monotonic() < deadline:
             time.sleep(3)
             status = get_batch_stack_status()
             if status is None:
@@ -527,7 +551,22 @@ def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False):
                 })
                 break
             elif state in ("fail", "cancel"):
-                print(f"  {state.title()}: block {start}-{end}")
+                err = status.get("error")
+                detail = f" ({err})" if err else ""
+                print(f"  {state.title()}: block {start}-{end}{detail}")
+                clear_batch_stack()
+                summary["blocks_failed"] += 1
+                summary["results"].append({
+                    "block_start": block["block_start"],
+                    "block_end": block["block_end"],
+                    "exposure": block["exposure"],
+                    "filter": block["filter"],
+                    "status": state,
+                    "error": err,
+                })
+                break
+            elif state not in ("working", ""):
+                print(f"  Unexpected state {state!r}: block {start}-{end}")
                 clear_batch_stack()
                 summary["blocks_failed"] += 1
                 summary["results"].append({
@@ -538,6 +577,18 @@ def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False):
                     "status": state,
                 })
                 break
+        else:
+            elapsed = round(max_wait_sec / 60, 1)
+            print(f"  Timed out after {elapsed} min: block {start}-{end}")
+            clear_batch_stack()
+            summary["blocks_failed"] += 1
+            summary["results"].append({
+                "block_start": block["block_start"],
+                "block_end": block["block_end"],
+                "exposure": block["exposure"],
+                "filter": block["filter"],
+                "status": "timeout",
+            })
 
     return summary
 
@@ -585,7 +636,8 @@ def list_targets():
 
 
 @multiple_ips
-def stack_all(block_minutes=15, min_exptime=240, dry_run=False):
+def stack_all(block_minutes=15, min_exptime=240, dry_run=False,
+              max_wait_sec=3600):
     """Find and batch-stack all unstacked time blocks for every target.
 
     Discovers targets via :func:`list_targets`, then calls
@@ -600,6 +652,9 @@ def stack_all(block_minutes=15, min_exptime=240, dry_run=False):
         Minimum total effective exposure in seconds.  Default 240.
     dry_run : bool
         If ``True``, preview what would be stacked without doing it.
+    max_wait_sec : float
+        Maximum seconds to wait per block.  Passed to :func:`stack_blocks`.
+        Default 3600.
 
     Returns
     -------
@@ -642,6 +697,7 @@ def stack_all(block_minutes=15, min_exptime=240, dry_run=False):
                 block_minutes=block_minutes,
                 min_exptime=min_exptime,
                 dry_run=dry_run,
+                max_wait_sec=max_wait_sec,
             )
         except Exception as exc:
             print(f"  Error: {exc}")
