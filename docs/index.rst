@@ -13,6 +13,21 @@ Welcome to SeeStar-Py's Documentation!
    See :doc:`info/authentication` for more details and the legal basis for
    interoperability.
 
+.. important::
+
+   **Version compatibility.**  seestarpy **0.5.0+** targets the **Seestar
+   app v3.2.0 / firmware v7.75** generation.  The onboard batch-stacking
+   workflow (:mod:`~seestarpy.stack`, :mod:`~seestarpy.crowdsky`) sends
+   sub-frame paths in the form firmware v7.75 requires; on **earlier
+   firmware that format is not guaranteed to work**.
+
+   If your Seestar runs firmware **earlier than v7.75** (app < v3.2.0),
+   install a previous release instead:
+
+   .. code-block:: bash
+
+      pip install "seestarpy<0.5"
+
 .. image:: https://img.shields.io/pypi/v/seestarpy
    :alt: PyPI Version
    :target: https://pypi.org/project/seestarpy/

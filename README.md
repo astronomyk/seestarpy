@@ -6,6 +6,20 @@ This package is on ReadTheDocs. See [seestarpy.readthedocs.io](https://seestarpy
 If you've found the package useful - how about [buying me a coffee](https://buymeacoffee.com/kdleschinsf), to keep the creative juices flowing ;)
 
 
+> **Version compatibility**
+>
+> seestarpy **0.5.0+** targets the **Seestar app v3.2.0 / firmware v7.75**
+> generation. The onboard batch-stacking workflow (`stack`, `crowdsky`)
+> sends sub-frame paths in the form firmware v7.75 requires; on earlier
+> firmware that format is not guaranteed to work.
+>
+> If your Seestar runs firmware **earlier than v7.75** (app < v3.2.0),
+> install a previous release instead: `pip install "seestarpy<0.5"`.
+>
+> Firmware 7.18+ also requires authentication — see the
+> [authentication docs](https://seestarpy.readthedocs.io/en/latest/info/authentication.html).
+
+
 Quickstart
 ----------
 Install `seestarpy` using pip:

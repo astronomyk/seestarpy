@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.5.0 — 2026-06-16
+
+> **Compatibility:** this release targets the **Seestar app v3.2.0 /
+> firmware v7.75** generation. The onboard batch-stacking workflow
+> (`stack`, `crowdsky`) now sends sub-frame paths in the form v7.75
+> requires; on earlier firmware that path format is not guaranteed to work.
+> **If your Seestar runs firmware earlier than v7.75 (app < v3.2.0), pin a
+> previous seestarpy release** (e.g. `pip install "seestarpy<0.5"`).
+> Firmware 7.18+ authentication (a signing key) is still required.
 
 ### Connection / session layer
 
