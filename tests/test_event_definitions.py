@@ -1,5 +1,8 @@
 import json
+import os
+
 import pytest
+
 from src.seestarpy.events import event_definitions as ed
 
 # Sample log lines from user input (stringified for test simulation)
@@ -26,8 +29,14 @@ TEST_LOG_LINES = [
     '{"event": "View", "state": "working", "lapse_ms": 0, "mode": "star", "cam_id": 0, "target_ra_dec": [12.0, 70.0], "target_name": "Servus", "lp_filter": false, "gain": 80, "route": []}',
     '{"event": "WheelMove", "state": "start"}'
 ]
-with open("event_output_20250722.dat") as f:
-    TEST_LOG_LINES = [s.strip() for s in f.readlines()]
+# Prefer the captured event log next to this test file, if present.  Resolve
+# the path relative to __file__ (not the process cwd) so collection works no
+# matter which directory pytest is launched from; fall back to the inline
+# sample lines above when the data file is absent.
+_DATA_FILE = os.path.join(os.path.dirname(__file__), "event_output_20250722.dat")
+if os.path.isfile(_DATA_FILE):
+    with open(_DATA_FILE) as f:
+        TEST_LOG_LINES = [s.strip() for s in f.readlines() if s.strip()]
 
 
 @pytest.mark.parametrize("json_str", TEST_LOG_LINES)
