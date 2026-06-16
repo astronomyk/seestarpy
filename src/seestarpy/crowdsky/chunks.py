@@ -134,7 +134,7 @@ def _read_fits_ra_dec(remote_path):
         from .. import connection
 
         path = urllib.parse.quote(remote_path, safe="/")
-        url = f"http://{connection.DEFAULT_IP}/{path}"
+        url = f"http://{connection.current_ip()}/{path}"
         req = urllib.request.Request(url, headers={"Range": "bytes=0-23039"})
         resp = urllib.request.urlopen(req, timeout=10)
         header_bytes = resp.read().decode("ascii", errors="replace")
