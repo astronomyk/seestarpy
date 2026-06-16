@@ -116,22 +116,26 @@ def _floor_to_block(dt, block_minutes):
 def _read_fits_ra_dec(remote_path):
     """Read RA/Dec from a FITS header on the Seestar via HTTP Range request.
 
-    Fetches the first 5760 bytes (two FITS header blocks of 2880 bytes each)
-    and parses 80-byte FITS cards for ``RA`` and ``DEC`` keywords.
+    Fetches the first 8 FITS header blocks (23040 bytes = 8 × 2880) and
+    parses 80-byte FITS cards for ``RA`` and ``DEC`` keywords.  Eight blocks
+    comfortably cover the Seestar's stack headers even if a future firmware
+    grows them past the two blocks the original implementation read.
 
     Parameters
     ----------
     remote_path : str
         Path relative to the HTTP root, e.g. ``"MyWorks/M 81/file.fit"``.
 
-    Returns ``(ra_deg, dec_deg)`` or ``(None, None)`` on failure.
+    Returns ``(ra_deg, dec_deg)`` or ``(None, None)`` on failure.  Callers
+    are expected to warn on the ``(None, None)`` case rather than silently
+    accepting the placeholder HEALPix pixel it implies.
     """
     try:
         from .. import connection
 
         path = urllib.parse.quote(remote_path, safe="/")
         url = f"http://{connection.DEFAULT_IP}/{path}"
-        req = urllib.request.Request(url, headers={"Range": "bytes=0-5759"})
+        req = urllib.request.Request(url, headers={"Range": "bytes=0-23039"})
         resp = urllib.request.urlopen(req, timeout=10)
         header_bytes = resp.read().decode("ascii", errors="replace")
         ra = dec = None
@@ -184,21 +188,34 @@ _compute_chunk_key = compute_chunk_key
 def _rename_output(target, block, status):
     """Rename a DSO_Stacked output to CrowdSky format with block metadata.
 
-    Renames all three companion files (``.fit``, ``.jpg``, ``_thn.jpg``)
+    Renames the ``.fit`` output (and its ``.jpg`` / ``_thn.jpg`` companions)
     produced by the batch stacker.  The CrowdSky filename encodes the
-    block-start timestamp and filter so that :func:`find_unstacked_blocks`
-    can do exact coverage matching.
+    block-start timestamp, filter and HEALPix pixel so that
+    :func:`find_unstacked_blocks` can do exact coverage matching.
+
+    The ``.fit`` rename is the one that matters for idempotency: coverage
+    detection only recognises ``CrowdSky_*`` files, so if the ``.fit`` is
+    left as ``DSO_Stacked_*`` the block looks unstacked and gets re-stacked
+    on the next run.  This function therefore renames the ``.fit`` first and
+    treats a failure there as fatal (returns ``None``), while tolerating
+    missing/failed ``.jpg`` and ``_thn.jpg`` companions (which only affect
+    previews).  Every failure path emits a warning instead of failing
+    silently.
 
     Returns the new ``.fit`` filename on success, or ``None`` on failure.
     """
     output_file = status.get("output_file", {})
     files = output_file.get("files", [])
     if not files:
+        print("  WARNING: stack completed but firmware reported no "
+              "output_file — cannot rename to CrowdSky_*.")
         return None
 
     # Find the .fit output
     old_names = [f["name"] for f in files if f["name"].endswith(".fit")]
     if not old_names:
+        print("  WARNING: no .fit in the stack output — cannot rename to "
+              "CrowdSky_*.")
         return None
     old_fit = old_names[0]
 
@@ -209,30 +226,58 @@ def _rename_output(target, block, status):
     old_stem = old_fit.removesuffix(".fit")
     folder = f"MyWorks/{target}"
 
+    # Read RA/Dec via HTTP Range request (no SMB needed).  A miss only
+    # downgrades the cosmetic HEALPix pixel to the HP000000 placeholder;
+    # warn so the placeholder isn't mistaken for a real pixel.
+    ra, dec = _read_fits_ra_dec(f"{folder}/{old_fit}")
+    if ra is None or dec is None:
+        print(f"  WARNING: could not read RA/Dec from {old_fit}; "
+              f"using placeholder HEALPix pixel HP000000.")
+    chunk_key = compute_chunk_key(block["block_start"], ra, dec)
+
+    new_stem = (
+        f"CrowdSky_{frame_count}_{target}_{block['exposure']}"
+        f"_{block['filter']}_{chunk_key}"
+    )
+
     try:
-        # Read RA/Dec via HTTP Range request (no SMB needed)
-        ra, dec = _read_fits_ra_dec(f"{folder}/{old_fit}")
-        chunk_key = compute_chunk_key(block["block_start"], ra, dec)
-
-        new_stem = (
-            f"CrowdSky_{frame_count}_{target}_{block['exposure']}"
-            f"_{block['filter']}_{chunk_key}"
-        )
-
-        # SMB connection only needed for the rename operation
         conn = data._connect_smb()
+    except Exception as exc:
+        print(f"  WARNING: SMB connect failed ({exc}); output left as "
+              f"{old_fit} and this block will be re-stacked next run.")
+        return None
+
+    try:
+        # Critical: rename the .fit first.  If this fails the block is not
+        # idempotently covered, so report it loudly and bail.
         try:
-            for ext in (".fit", ".jpg", "_thn.jpg"):
+            conn.rename(
+                data.SHARE_NAME,
+                f"{folder}/{old_stem}.fit",
+                f"{folder}/{new_stem}.fit",
+            )
+        except Exception as exc:
+            print(f"  WARNING: failed to rename {old_fit} -> "
+                  f"{new_stem}.fit ({exc}); output left as DSO_Stacked_* "
+                  f"and this block will be re-stacked next run.")
+            return None
+
+        # Companions are best-effort: a missing .jpg/_thn.jpg is normal and
+        # must not undo the successful .fit rename.
+        for ext in (".jpg", "_thn.jpg"):
+            try:
                 conn.rename(
                     data.SHARE_NAME,
                     f"{folder}/{old_stem}{ext}",
                     f"{folder}/{new_stem}{ext}",
                 )
-        finally:
-            conn.close()
-        return f"{new_stem}.fit"
-    except Exception:
-        return None
+            except Exception as exc:
+                print(f"  Note: companion {old_stem}{ext} not renamed "
+                      f"({exc}).")
+    finally:
+        conn.close()
+
+    return f"{new_stem}.fit"
 
 
 def group_frames_into_blocks(parsed_frames, block_minutes=15):
@@ -537,6 +582,10 @@ def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False,
                 )
                 if out_name:
                     print(f"  Renamed -> {out_name}")
+                else:
+                    print("  WARNING: rename to CrowdSky_* failed — output "
+                          "left as DSO_Stacked_*; this block is NOT covered "
+                          "and will be re-stacked on the next run.")
 
                 clear_batch_stack()
                 summary["blocks_stacked"] += 1
@@ -548,6 +597,7 @@ def stack_blocks(target, block_minutes=15, min_exptime=240, dry_run=False,
                     "status": "complete",
                     "frames": status.get("stacked_img"),
                     "output_file": out_name,
+                    "rename_failed": out_name is None,
                 })
                 break
             elif state in ("fail", "cancel"):
