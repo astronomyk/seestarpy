@@ -151,6 +151,7 @@ Contents
    :caption: Reference
 
    info/authentication
+   info/connection_framework
    info/errors
    info/image_stream_protocol
    api/api_index
