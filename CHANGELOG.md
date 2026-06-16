@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Connection / session layer
+
+- **`connection.multiple_ips`** — No longer mutates the shared module
+  global ``DEFAULT_IP`` to retarget calls. Concurrent broadcasts to
+  multiple Seestars previously raced on that global, so a command could be
+  sent to the wrong scope. Each worker now sets a per-thread active IP
+  (``connection.current_ip()``), and nested decorated calls inherit the
+  outer scope instead of snapping back to ``DEFAULT_IP``.
+- **`connection.send_command`** — Reuses one persistent, authenticated TCP
+  connection per Seestar (``_Connection`` pool) instead of opening a fresh
+  socket and re-running the firmware 7.18+ RSA handshake on every call. A
+  long polling loop (e.g. `stack_blocks`) now authenticates once rather
+  than once per poll. Drops are detected and the next call reconnects,
+  re-authenticates and retries once; ``close_connections()`` (also run at
+  interpreter exit) tears the pool down. Toggle with
+  ``connection.PERSIST_CONNECTIONS``.
+- **`data._connect_smb` / `data._build_http_url` / `crowdsky._read_fits_ra_dec`**
+  — Resolve the target host via ``connection.current_ip()`` so multi-IP
+  broadcasts address the right Seestar.
+- **`auth`** — Clearer ``AuthenticationError`` message: a rejected
+  ``verify_client`` now means the signature didn't match this firmware
+  (re-extract the key), not the previously-implied "code=None" case that
+  the id-matching handshake fix already eliminated.
+
 ### Bug fixes — firmware v7.75 onboard stacking
 
 - **`stack.set_batch_stack_setting`** — Firmware v7.75 no longer resolves

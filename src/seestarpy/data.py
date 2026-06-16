@@ -25,8 +25,8 @@ def _connect_smb() -> SMBConnection:
     """
     Create and return an SMBConnection using direct TCP (port 445).
 
-    Uses the module-level :data:`connection.DEFAULT_IP`, which the
-    :func:`~connection.multiple_ips` decorator swaps per-thread.
+    Uses :func:`connection.current_ip`, which the
+    :func:`~connection.multiple_ips` decorator sets per worker thread.
 
     Returns
     -------
@@ -38,7 +38,7 @@ def _connect_smb() -> SMBConnection:
     ConnectionError
         If the connection to the Seestar fails.
     """
-    ip = connection.DEFAULT_IP
+    ip = connection.current_ip()
     conn = SMBConnection(
         username='',
         password='',
@@ -299,7 +299,7 @@ def _build_http_url(remote_path):
         Full URL like ``"http://192.168.1.246/MyWorks/M%2081/file.fit"``.
     """
     path = urllib.parse.quote(remote_path, safe="/")
-    return f"http://{connection.DEFAULT_IP}/{path}"
+    return f"http://{connection.current_ip()}/{path}"
 
 
 @multiple_ips

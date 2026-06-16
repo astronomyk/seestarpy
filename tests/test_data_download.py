@@ -12,13 +12,13 @@ from seestarpy.data import _build_http_url, delete_files, download_file
 class TestBuildHttpUrl:
     @patch("seestarpy.data.connection")
     def test_simple_path(self, mock_conn):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         url = _build_http_url("MyWorks/Lunar/thumb.jpg")
         assert url == "http://192.168.1.246/MyWorks/Lunar/thumb.jpg"
 
     @patch("seestarpy.data.connection")
     def test_spaces_encoded(self, mock_conn):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         url = _build_http_url("MyWorks/M 81/DSO_Stacked_3_M 81_20.0s_20260227_225203.fit")
         assert url == (
             "http://192.168.1.246/MyWorks/M%2081/"
@@ -27,7 +27,7 @@ class TestBuildHttpUrl:
 
     @patch("seestarpy.data.connection")
     def test_slashes_preserved(self, mock_conn):
-        mock_conn.DEFAULT_IP = "10.0.0.1"
+        mock_conn.current_ip.return_value = "10.0.0.1"
         url = _build_http_url("MyWorks/a/b/c.fit")
         assert "MyWorks/a/b/c.fit" in url
 
@@ -36,7 +36,7 @@ class TestDownloadFile:
     @patch("seestarpy.data.connection")
     @patch("seestarpy.data.urllib.request.urlopen")
     def test_downloads_file(self, mock_urlopen, mock_conn, tmp_path):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         content = b"SIMPLE  = T" + b"\x00" * 1000
         mock_resp = MagicMock()
         mock_resp.read.side_effect = [content, b""]
@@ -53,7 +53,7 @@ class TestDownloadFile:
     @patch("seestarpy.data.connection")
     @patch("seestarpy.data.urllib.request.urlopen")
     def test_url_has_correct_path(self, mock_urlopen, mock_conn, tmp_path):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         mock_resp = MagicMock()
         mock_resp.read.side_effect = [b"data", b""]
         mock_urlopen.return_value = mock_resp
@@ -67,7 +67,7 @@ class TestDownloadFile:
     @patch("seestarpy.data.connection")
     @patch("seestarpy.data.urllib.request.urlopen")
     def test_404_raises_file_not_found(self, mock_urlopen, mock_conn, tmp_path):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         import urllib.error
 
         mock_urlopen.side_effect = urllib.error.HTTPError(
@@ -80,7 +80,7 @@ class TestDownloadFile:
     @patch("seestarpy.data.connection")
     @patch("seestarpy.data.urllib.request.urlopen")
     def test_500_raises_connection_error(self, mock_urlopen, mock_conn, tmp_path):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         import urllib.error
 
         mock_urlopen.side_effect = urllib.error.HTTPError(
@@ -93,7 +93,7 @@ class TestDownloadFile:
     @patch("seestarpy.data.connection")
     @patch("seestarpy.data.urllib.request.urlopen")
     def test_unreachable_raises_connection_error(self, mock_urlopen, mock_conn, tmp_path):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         import urllib.error
 
         mock_urlopen.side_effect = urllib.error.URLError("timed out")
@@ -104,7 +104,7 @@ class TestDownloadFile:
     @patch("seestarpy.data.connection")
     @patch("seestarpy.data.urllib.request.urlopen")
     def test_creates_dest_directory(self, mock_urlopen, mock_conn, tmp_path):
-        mock_conn.DEFAULT_IP = "192.168.1.246"
+        mock_conn.current_ip.return_value = "192.168.1.246"
         mock_resp = MagicMock()
         mock_resp.read.side_effect = [b"x", b""]
         mock_urlopen.return_value = mock_resp
