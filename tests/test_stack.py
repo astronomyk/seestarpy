@@ -1,9 +1,10 @@
 """Unit tests for the batch-stack JSON-RPC wrappers in stack.py.
 
-These assert the exact payload shape sent to the firmware, in particular the
-firmware v7.75 requirement that each file entry carries a full relative path
-from the SD-card root (bare filenames make the firmware fail with
-``state="fail"``, ``error="no image"``, ``code=267``).
+These assert the exact payload shape sent to the firmware.  The required
+sub-frame name format is firmware dependent: firmware ≥ 7.75
+(``firmware_ver_int`` ≥ 2775) needs a full relative path from the SD-card
+root, while older firmware needs bare filenames (full paths make older
+firmware fail with ``state="fail"``, ``error="no image"``, ``code=267``).
 """
 
 from unittest.mock import patch
@@ -12,9 +13,10 @@ from seestarpy import stack
 
 
 class TestSetBatchStackSetting:
+    @patch("seestarpy.stack._firmware_ver_int", return_value=2775)
     @patch("seestarpy.stack.send_command")
-    def test_bare_filenames_get_full_path(self, mock_send):
-        """Bare filenames are prefixed with *path* (v7.75 requirement)."""
+    def test_bare_filenames_get_full_path_on_new_fw(self, mock_send, _fw):
+        """Firmware ≥ 7.75: bare filenames are prefixed with *path*."""
         stack.set_batch_stack_setting(
             "MyWorks/NGC 7000_sub",
             [
@@ -31,16 +33,54 @@ class TestSetBatchStackSetting:
             "MyWorks/NGC 7000_sub/Light_NGC 7000_20.0s_IRCUT_20260613-225644.fit",
         ]
 
+    @patch("seestarpy.stack._firmware_ver_int", return_value=2775)
     @patch("seestarpy.stack.send_command")
-    def test_full_paths_passed_through(self, mock_send):
-        """Entries already containing a '/' are left untouched (idempotent)."""
+    def test_full_paths_passed_through_on_new_fw(self, mock_send, _fw):
+        """Firmware ≥ 7.75: entries already containing a '/' are untouched."""
         full = "MyWorks/M 81_sub/Light_M 81_10.0s_LP_20260120-061408.fit"
         stack.set_batch_stack_setting("MyWorks/M 81_sub", [full])
         sent = mock_send.call_args[0][0]
         assert [f["name"] for f in sent["params"]["files"]] == [full]
 
+    @patch("seestarpy.stack._firmware_ver_int", return_value=2732)
     @patch("seestarpy.stack.send_command")
-    def test_empty_file_list(self, mock_send):
+    def test_bare_filenames_on_old_fw(self, mock_send, _fw):
+        """Firmware < 7.75: bare filenames are sent as-is."""
+        stack.set_batch_stack_setting(
+            "MyWorks/AM Leo_sub",
+            ["Light_AM Leo_10.0s_IRCUT_20260406-211450.fit"],
+        )
+        sent = mock_send.call_args[0][0]
+        assert [f["name"] for f in sent["params"]["files"]] == [
+            "Light_AM Leo_10.0s_IRCUT_20260406-211450.fit"
+        ]
+
+    @patch("seestarpy.stack._firmware_ver_int", return_value=2732)
+    @patch("seestarpy.stack.send_command")
+    def test_full_paths_stripped_on_old_fw(self, mock_send, _fw):
+        """Firmware < 7.75: a full path is reduced to its bare filename."""
+        full = "MyWorks/AM Leo_sub/Light_AM Leo_10.0s_IRCUT_20260406-211450.fit"
+        stack.set_batch_stack_setting("MyWorks/AM Leo_sub", [full])
+        sent = mock_send.call_args[0][0]
+        assert [f["name"] for f in sent["params"]["files"]] == [
+            "Light_AM Leo_10.0s_IRCUT_20260406-211450.fit"
+        ]
+
+    @patch("seestarpy.stack._firmware_ver_int", return_value=None)
+    @patch("seestarpy.stack.send_command")
+    def test_defaults_to_full_path_when_fw_unknown(self, mock_send, _fw):
+        """Unknown firmware: default to the full-path form."""
+        stack.set_batch_stack_setting(
+            "MyWorks/M 81_sub", ["Light_M 81_10.0s_LP_20260120-061408.fit"]
+        )
+        sent = mock_send.call_args[0][0]
+        assert [f["name"] for f in sent["params"]["files"]] == [
+            "MyWorks/M 81_sub/Light_M 81_10.0s_LP_20260120-061408.fit"
+        ]
+
+    @patch("seestarpy.stack._firmware_ver_int", return_value=2775)
+    @patch("seestarpy.stack.send_command")
+    def test_empty_file_list(self, mock_send, _fw):
         stack.set_batch_stack_setting("MyWorks/M 81_sub", [])
         sent = mock_send.call_args[0][0]
         assert sent["params"]["files"] == []
