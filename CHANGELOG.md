@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.5.1 — 2026-07-09
+
+> **Compatibility:** a bug-fix release that makes several calls
+> **firmware-tolerant** across the v6.x–v8.x generations. Getters that were
+> renamed or removed in newer firmware now fall back automatically, so the
+> same code works on old and new Seestars. Verified live on firmware v7.75;
+> diagnosed against firmware v8.46.
+
+### Firmware v8.x compatibility
+
+- **`status.status_bar` / `status.get_coords`** — Fixed a hard crash on
+  firmware v8.x. They queried `scope_get_ra_dec`, a port-4800 heartbeat that
+  the command socket rejects on newer firmware; the command-socket RA/Dec
+  getter is `scope_get_equ_coord`. The error placeholder then reached
+  `round("---")` and raised `TypeError`. Both functions now use
+  `scope_get_equ_coord` and tolerate its two return shapes (newer firmware
+  returns `{"ra": .., "dec": ..}`, older a `[ra, dec]` list). `status_bar`
+  also degrades any missing/non-numeric cell to `---` instead of crashing.
+- **`raw.scope_get_ra_dec`** — Now falls back to `scope_get_equ_coord` when
+  the firmware answers `code 103` ("method not found").
+- **`raw.get_stack_setting`** — The `get_stack_setting` RPC was removed from
+  the firmware at v6.7. The (deprecated) wrapper now falls back to
+  `get_setting` on `code 103` while still returning the native response on
+  older firmware.
+- **`raw.get_stacked_img`** — Deprecated. It is a port-4800 binary
+  image-stream method (not a command-socket RPC) and is rejected on port
+  4700 with `code 103`; use `stream.get_live_image()` to fetch the latest
+  stacked image.
+- **`raw.scope_move_to_horizon`** — Unchanged on the wire (still valid, no
+  params). Docstring now notes that an apparent failure is usually a
+  precondition: the scope must be awake/initialised before it honours the
+  move.
+
+### Batch stacking
+
+- **`stack.set_batch_stack_setting`** — Now firmware-aware: detects
+  `firmware_ver_int` per Seestar and sends full relative sub-frame paths on
+  firmware ≥ 7.75 (int 2775) but bare filenames on older firmware (e.g.
+  6.58, 7.32), which reject full paths with `state="fail"`, `error="no
+  image"`, `code=267`. Fixes batch stacking (and
+  `crowdsky.stack_blocks`/`stack_all`) on pre-7.75 scopes.
+
 ## v0.5.0 — 2026-06-16
 
 > **Compatibility:** this release targets the **Seestar app v3.2.0 /
