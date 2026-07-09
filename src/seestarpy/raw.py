@@ -600,9 +600,22 @@ def get_solve_result():
 
 
 @multiple_ips
+@_deprecated("v0.5.1", message="'get_stacked_img' is a binary image-stream "
+             "method (port 4800), not a command-socket method; use "
+             "seestarpy.stream.get_live_image() instead.")
 def get_stacked_img():
     """
     Get the current stacked image data.
+
+    .. deprecated::
+        ``get_stacked_img`` is **not** a command-socket (port 4700) RPC
+        method.  It is only valid on the binary image-stream socket
+        (port 4800, sent with a hardcoded ``"id": 23``), where
+        :mod:`seestarpy.stream` uses it internally.  Sent over the command
+        socket it is rejected by the firmware (``code 103``), so this
+        wrapper never worked as intended.  Use
+        :func:`seestarpy.stream.get_live_image` to fetch the latest stacked
+        image instead.
 
     Returns
     -------
@@ -617,17 +630,28 @@ def get_stacked_img():
 
 
 @multiple_ips
-@_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
+@_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'get_setting'")
 def get_stack_setting():
     """
     Find out whether the Seestar is saving all sub-frames, good and bad.
 
     .. deprecated::
-        Seestar Firmware v6.7 uses :func:`set_setting` instead.
+        The ``get_stack_setting`` RPC method was removed from the firmware
+        at v6.7; on newer firmware (e.g. v7.x / v8.x) it returns
+        ``code 103`` (``"method not found"``).  This wrapper is now
+        **firmware-tolerant**: it tries ``get_stack_setting`` first (so old
+        scopes keep their native response) and, if the firmware rejects it
+        with ``code 103``, transparently falls back to
+        :func:`get_setting`.  Prefer :func:`get_setting` directly on modern
+        firmware.
 
     Returns
     -------
     dict
+        On old firmware, the native ``get_stack_setting`` response (see the
+        example below).  On firmware that removed the method, the
+        :func:`get_setting` response, whose ``result`` carries the stacking
+        settings among the full settings dict.
 
     Examples
     --------
@@ -650,8 +674,12 @@ def get_stack_setting():
     -----
     Accepts the ``ips`` keyword for multi-Seestar operation.
     """
-    params = {"method": "get_stack_setting"}
-    return send_command(params)
+    resp = send_command({"method": "get_stack_setting"})
+    # Firmware >= v6.7 removed this method and answers "method not found"
+    # (code 103).  Fall back to get_setting, which carries these settings.
+    if isinstance(resp, dict) and resp.get("code") == 103:
+        return send_command({"method": "get_setting"})
+    return resp
 
 
 @multiple_ips
@@ -1690,6 +1718,16 @@ def scope_get_ra_dec():
 
     .. note:: Requires firmware v6.70 or later.
 
+    .. note::
+        ``scope_get_ra_dec`` is the binary image-stream (port 4800)
+        heartbeat method.  On the command socket (port 4700) the RA/Dec
+        getter used by the official app on all firmware is
+        :func:`scope_get_equ_coord`, and newer firmware (v8.x) rejects
+        ``scope_get_ra_dec`` on the command socket with ``code 103``.  This
+        wrapper is therefore firmware-tolerant: it falls back to
+        ``scope_get_equ_coord`` when the firmware reports "method not
+        found".  Prefer :func:`scope_get_equ_coord` directly.
+
     Returns
     -------
     dict
@@ -1698,8 +1736,10 @@ def scope_get_ra_dec():
     -----
     Accepts the ``ips`` keyword for multi-Seestar operation.
     """
-    params = {'method': 'scope_get_ra_dec'}
-    return send_command(params)
+    resp = send_command({'method': 'scope_get_ra_dec'})
+    if isinstance(resp, dict) and resp.get("code") == 103:
+        return send_command({'method': 'scope_get_equ_coord'})
+    return resp
 
 
 @multiple_ips
@@ -1774,6 +1814,13 @@ def scope_move_to_horizon():
 
     Notes
     -----
+    The wire method and (empty) params are **unchanged** across firmware —
+    ``scope_move_to_horizon`` is still present in the v8.30-era app command
+    set and takes no params, so this call is correct on modern firmware.  If
+    it appears to "fail", inspect the returned dict's ``code``/``error``: the
+    usual cause is a **precondition** — the scope must be awake/initialised
+    (not mid-park, not already slewing) before it will honour the move.
+
     Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {'method': 'scope_move_to_horizon'}

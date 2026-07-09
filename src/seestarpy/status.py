@@ -4,6 +4,45 @@ from . import raw
 from .connection import send_command, multiple_ips
 
 
+def _num(val, nd=None):
+    """Round *val* for display, or return ``"---"`` if it isn't numeric.
+
+    ``status_bar`` populates its cells from live device queries.  When an
+    endpoint returns an error dict (e.g. an unknown RPC method on newer
+    firmware) the corresponding value is a placeholder string rather than a
+    number, and calling ``round()`` on it would raise ``TypeError``.  This
+    helper keeps the dashboard rendering gracefully in that case.
+    """
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        return "---"
+    return round(val, nd) if nd is not None else round(val)
+
+
+def _pair(resp, keys):
+    """Extract a two-element coordinate ``[a, b]`` from a coordinate RPC.
+
+    The firmware return shape is **version dependent**: newer firmware
+    replies with a dict (e.g. ``scope_get_equ_coord`` -> ``{"ra": .., "dec":
+    ..}``), while older firmware replied with a bare list ``[a, b]``.  This
+    tolerates both (and error responses, which lack ``result``), always
+    returning a two-element list so callers can index ``[0]``/``[1]``.
+
+    Parameters
+    ----------
+    resp : dict
+        The raw RPC response.
+    keys : tuple of str
+        The dict keys to read for the (first, second) element, e.g.
+        ``("ra", "dec")`` or ``("alt", "az")``.
+    """
+    result = resp.get("result") if isinstance(resp, dict) else None
+    if isinstance(result, dict):
+        return [result.get(keys[0], "---"), result.get(keys[1], "---")]
+    if isinstance(result, (list, tuple)) and len(result) >= 2:
+        return [result[0], result[1]]
+    return ["---", "---"]
+
+
 @multiple_ips
 def status_bar(return_type="str"):
     """
@@ -50,22 +89,29 @@ def status_bar(return_type="str"):
                             "storage"]).get("result", {})
     app = raw.iscope_get_app_state().get("result", {})
     view = app.get("View", {})
-    azalt = raw.scope_get_horiz_coord().get("result", ["---", "---"])
-    radec = raw.scope_get_ra_dec().get("result", ["---", "---"])
+    azalt = _pair(raw.scope_get_horiz_coord(), ("alt", "az"))
+    # ``scope_get_equ_coord`` is the command-socket (port 4700) RA/Dec method
+    # used by the official app on all firmware; ``scope_get_ra_dec`` is a
+    # port-4800 heartbeat and is rejected on the command socket by newer
+    # firmware (v8.x), which used to crash this dashboard.  Newer firmware
+    # returns RA/Dec as a dict ({"ra":.., "dec":..}); older firmware returned
+    # a list -- _pair() normalises both.
+    radec = _pair(raw.scope_get_equ_coord(), ("ra", "dec"))
 
     t11 = f'{view.get("mode", "---"):^14}'
     t12 = f'{view.get("state", "---"):^14}'
     t13 = f'{view.get("error", "---"):^14}'
     t14 = f'{view.get("target_name", "---"):^14}'
 
-    t21a = f'{round(view.get("target_ra_dec", ["---", "---"])[0], 3):<7}'
-    t21b = f'{round(view.get("target_ra_dec", ["---", "---"])[1], 2):<6}'
-    t22a = f'{round(radec[0], 3):<7}'
-    t22b = f'{round(radec[1], 2):<6}'
-    al = f'{round(azalt[0]):<4}'
-    az = f'{round(azalt[1]):<4}'
-    co = f'{azimuth_to_compass(azalt[1]):<4}'
-    t24 = f'{round(dev.get("balance_sensor", {}).get("data", {}).get("angle", "---"), 3):^14}'
+    target_ra_dec = view.get("target_ra_dec", ["---", "---"])
+    t21a = f'{_num(target_ra_dec[0], 3):<7}'
+    t21b = f'{_num(target_ra_dec[1], 2):<6}'
+    t22a = f'{_num(radec[0], 3):<7}'
+    t22b = f'{_num(radec[1], 2):<6}'
+    al = f'{_num(azalt[0]):<4}'
+    az = f'{_num(azalt[1]):<4}'
+    co = f'{(azimuth_to_compass(azalt[1]) if isinstance(azalt[1], (int, float)) and not isinstance(azalt[1], bool) else "---"):<4}'
+    t24 = f'{_num(dev.get("balance_sensor", {}).get("data", {}).get("angle", "---"), 3):^14}'
 
     t31 = f'{str(view.get("lp_filter")):^14}'
     t32 = f'{view.get("Stack", {}).get("Exposure", {}).get("exp_ms", 0)/1000:^14}'
@@ -275,15 +321,17 @@ def get_coords():
         {'ra': 13.398, 'dec': 54.925, 'alt': 42.3, 'az': 312.7}
 
     """
-    eq_dict = raw.scope_get_ra_dec()
+    eq_dict = raw.scope_get_equ_coord()
     altaz_dict = raw.scope_get_horiz_coord()
 
-    if (isinstance(eq_dict.get("result"), list) and
-            isinstance(altaz_dict.get("result"), list)):
-        return {"ra": eq_dict["result"][0],
-                "dec": eq_dict["result"][1],
-                "alt": altaz_dict["result"][0],
-                "az": altaz_dict["result"][1]}
+    # Tolerate both firmware return shapes: newer firmware returns
+    # scope_get_equ_coord as {"ra":.., "dec":..}, older as [ra, dec].
+    ra, dec = _pair(eq_dict, ("ra", "dec"))
+    alt, az = _pair(altaz_dict, ("alt", "az"))
+
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool)
+           for v in (ra, dec, alt, az)):
+        return {"ra": ra, "dec": dec, "alt": alt, "az": az}
     else:
         raise ValueError(f"Could not get coordinates: {eq_dict}, {altaz_dict}")
 

@@ -1,5 +1,26 @@
-from .connection import multiple_ips, send_command
-from .raw import iscope_get_app_state
+from .connection import multiple_ips, send_command, current_ip
+from .raw import iscope_get_app_state, get_device_state
+
+# Firmware 7.75 (firmware_ver_int 2775) is the cut-over where the batch
+# stacker started requiring full relative sub-frame paths.  Older firmware
+# (e.g. 6.58 -> 2658, 7.32 -> 2732) wants bare filenames and rejects full
+# paths with state="fail", code=267, error="no image".
+_FULL_PATH_MIN_FW = 2775
+
+# Cache the firmware_ver_int per Seestar IP so a long stacking loop doesn't
+# re-query get_device_state for every block.
+_firmware_ver_cache = {}
+
+
+def _firmware_ver_int(ip):
+    """Return the firmware_ver_int for *ip*, or ``None`` if it can't be read."""
+    if ip not in _firmware_ver_cache:
+        try:
+            resp = get_device_state(keys=["device"])
+            _firmware_ver_cache[ip] = resp["result"]["device"]["firmware_ver_int"]
+        except Exception:
+            _firmware_ver_cache[ip] = None
+    return _firmware_ver_cache[ip]
 
 
 @multiple_ips
@@ -38,19 +59,26 @@ def set_batch_stack_setting(path, files):
     This must be called before :func:`start_batch_stack`.  The files
     are FITS sub-frames stored on the Seestar's SD card.
 
-    .. note:: Firmware v7.75 requires each file entry to carry a **full
-       relative path from the SD-card root** (e.g.
-       ``"MyWorks/M 101_sub/Light_M 101_10.0s_LP_....fit"``).  Passing a
-       bare filename makes the firmware fail immediately with
-       ``state="fail"``, ``error="no image"``, ``code=267``.  This
-       function therefore prefixes bare filenames with *path*
-       automatically; entries that already contain a ``/`` are sent
-       unchanged.  Method name and ``params`` shape are unchanged from
-       v3.0.2 — only the file-name resolution changed.
+    .. note:: The required file-name format is **firmware dependent**:
+
+       - **Firmware ≥ 7.75** (``firmware_ver_int`` ≥ 2775) requires each
+         file entry to carry a **full relative path from the SD-card root**
+         (e.g. ``"MyWorks/M 101_sub/Light_M 101_10.0s_LP_....fit"``).
+       - **Older firmware** (e.g. 6.58, 7.32) requires **bare filenames**
+         and rejects full paths with ``state="fail"``, ``error="no image"``,
+         ``code=267``.
+
+       This function detects the target's firmware (via
+       :func:`~seestarpy.raw.get_device_state`, cached per IP) and formats
+       each entry accordingly, so the same call works across firmware
+       versions.  If the firmware can't be read it defaults to the
+       full-path form.  The method name and ``params`` shape are unchanged
+       from v3.0.2 — only the file-name resolution changed.
 
        Confirmed via traffic capture from the official Seestar app v3.0.2
        on 2026-02-24; full-path requirement confirmed live on firmware
-       v7.75 (Seestar S30 Pro) on 2026-06-15.
+       v7.75 (Seestar S30 Pro) on 2026-06-15; bare-name requirement
+       confirmed live on firmware 6.58 / 7.32 (Seestar S50) on 2026-06-25.
 
     Parameters
     ----------
@@ -82,13 +110,23 @@ def set_batch_stack_setting(path, files):
         ... )
 
     """
+    ver = _firmware_ver_int(current_ip())
+    use_full_path = ver is None or ver >= _FULL_PATH_MIN_FW
+
+    if use_full_path:
+        # Firmware ≥ 7.75 (or unknown): full relative path. Leave entries
+        # that already contain a '/' untouched; prefix bare names with path.
+        entries = [f if '/' in f else f'{path}/{f}' for f in files]
+    else:
+        # Older firmware: bare filename only. Strip any leading path so a
+        # caller passing full paths still works.
+        entries = [f.rsplit('/', 1)[-1] for f in files]
+
     params = {
         'method': 'set_batch_stack_setting',
         'params': {
             'path': path,
-            'files': [
-                {'name': f if '/' in f else f'{path}/{f}'} for f in files
-            ],
+            'files': [{'name': name} for name in entries],
         },
     }
     return send_command(params)
