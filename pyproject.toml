@@ -46,6 +46,21 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/seestarpy"]
 
+# Without an explicit file list, hatchling packs everything in the project
+# directory into the sdist — including the (untracked, multi-GB) FITS
+# observation folders that accumulate in the working tree.
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "src",
+    "tests",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "LICENSE",
+    ".readthedocs.yaml",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
