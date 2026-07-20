@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.5.2 — 2026-07-20
+
+> **Discovery:** network discovery now identifies *which* Seestar answered,
+> not just where. Every discovery/print path shows a short
+> ``model_serial`` device id (e.g. ``s50_a3497936``, ``s30pro_ce545589``),
+> and the serial number is queryable directly. Verified live on an S50 and
+> an S30 Pro (firmware v7.75).
+
+### Device identification
+
+- **`connection.find_available_ips`** — Each found Seestar is now queried
+  (in parallel, with a short timeout) for its model and serial number:
+  `✓ Found seestar.local at 192.168.1.81 (s50_a3497936)`. Hosts are listed
+  in hostname order. A scope that resolves but can't be queried on port
+  4700 still prints without the id — discovery never hangs on a wedged
+  scope.
+- **`connection.find_seestar`** — The import-time "Seestar found at" line
+  includes the device id. (The module-level auto-discovery call moved to
+  the end of `connection.py` to make this possible; no behaviour change.)
+- **`connection.set_default_ip`** — Prints the device id alongside the
+  hostname: `DEFAULT_IP → 192.168.1.78 (seestar-2.local, s30pro_ce545589)`.
+- **`status.get_serial_number`** (alias **`status.get_sn`**) — New helper
+  returning the bare serial number (e.g. `'a3497936'`). Accepts `ips=` for
+  multi-Seestar queries.
+- Device ids are cached per IP for the session (successful lookups only),
+  so repeated calls don't re-query the scope.
+- **`_Connection.send`** gained a `quiet=` flag so internal discovery
+  queries don't spam the console at the default `VERBOSE_LEVEL`.
+
 ## v0.5.1 — 2026-07-09
 
 > **Compatibility:** a bug-fix release that makes several calls
