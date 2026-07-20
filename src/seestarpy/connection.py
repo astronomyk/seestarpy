@@ -37,22 +37,20 @@ def find_seestar():
 
         >>> from seestarpy import connection as conn
         >>> conn.find_seestar()
-        Seestar found at: 192.168.1.243
+        Seestar found at: 192.168.1.243 (s50_a3497936)
         '192.168.1.243'
 
     """
     try:
         ip = socket.gethostbyname('seestar.local')
-        print(f"Seestar found at: {ip}")
+        dev_id = _get_device_id(ip)
+        suffix = f" ({dev_id})" if dev_id else ""
+        print(f"Seestar found at: {ip}{suffix}")
         return ip
     except socket.gaierror:
         print("Seestar not found on network")
         return None
 
-
-seestar_ip = find_seestar()
-DEFAULT_IP = seestar_ip if seestar_ip else "10.0.0.1"
-AVAILABLE_IPS = {'seestar.local': DEFAULT_IP}
 
 # Per-thread "active" target IP.  :func:`multiple_ips` sets this on each
 # worker thread so concurrent broadcasts to different scopes don't race on a
@@ -151,14 +149,52 @@ def multiple_ips(func):
     return wrapper
 
 
+# Cache of short device identifiers keyed by IP, filled by _get_device_id.
+# Serial numbers don't change, so a successful lookup is reused for the
+# rest of the session (failures are not cached and will be retried).
+_device_ids = {}
+
+
+def _get_device_id(ip, timeout=3):
+    """Return a short ``model_serial`` identifier for the Seestar at *ip*.
+
+    Queries ``get_device_state`` for the device block and condenses the
+    ``product_model`` and ``sn`` fields, e.g. ``'Seestar S50'`` with serial
+    ``'a3497936'`` becomes ``'s50_a3497936'``.  Uses a throwaway connection
+    with a short timeout so discovery never hangs on a wedged scope.
+    Returns ``None`` if the device can't be queried.
+    """
+    if ip in _device_ids:
+        return _device_ids[ip]
+    conn = _Connection(ip)
+    conn._READ_TIMEOUT = timeout
+    try:
+        resp = conn.send({"method": "get_device_state",
+                          "params": {"keys": ["device"]}}, quiet=True)
+        device = resp.get("result", {}).get("device", {})
+        model = (device.get("product_model") or "")
+        model = model.replace("Seestar", "").replace(" ", "").lower()
+        sn = device.get("sn") or ""
+        dev_id = f"{model}_{sn}" if model and sn else (model or sn or None)
+        if dev_id is not None:
+            _device_ids[ip] = dev_id
+        return dev_id
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
 def find_available_ips(n_ip, timeout=2):
     """
     Find all Seestars on the local network using parallel mDNS lookups.
 
     Resolves hostnames ``seestar.local``, ``seestar-2.local``, …,
     ``seestar-<n_ip>.local`` in parallel and updates the module-level
-    :data:`AVAILABLE_IPS` dictionary with the results.  Use this when
-    controlling multiple Seestars from a single script.
+    :data:`AVAILABLE_IPS` dictionary with the results.  Each found Seestar
+    is also queried for its model and serial number, which are shown in
+    the printed summary.  Use this when controlling multiple Seestars
+    from a single script.
 
     Parameters
     ----------
@@ -174,8 +210,8 @@ def find_available_ips(n_ip, timeout=2):
 
         >>> from seestarpy import connection as conn
         >>> conn.find_available_ips(3)
-        ✓ Found seestar.local at 192.168.1.243
-        ✓ Found seestar-2.local at 192.168.1.244
+        ✓ Found seestar.local at 192.168.1.243 (s50_a3497936)
+        ✓ Found seestar-2.local at 192.168.1.244 (s50_b5210442)
         ✗ seestar-3.local has no active IP address
         Use connection.AVAILABLE_IPS to get active addresses
         >>> conn.AVAILABLE_IPS
@@ -202,13 +238,24 @@ def find_available_ips(n_ip, timeout=2):
             if result:
                 name, ip = result
                 found[name] = ip
-                print(f"✓ Found {name} at {ip}")
     except FuturesTimeoutError:
         pass
 
-    for hostname in hostnames:
-        if hostname not in found:
-            print(f"✗ {hostname} has no active IP address")
+    # Ask each found Seestar for its model + serial number (in parallel).
+    device_ids = {}
+    if found:
+        with ThreadPoolExecutor(max_workers=len(found)) as executor:
+            id_futures = {name: executor.submit(_get_device_id, ip)
+                          for name, ip in found.items()}
+        device_ids = {name: fut.result() for name, fut in id_futures.items()}
+
+    for name in hostnames:
+        if name in found:
+            dev_id = device_ids.get(name)
+            suffix = f" ({dev_id})" if dev_id else ""
+            print(f"✓ Found {name} at {found[name]}{suffix}")
+        else:
+            print(f"✗ {name} has no active IP address")
 
     print("Use connection.AVAILABLE_IPS to get active addresses")
     AVAILABLE_IPS.update(found)
@@ -246,7 +293,7 @@ def set_default_ip(n):
         >>> from seestarpy import connection as conn
         >>> conn.find_available_ips(3)
         >>> conn.set_default_ip(2)
-        DEFAULT_IP → 192.168.1.83 (seestar-2.local)
+        DEFAULT_IP → 192.168.1.83 (seestar-2.local, s50_b5210442)
 
     """
     global DEFAULT_IP
@@ -258,7 +305,9 @@ def set_default_ip(n):
             f"Available: {list(AVAILABLE_IPS.keys())}"
         )
     DEFAULT_IP = AVAILABLE_IPS[hostname]
-    print(f"DEFAULT_IP \u2192 {DEFAULT_IP} ({hostname})")
+    dev_id = _get_device_id(DEFAULT_IP)
+    suffix = f", {dev_id}" if dev_id else ""
+    print(f"DEFAULT_IP \u2192 {DEFAULT_IP} ({hostname}{suffix})")
 
 
 class _Connection:
@@ -307,9 +356,9 @@ class _Connection:
             self._close_locked()
 
     # -- one request/reply round on the live socket -------------------------
-    def _send_once(self, cmd, cmd_id):
+    def _send_once(self, cmd, cmd_id, quiet=False):
         message = json.dumps(cmd) + "\r\n"
-        if VERBOSE_LEVEL >= 1:
+        if VERBOSE_LEVEL >= 1 and not quiet:
             print(f"\nSending: {message.strip()}")
         self._sock.sendall(message.encode())
 
@@ -337,23 +386,24 @@ class _Connection:
                     if isinstance(frame, dict) else None
                 print(f"  (skipped event: {ev})")
 
-    def send(self, params):
+    def send(self, params, quiet=False):
         cmd_id = 1
         cmd = {"id": cmd_id, "verify": True}
         cmd.update(params)
 
+        verbose = 0 if quiet else VERBOSE_LEVEL
         with self._lock:
             last_exc = None
             for attempt in (1, 2):
                 try:
                     if self._sock is None:
                         self._connect()
-                    parsed = self._send_once(cmd, cmd_id)
+                    parsed = self._send_once(cmd, cmd_id, quiet=quiet)
                     if not PERSIST_CONNECTIONS:
                         self._close_locked()
-                    if VERBOSE_LEVEL >= 1:
+                    if verbose >= 1:
                         print(f"\nRecieved: {json.dumps(parsed)}")
-                    if VERBOSE_LEVEL >= 2:
+                    if verbose >= 2:
                         print("\n✅ Response:")
                         print(f"  method: {parsed.get('method')}")
                         print(f"  result: {json.dumps(parsed.get('result'), indent=2)}")
@@ -365,7 +415,7 @@ class _Connection:
                     # first attempt, reconnect + re-authenticate and retry.
                     last_exc = exc
                     self._close_locked()
-                    if VERBOSE_LEVEL >= 1 and attempt == 1:
+                    if verbose >= 1 and attempt == 1:
                         print(f"  (connection to {self.ip} dropped: {exc} — "
                               f"reconnecting)")
             raise ConnectionError(
@@ -445,3 +495,11 @@ def send_command(params):
 
     """
     return _get_connection(current_ip()).send(params)
+
+
+# Module-level auto-discovery.  This runs at the END of the module (not at
+# the top) because find_seestar() now queries the device id via
+# _get_device_id(), which needs the _Connection class to be defined.
+seestar_ip = find_seestar()
+DEFAULT_IP = seestar_ip if seestar_ip else "10.0.0.1"
+AVAILABLE_IPS = {'seestar.local': DEFAULT_IP}

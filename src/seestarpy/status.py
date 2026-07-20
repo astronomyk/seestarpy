@@ -177,6 +177,42 @@ def get_firmware_version():
 
 
 @multiple_ips
+def get_serial_number():
+    """
+    Get the Seestar serial number.
+
+    Also available under the shorthand alias :func:`get_sn`.
+
+    Returns
+    -------
+    str
+        Serial number, e.g. ``"a3497936"``.
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.get_serial_number()
+        'a3497936'
+        >>> status.get_sn(ips="all")
+        {'192.168.1.81': 'a3497936', '192.168.1.78': 'ce545589'}
+
+    """
+    return (raw.get_device_state(["device"])
+            .get("result", {})
+            .get("device", {})
+            .get("sn"))
+
+
+#: Shorthand alias for :func:`get_serial_number`.
+get_sn = get_serial_number
+
+
+@multiple_ips
 def get_mount_state():
     """
     Get the full mount state dictionary from the Seestar.
