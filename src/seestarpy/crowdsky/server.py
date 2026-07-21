@@ -187,7 +187,7 @@ def upload_stack(fits_path, thumbnail=None, n_frames_input=None,
     # uplinks (e.g. AU residential → crowdsky.univie.ac.at) routinely
     # need more than the 30 s default.
     resp = _request("POST", "/api/upload_stack.php",
-                    files=files, data=data, timeout=(30, 300))
+                    files=files, data=data, timeout=(60, 300))
     return resp.json()
 
 
