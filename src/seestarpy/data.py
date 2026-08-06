@@ -1,14 +1,16 @@
 # seestar_data_utils.py
-# Utilities for listing, deleting, and downloading data from a Seestar S50
+# Utilities for listing, deleting, downloading, and uploading data on a
+# Seestar S50.
 # File listing uses JSON-RPC over port 4700 (paginated)
-# Deleting uses pysmb over direct SMB (port 445)
-# Downloading uses mounted SMB paths on Unix; Windows uses native SMB paths
+# Deleting and uploading use pysmb over direct SMB (port 445)
+# Downloading uses the built-in HTTP server (port 80)
 
+import fnmatch
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Dict
+from typing import Dict, Iterable, List
 
 from smb.SMBConnection import SMBConnection
 from smb.smb_structs import OperationFailure
@@ -425,3 +427,204 @@ def download_folder(folder: str = "", dest: str = "") -> None:
         print(f"OK Download complete: {total_files} files")
     finally:
         conn.close()
+
+
+def _ensure_remote_dir(conn: SMBConnection, path: str) -> None:
+    """Create a directory on the share, ignoring 'already exists'.
+
+    ``createDirectory`` raises :class:`OperationFailure` if the directory
+    already exists; that is the normal case when re-uploading, so it is
+    swallowed.
+    """
+    try:
+        conn.createDirectory(SHARE_NAME, path)
+    except OperationFailure:
+        pass
+
+
+def _upload_to_conn(conn: SMBConnection, remote_dir: str,
+                    filepaths: List[str], overwrite: bool) -> Dict[str, bool]:
+    """Upload *filepaths* into *remote_dir* using an open SMB connection.
+
+    Shared implementation for :func:`upload_files` and
+    :func:`upload_folder`.  Creates *remote_dir* if needed and, unless
+    *overwrite* is set, skips any file already present with a matching byte
+    size (so an interrupted upload can be safely resumed by re-running).
+    """
+    _ensure_remote_dir(conn, remote_dir)
+
+    # Snapshot existing remote sizes for idempotent skips.
+    existing: Dict[str, int] = {}
+    if not overwrite:
+        try:
+            for entry in conn.listPath(SHARE_NAME, remote_dir):
+                if entry.filename not in (".", ".."):
+                    existing[entry.filename] = entry.file_size
+        except OperationFailure:
+            pass
+
+    results: Dict[str, bool] = {}
+    total = len(filepaths)
+    for idx, local in enumerate(filepaths, 1):
+        name = os.path.basename(local)
+        try:
+            lsize = os.path.getsize(local)
+            if not overwrite and existing.get(name) == lsize:
+                results[name] = True
+                print(f"  [{idx}/{total}] {name} (already present, skipped)")
+                continue
+            with open(local, "rb") as fh:
+                conn.storeFile(SHARE_NAME, f"{remote_dir}/{name}", fh)
+            results[name] = True
+            print(f"  [{idx}/{total}] {name} ({lsize / 1024 / 1024:.2f} MB) OK")
+        except (OperationFailure, OSError) as exc:
+            results[name] = False
+            print(f"  [{idx}/{total}] {name} FAILED: {exc}")
+    return results
+
+
+@multiple_ips
+def upload_files(folder: str, filepaths: Iterable[str],
+                 overwrite: bool = False) -> Dict[str, bool]:
+    """
+    Upload specific local files into an observation folder via SMB.
+
+    Copies each local file into ``MyWorks/<folder>`` on the Seestar's
+    internal eMMC, creating the folder if it does not exist.  This is the
+    inverse of :func:`download_folder` and the prerequisite for stacking
+    off-telescope sub-frames with :func:`seestarpy.stack.set_batch_stack_setting`
+    (upload the subs, then point the batch stacker at ``MyWorks/<folder>``).
+
+    Uploading is **idempotent**: unless *overwrite* is set, a file already
+    present remotely with a matching byte size is skipped, so a re-run after
+    a dropped connection resumes rather than re-sending everything.
+
+    Parameters
+    ----------
+    folder : str
+        Destination folder name under ``MyWorks`` (e.g. ``"NGC 3310_sub"``).
+        Created automatically if absent.
+    filepaths : iterable of str
+        Local paths to upload.  Only the base name of each is used for the
+        remote name, so files from different local directories may be mixed.
+    overwrite : bool, optional
+        If ``True``, re-upload every file even when a same-size copy already
+        exists remotely.  Default ``False``.
+
+    Returns
+    -------
+    dict of {str: bool}
+        Mapping of each file's base name to ``True`` when it is present on
+        the Seestar after the call (uploaded or already there) and ``False``
+        if the upload failed.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import data
+        >>> data.upload_files("NGC 3310_sub", [
+        ...     r"D:\\subs\\Light_NGC 3310_20.0s_IRCUT_20260709-232704.fit",
+        ...     r"D:\\subs\\Light_NGC 3310_20.0s_IRCUT_20260709-232728.fit",
+        ... ])
+        {'Light_NGC 3310_20.0s_IRCUT_20260709-232704.fit': True,
+         'Light_NGC 3310_20.0s_IRCUT_20260709-232728.fit': True}
+
+    """
+    filepaths = list(filepaths)
+    if not filepaths:
+        return {}
+
+    conn = _connect_smb()
+    try:
+        return _upload_to_conn(conn, f"{ROOT_DIR}/{folder}", filepaths, overwrite)
+    finally:
+        conn.close()
+
+
+@multiple_ips
+def upload_folder(local_dir: str, folder: str = None, pattern: str = "*",
+                  overwrite: bool = False) -> Dict[str, bool]:
+    """
+    Upload the contents of a local directory into an observation folder via SMB.
+
+    Copies every file in *local_dir* matching *pattern* into
+    ``MyWorks/<folder>`` on the Seestar's internal eMMC.  Sub-directories are
+    ignored (Seestar observation folders are flat).  Like :func:`upload_files`
+    this is idempotent: same-size files already present are skipped unless
+    *overwrite* is set.
+
+    The typical use is to push a folder of raw sub-frames back onto the scope
+    so its onboard stacker can process them::
+
+        data.upload_folder(r"D:\\Seestar\\NGC 3310", pattern="*.fit")
+        stack.set_batch_stack_setting("MyWorks/NGC 3310", files)
+        stack.start_batch_stack()
+
+    Parameters
+    ----------
+    local_dir : str
+        Local directory whose files will be uploaded.
+    folder : str, optional
+        Destination folder name under ``MyWorks``.  Defaults to the base
+        name of *local_dir*.
+    pattern : str, optional
+        ``fnmatch`` glob applied to file names (e.g. ``"*.fit"`` for FITS
+        sub-frames only).  Default ``"*"`` uploads every file.
+    overwrite : bool, optional
+        If ``True``, re-upload every file even when a same-size copy already
+        exists remotely.  Default ``False``.
+
+    Returns
+    -------
+    dict of {str: bool}
+        Mapping of each uploaded file's base name to its success flag (see
+        :func:`upload_files`).
+
+    Raises
+    ------
+    NotADirectoryError
+        If *local_dir* is not an existing directory.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import data
+        >>> data.upload_folder(r"D:\\Seestar\\NGC 3310_07.09", pattern="*.fit")
+        Uploading 125 files to 'NGC 3310_07.09' (496.0 MB)...
+          [1/125] Light_NGC 3310_20.0s_IRCUT_20260709-232704.fit (3.96 MB) OK
+          ...
+        OK Upload complete: 125/125 files present on scope
+
+    """
+    if not os.path.isdir(local_dir):
+        raise NotADirectoryError(f"Not a directory: {local_dir}")
+
+    if folder is None:
+        folder = os.path.basename(os.path.normpath(local_dir))
+
+    names = sorted(
+        name for name in fnmatch.filter(os.listdir(local_dir), pattern)
+        if os.path.isfile(os.path.join(local_dir, name))
+    )
+    filepaths = [os.path.join(local_dir, name) for name in names]
+    total_size = sum(os.path.getsize(p) for p in filepaths)
+    print(
+        f"Uploading {len(filepaths)} files to '{folder}' "
+        f"({total_size / 1024 / 1024:.1f} MB)...")
+
+    if not filepaths:
+        print("OK Upload complete: 0/0 files present on scope")
+        return {}
+
+    conn = _connect_smb()
+    try:
+        results = _upload_to_conn(
+            conn, f"{ROOT_DIR}/{folder}", filepaths, overwrite)
+    finally:
+        conn.close()
+
+    ok = sum(1 for v in results.values() if v)
+    print(f"OK Upload complete: {ok}/{len(results)} files present on scope")
+    return results
