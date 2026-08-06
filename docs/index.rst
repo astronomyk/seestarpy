@@ -152,6 +152,7 @@ Contents
    :caption: Tutorials
 
    examples/basic_connection
+   examples/install_on_raspberry_pi
    examples/basic_observing
    examples/basic_status_checks
    examples/changing_seestar_settings
