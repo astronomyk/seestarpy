@@ -6,3 +6,19 @@ _build/
 dist/
 mobile_env/
 .buildozer/
+
+# Local automation scripts and the data they download
+automation/
+
+# Observation data must never land in the repo
+*.fit
+*.fits
+*.fit.gz
+*.fits.gz
+*.fz
+
+# Assistant scratch, traffic captures, decompiled firmware references
+.claude/
+decompiled_api_commands*.txt
+API_CHANGES_*.md
+*.stackdump
