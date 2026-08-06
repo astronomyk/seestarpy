@@ -1532,6 +1532,130 @@ def set_setting(**kwargs):
     return send_command(params)
 
 
+#: Accepted ``typec_mode`` values, keyed by the friendly aliases accepted by
+#: :func:`set_usb_mode`.  The firmware itself only accepts ``'file'`` and
+#: ``'net'`` (anything else returns error 102).
+_USB_MODE_ALIASES = {
+    "file": "file", "drive": "file", "storage": "file", "usb": "file",
+    "net": "net", "eth": "net", "ethernet": "net", "lan": "net",
+}
+
+
+@multiple_ips
+def get_usb_mode():
+    """
+    Report how the USB-C port is currently configured.
+
+    Reads the two settings that govern the USB-C port role: ``typec_mode``
+    (``'file'`` = mass-storage drive, ``'net'`` = wired Ethernet) and
+    ``usb_en_eth`` (master switch for USB Ethernet).
+
+    Returns
+    -------
+    dict
+        ``{'typec_mode': str, 'usb_en_eth': bool}``.
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.get_usb_mode()
+        {'typec_mode': 'file', 'usb_en_eth': False}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    # send_command() rather than get_setting(): a nested @multiple_ips call
+    # re-validates the inherited IP against connection.AVAILABLE_IPS, which
+    # only ever holds the address discovered at import time, so any other
+    # scope resolves to an empty target list.
+    result = send_command({"method": "get_setting"})["result"]
+    return {"typec_mode": result.get("typec_mode"),
+            "usb_en_eth": result.get("usb_en_eth")}
+
+
+@multiple_ips
+def set_usb_mode(mode):
+    """
+    Switch the USB-C port between mass-storage and wired-LAN modes.
+
+    The Seestar's USB-C port is dual-role:
+
+    - ``'file'`` — the scope presents itself as a USB mass-storage
+      **device**, i.e. it mounts as a drive when plugged into a computer.
+      This also switches ``usb_en_eth`` back off.
+    - ``'net'`` — the scope becomes a USB **host** that drives an external
+      USB-to-Ethernet adapter, putting it on a wired LAN.  This also
+      switches ``usb_en_eth`` on.
+
+    Both modes write ``usb_en_eth`` and ``typec_mode`` together, so the two
+    calls are exact reversals of each other.  The firmware does not couple
+    them: writing ``typec_mode`` alone leaves ``usb_en_eth`` at whatever it
+    was.
+
+    Parameters
+    ----------
+    mode : str
+        ``'file'`` (aliases ``'drive'``, ``'storage'``, ``'usb'``) or
+        ``'net'`` (aliases ``'eth'``, ``'ethernet'``, ``'lan'``).
+
+    Returns
+    -------
+    dict
+        The ``set_setting`` response.
+
+    Raises
+    ------
+    ValueError
+        If *mode* is not one of the accepted values/aliases.
+
+    Notes
+    -----
+    Only ``typec_mode`` values ``'file'`` and ``'net'`` are valid; the
+    firmware rejects anything else with error 102.
+
+    Switching modes restarts the scope's USB subsystem, so the port goes
+    away and comes back — expect a few seconds before it settles, and any
+    mounted drive to disappear the moment you select ``'net'``.  On an S50
+    running fw 8.46 the role change re-negotiated over an already-seated
+    cable with no replug needed (the mass-storage gadget re-enumerated on
+    its own within seconds), and the scope's Wi-Fi connection was not
+    disturbed.  Other firmware/host combinations may still need a physical
+    **unplug and re-plug** before the drive reappears.
+
+    ``pi_status.is_typec_connected`` tracks the mass-storage gadget, not
+    the wired LAN: it reads ``True`` in ``'file'`` mode and flips to
+    ``False`` in ``'net'`` mode, even while the port is powered.
+
+    Getting onto a wired LAN also needs a powered USB-C-to-Ethernet
+    adapter (with PD) between the scope and the router; ``'net'`` mode
+    alone only arms the firmware.
+
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.set_usb_mode("net")     # arm the scope for a wired LAN
+        >>> raw.set_usb_mode("file")    # present the scope as a USB drive
+    """
+    key = _USB_MODE_ALIASES.get(str(mode).lower())
+    if key is None:
+        raise ValueError(
+            f"Unknown USB mode {mode!r}. Use 'file' (mass-storage drive) "
+            f"or 'net' (wired Ethernet)."
+        )
+    # Always write both keys, so each mode is a true reversal of the other:
+    # setting ``typec_mode`` on its own leaves ``usb_en_eth`` latched at its
+    # previous value (confirmed on an S50 running fw 8.46).  send_command()
+    # rather than set_setting() for the nesting reason in get_usb_mode().
+    return send_command({"method": "set_setting",
+                         "params": {"usb_en_eth": key == "net",
+                                    "typec_mode": key}})
+
+
 @multiple_ips
 @_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
 def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
