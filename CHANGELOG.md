@@ -1,5 +1,77 @@
 # Changelog
 
+## v0.6.0 — 2026-08-06
+
+> **Getting data on and off the scope.** Three new capabilities: switch the
+> USB-C port between mass-storage and wired-LAN roles, upload files *to* the
+> Seestar over SMB (not just download), and run the whole CrowdSky
+> stack-then-upload pipeline with one call. Includes the changes from
+> v0.5.2, which was bumped but never published.
+
+### USB-C port control
+
+- **`raw.set_usb_mode`** — New. Switches the USB-C port between `'file'`
+  (mass-storage gadget: the scope mounts as a drive) and `'net'` (USB host
+  driving an external Ethernet adapter). Accepts the aliases `'drive'`,
+  `'storage'`, `'usb'` and `'eth'`, `'ethernet'`, `'lan'`, and rejects
+  anything else with a `ValueError` before the round-trip — the firmware
+  answers `code 102` for any other spelling.
+- **`raw.get_usb_mode`** — New. Reports `{'typec_mode', 'usb_en_eth'}`.
+- Both modes write **both** settings. The firmware does not couple
+  `typec_mode` and `usb_en_eth`, so writing the role alone leaves the
+  master switch latched and a `'file'` switch would not undo a `'net'`
+  switch. Verified live across four scopes on firmware v8.46.
+- A scope in `'net'` mode is **dual-homed** — it keeps Wi-Fi and picks up a
+  second wired DHCP lease, and both addresses answer on port 4700. The
+  wired address appears nowhere in the API (`get_device_state`'s `station`
+  block describes only Wi-Fi, and there is no `eth0` section), and mDNS
+  tends to advertise the wired lease rather than the Wi-Fi one. See
+  *Changing the Seestar's settings* in the docs.
+- Wired mode needs a **powered** USB-C-to-Ethernet adapter with PD; the
+  setting alone only arms the firmware.
+
+### Uploading to the Seestar
+
+- **`data.upload_files`** — New. Uploads specific local files into
+  `MyWorks/<folder>` on the scope's eMMC over SMB, creating the folder if
+  needed. Idempotent: unless `overwrite=True`, a file already present with
+  a matching byte size is skipped, so a re-run after a dropped connection
+  resumes instead of re-sending.
+- **`data.upload_folder`** — New. Same, for a whole local directory with
+  optional `fnmatch` pattern filtering.
+- Together these make off-telescope sub-frames stackable on the scope:
+  upload the subs, then point `stack.set_batch_stack_setting` at
+  `MyWorks/<folder>`.
+
+### CrowdSky
+
+- **`crowdsky.sync`** — New one-call pipeline: batch-stack every unstacked
+  time block for every target, then upload the resulting `CrowdSky_*.fit`
+  stacks the server doesn't already have. Credentials are validated
+  *before* stacking starts, so a typo fails in seconds rather than after an
+  hour. The two phases run strictly sequentially by design — the Seestar's
+  file-listing API keeps one directory cursor per device, so concurrent
+  listing silently skips blocks.
+- Stack upload timeout raised from 30 s to 60 s for the connect phase.
+
+### Fixes
+
+- **`raw.get_usb_mode` / `raw.set_usb_mode`** call `send_command` directly
+  instead of nesting `@multiple_ips` wrappers. A nested call re-validates
+  the inherited IP against `connection.AVAILABLE_IPS`, which only holds the
+  address discovered at import time, so targeting any other scope died with
+  `ValueError: max_workers must be greater than 0`. Other nested
+  `@multiple_ips` pairs are still affected; `resolve_ips` rejecting a bare
+  IP string it documents as valid is a separate open issue.
+- `docs/conf.py` reported `v0.3.0` as the release for three versions.
+
+### Docs
+
+- New tutorial page: installing on a Raspberry Pi.
+- *Changing the Seestar's settings* gained a USB-C section covering port
+  roles, the PD-adapter requirement, and how to find a wired scope's
+  address.
+
 ## v0.5.2 — 2026-07-20
 
 > **Discovery:** network discovery now identifies *which* Seestar answered,
