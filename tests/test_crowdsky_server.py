@@ -171,7 +171,7 @@ class TestUploadStack:
 
         server.upload_stack(str(fits_file))
 
-        assert mock_req.call_args.kwargs["timeout"] == (30, 300)
+        assert mock_req.call_args.kwargs["timeout"] == (60, 300)
 
 
 # ---------------------------------------------------------------------------
