@@ -19,7 +19,7 @@ def _deprecated(since, message=""):
         return wrapper
     return decorator
 
-from .connection import send_command, multiple_ips
+from .connection import send_command, multiple_ips, current_ip
 
 """
 To implement:
@@ -1654,6 +1654,89 @@ def set_usb_mode(mode):
     return send_command({"method": "set_setting",
                          "params": {"usb_en_eth": key == "net",
                                     "typec_mode": key}})
+
+
+@multiple_ips
+def _get_link_type_by_ip():
+    """Per-IP implementation backing :func:`get_link_type`.
+
+    Kept separate so :func:`get_link_type` can remap the ``@multiple_ips``
+    aggregate dict (keyed by IP) to be keyed by serial number instead.
+    """
+    ip = current_ip()
+    state = send_command({"method": "get_device_state",
+                          "params": {"keys": ["station", "device"]}})["result"]
+    station_ip = state.get("station", {}).get("ip")
+    sn = state.get("device", {}).get("sn")
+    setting = send_command({"method": "get_setting"})["result"]
+
+    if station_ip is None:
+        link = "unknown"
+    elif station_ip == ip:
+        link = "wifi"
+    else:
+        link = "wired"
+
+    return {"sn": sn, "link": link, "ip": ip, "station_ip": station_ip,
+            "typec_mode": setting.get("typec_mode"),
+            "usb_en_eth": setting.get("usb_en_eth")}
+
+
+def get_link_type(ips=None):
+    """
+    Determine whether each Seestar is currently reachable over Wi-Fi or a
+    wired USB-Ethernet gadget.
+
+    The firmware has no single field for "which NIC is this connection
+    actually using", so this infers it by comparing the IP the command
+    was sent to against the IP the Wi-Fi station interface reports for
+    itself (``get_device_state()["station"]["ip"]``):
+
+    - If they **match**, the connection is going over Wi-Fi.
+    - If they **differ**, the Wi-Fi radio is associated to its AP but
+      idle for this connection — traffic must be going over the wired
+      USB-Ethernet gadget instead (see :func:`get_usb_mode`).
+
+    Parameters
+    ----------
+    ips
+        See the ``ips`` keyword accepted by every function in this module
+        (an IP/hostname, an int, ``"all"``, a list, or ``None`` for
+        :data:`~seestarpy.connection.DEFAULT_IP`).
+
+    Returns
+    -------
+    dict
+        Keyed by each Seestar's serial number (falling back to its IP if
+        the serial can't be read), with values
+        ``{'link': 'wifi' | 'wired' | 'unknown', 'ip': str,
+        'station_ip': str or None, 'typec_mode': str or None,
+        'usb_en_eth': bool or None}``.  ``'unknown'`` only occurs if the
+        Wi-Fi station block is absent (e.g. Wi-Fi never configured).
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.get_link_type(ips="all")
+        {'97783b61': {'link': 'wired', 'ip': '192.168.1.55',
+                      'station_ip': '192.168.1.83',
+                      'typec_mode': 'net', 'usb_en_eth': True},
+         'ce545589': {'link': 'wifi', 'ip': '192.168.1.106',
+                      'station_ip': '192.168.1.106',
+                      'typec_mode': 'file', 'usb_en_eth': False}}
+
+    Notes
+    -----
+    Fetches ``station``/``device`` via :func:`send_command` directly
+    rather than :func:`get_device_state` / :func:`get_usb_mode`, to avoid
+    the nested-``@multiple_ips`` IP-resolution pitfall described in
+    :func:`get_usb_mode`.
+    """
+    result = _get_link_type_by_ip(ips=ips)
+    if "link" in result:
+        return result
+    return {v.get("sn") or k: v for k, v in result.items()}
 
 
 @multiple_ips
