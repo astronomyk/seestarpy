@@ -2,6 +2,7 @@ import atexit
 import json
 import socket
 import threading
+import time
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeoutError
@@ -9,23 +10,225 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 VERBOSE_LEVEL = 1
 DEFAULT_PORT = 4700
 
+# UDP broadcast discovery — the mechanism the ZWO app itself uses.  Every
+# Seestar listens on this port and answers a ``scan_iscope`` probe with its
+# serial number, model and (implicitly) its current IP.  Scopes are therefore
+# identified by *serial number*, not by hostname, which is what keeps
+# discovery working when a scope moves between Wi-Fi and a wired switch and
+# picks up a different address.
+DISCOVERY_PORT = 4720
+DISCOVERY_TIMEOUT = 2.0     # seconds to listen for replies
+DISCOVERY_INTERVAL = 0.5    # seconds between repeat probes inside that window
+
 # Reuse one authenticated TCP connection per Seestar instead of opening a
 # fresh socket (and re-running the RSA auth handshake) on every command.
 # Set to False to fall back to the old short-lived-socket behaviour.
 PERSIST_CONNECTIONS = True
 
+# Serial number -> full discovery record, filled by :func:`discover`.
+DISCOVERED = {}
+
+# Short device name -> IP, e.g. ``{'s50_a3497936': '192.168.1.55'}``.  Filled
+# by :func:`discover`; the legacy mDNS path (:func:`find_available_ips` with
+# ``mdns=True``) instead adds ``seestar-N.local`` keys.  One entry per scope.
+AVAILABLE_IPS = {}
+
+# Replaced at the bottom of the module by the import-time discovery sweep.
+DEFAULT_IP = "10.0.0.1"
+
+
+def _dev_id(model, sn):
+    """Condense a model + serial into the short ``s50_a3497936`` form."""
+    model = (model or "").replace("Seestar", "").replace(" ", "").lower()
+    sn = sn or ""
+    return f"{model}_{sn}" if model and sn else (model or sn or None)
+
+
+def _local_broadcast_addresses():
+    """Return the IPv4 broadcast addresses to send discovery probes to.
+
+    Every local IPv4 address contributes its ``x.y.z.255`` directed
+    broadcast (a /24 is assumed — Seestars live on ordinary home subnets),
+    and the limited broadcast ``255.255.255.255`` is appended as a fallback.
+    Directed addresses come first and matter most: on a multi-homed host
+    (VPN, WSL, Hyper-V) the limited broadcast frequently leaves through the
+    wrong interface and reaches nothing.
+    """
+    ips = set()
+    try:
+        for _, _, _, _, sa in socket.getaddrinfo(socket.gethostname(), None,
+                                                 socket.AF_INET):
+            ips.add(sa[0])
+    except socket.gaierror:
+        pass
+    # The interface that would carry a default-route packet — catches the
+    # common case where gethostname() resolves to something useless.
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("8.8.8.8", 80))
+        ips.add(probe.getsockname()[0])
+    except OSError:
+        pass
+    finally:
+        probe.close()
+
+    targets = []
+    for ip in sorted(ips):
+        if ip.startswith("127."):
+            continue
+        directed = ".".join(ip.split(".")[:3]) + ".255"
+        if directed not in targets:
+            targets.append(directed)
+    targets.append("255.255.255.255")
+    return targets
+
+
+def _parse_scan_reply(data, ip):
+    """Turn one ``scan_iscope`` datagram into a discovery record, or None."""
+    try:
+        msg = json.loads(data.decode("utf-8", "replace"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(msg, dict):
+        return None
+    result = msg.get("result") or {}
+    sn = result.get("sn")
+    if not sn:
+        return None
+    model = result.get("product_model") or result.get("model") or ""
+    return {
+        "sn": sn,
+        "ip": ip,
+        "model": model,
+        "dev_id": _dev_id(model, sn),
+        "ssid": result.get("ssid"),
+        "tcp_clients": result.get("tcp_client_num"),
+        "connect_lock": result.get("connect_lock"),
+        "verified": result.get("is_verified"),
+    }
+
+
+def discover(timeout=None, port=None, update=True, quiet=False):
+    """
+    Find every Seestar on the local network by UDP broadcast.
+
+    Broadcasts the firmware's own discovery probe —
+    ``{"id": 1, "method": "scan_iscope", "params": ""}`` on UDP port
+    :data:`DISCOVERY_PORT` — and collects the replies, which carry each
+    scope's serial number and model.  The probe is repeated every
+    :data:`DISCOVERY_INTERVAL` seconds for the whole listening window, so a
+    single dropped datagram doesn't lose a scope.
+
+    This is what the ZWO phone app does, and unlike the older
+    ``seestar-N.local`` hostname lookups it does not depend on mDNS being
+    forwarded across the network — so it keeps working when scopes move
+    between Wi-Fi and a wired switch.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Seconds to listen for replies.  Defaults to
+        :data:`DISCOVERY_TIMEOUT` (2 s); replies normally arrive within
+        ~150 ms, so the rest of the window is just insurance.
+    port : int, optional
+        UDP port to probe.  Defaults to :data:`DISCOVERY_PORT` (4720).
+    update : bool, optional
+        Update the module-level :data:`DISCOVERED` and
+        :data:`AVAILABLE_IPS` dictionaries with the results.  Default True.
+    quiet : bool, optional
+        Suppress the printed summary.  Default False.
+
+    Returns
+    -------
+    dict
+        ``{serial_number: ip}`` for every scope that answered.
+
+    Examples
+    --------
+
+        >>> from seestarpy import connection as conn
+        >>> conn.discover()
+        ✓ Found Seestar S50 at 192.168.1.55 (s50_a3497936)
+        ✓ Found Seestar S50 at 192.168.1.83 (s50_97783b61)
+        ✓ Found Seestar S30 Pro at 192.168.1.82 (s30pro_ce545589)
+        Use connection.AVAILABLE_IPS to get active addresses
+        {'a3497936': '192.168.1.55', '97783b61': '192.168.1.83',
+         'ce545589': '192.168.1.82'}
+
+    """
+    timeout = DISCOVERY_TIMEOUT if timeout is None else timeout
+    port = DISCOVERY_PORT if port is None else port
+    probe = json.dumps({"id": 1, "method": "scan_iscope",
+                        "params": ""}).encode() + b"\n\n"
+    targets = _local_broadcast_addresses()
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(0.15)
+
+    found = {}
+    try:
+        deadline = time.monotonic() + timeout
+        next_probe = 0.0
+        while True:
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            if now >= next_probe:
+                for target in targets:
+                    try:
+                        sock.sendto(probe, (target, port))
+                    except OSError:
+                        # A dead/blocked interface shouldn't abort the sweep.
+                        pass
+                next_probe = now + DISCOVERY_INTERVAL
+            try:
+                data, addr = sock.recvfrom(4096)
+            except (socket.timeout, OSError):
+                continue
+            record = _parse_scan_reply(data, addr[0])
+            if record:
+                # Last reply wins: a scope that just changed address answers
+                # from its new IP, and that's the one worth keeping.
+                found[record["sn"]] = record
+    finally:
+        sock.close()
+
+    if update:
+        DISCOVERED.update(found)
+        for record in found.values():
+            AVAILABLE_IPS[record["dev_id"]] = record["ip"]
+            # Discovery already told us model + serial, so the device-id
+            # cache can skip its get_device_state round-trip later on.
+            _device_ids[record["ip"]] = record["dev_id"]
+
+    if not quiet:
+        if found:
+            for sn in sorted(found):
+                rec = found[sn]
+                model = rec["model"] or "Seestar"
+                print(f"✓ Found {model} at {rec['ip']} ({rec['dev_id']})")
+            print("Use connection.AVAILABLE_IPS to get active addresses")
+        else:
+            print("✗ No Seestars answered the UDP discovery probe "
+                  f"(port {port})")
+
+    return {sn: rec["ip"] for sn, rec in found.items()}
+
 
 def find_seestar():
     """
-    Find a Seestar on the local network using mDNS hostname resolution.
+    Find a single Seestar on the local network.
 
-    Attempts to resolve ``seestar.local`` via DNS.  This function is called
-    automatically when the ``seestarpy`` package is imported, and its result
-    is used to set :data:`DEFAULT_IP`.
+    Runs a UDP broadcast sweep (:func:`discover`) and returns the address of
+    the first scope found, ordered by serial number.  If nothing answers the
+    broadcast — some managed switches and guest networks drop it — falls
+    back to resolving ``seestar.local`` via mDNS.
 
-    If the Seestar is not found (e.g. you are connected to a different
-    network), :data:`DEFAULT_IP` falls back to ``"10.0.0.1"`` — the
-    Seestar's own Wi-Fi hotspot address.
+    This function is called automatically when the ``seestarpy`` package is
+    imported, and its result is used to set :data:`DEFAULT_IP`.  If no
+    Seestar is found at all, :data:`DEFAULT_IP` falls back to ``"10.0.0.1"``
+    — the Seestar's own Wi-Fi hotspot address.
 
     Returns
     -------
@@ -37,19 +240,26 @@ def find_seestar():
 
         >>> from seestarpy import connection as conn
         >>> conn.find_seestar()
-        Seestar found at: 192.168.1.243 (s50_a3497936)
-        '192.168.1.243'
+        ✓ Found Seestar S50 at 192.168.1.55 (s50_a3497936)
+        Use connection.AVAILABLE_IPS to get active addresses
+        '192.168.1.55'
 
     """
+    found = discover()
+    if found:
+        return found[sorted(found)[0]]
+
     try:
         ip = socket.gethostbyname('seestar.local')
-        dev_id = _get_device_id(ip)
-        suffix = f" ({dev_id})" if dev_id else ""
-        print(f"Seestar found at: {ip}{suffix}")
-        return ip
     except socket.gaierror:
         print("Seestar not found on network")
         return None
+
+    dev_id = _get_device_id(ip)
+    AVAILABLE_IPS['seestar.local'] = ip
+    suffix = f" ({dev_id})" if dev_id else ""
+    print(f"Seestar found via mDNS at: {ip}{suffix}")
+    return ip
 
 
 # Per-thread "active" target IP.  :func:`multiple_ips` sets this on each
@@ -72,14 +282,41 @@ def current_ip():
     return getattr(_active, "ip", None) or DEFAULT_IP
 
 
+def discovery_order():
+    """Serial numbers of all discovered Seestars, in scope-number order.
+
+    Sorted by serial number, so scope ``1``, ``2``, ``3`` … mean the same
+    physical telescope from run to run and from network to network — unlike
+    an IP-ordered list, which reshuffles whenever DHCP does.
+    """
+    return sorted(DISCOVERED)
+
+
+def _nth_scope(n):
+    """Map a 1-based scope number onto a key :func:`resolve_ips` understands.
+
+    A ``seestar-N.local`` hostname wins if one was registered (the legacy
+    mDNS path), otherwise the *n*-th entry of :func:`discovery_order`.
+    """
+    legacy = f"seestar-{n}.local" if n > 1 else "seestar.local"
+    if legacy in AVAILABLE_IPS:
+        return legacy
+    order = discovery_order()
+    if 1 <= n <= len(order):
+        return order[n - 1]
+    return legacy
+
+
 def resolve_ips(call_time_ips):
     """Resolve the ``ips=`` kwarg to a flat list of IP-address strings.
 
     Accepts the same shapes as :func:`multiple_ips`: ``None`` (current
-    :data:`DEFAULT_IP`), an int (``2`` → ``seestar-2.local``), a hostname
-    or IP string, the literal ``"all"``, or a list mixing any of these.
-    Unknown entries are dropped (with a warning printed) so the result
-    is always a non-empty list of resolved IPs when input is valid.
+    :data:`DEFAULT_IP`), an int (``2`` → the second scope, see
+    :func:`discovery_order`), a device name (``'s50_a3497936'``), a bare
+    serial number (``'a3497936'``), a hostname or IP string, the literal
+    ``"all"``, or a list mixing any of these.  Unknown entries are dropped
+    (with a warning printed) so the result is always a non-empty list of
+    resolved IPs when input is valid.
     """
     def _resolve(ip):
         if isinstance(ip, list):
@@ -89,17 +326,20 @@ def resolve_ips(call_time_ips):
                 return AVAILABLE_IPS[ip]
             elif ip in AVAILABLE_IPS.values():
                 return ip
+            elif ip in DISCOVERED:
+                return DISCOVERED[ip]["ip"]
             else:
                 print(f"{ip} is not a valid IP address")
                 return None
         elif isinstance(ip, int):
-            name = f"seestar-{ip}.local" if ip > 1 else "seestar.local"
-            return _resolve(name)
+            return _resolve(_nth_scope(ip))
         elif ip is None:
             return DEFAULT_IP
 
     if isinstance(call_time_ips, str) and call_time_ips.lower() == "all":
-        call_time_ips = list(AVAILABLE_IPS.values())
+        # dict.fromkeys de-duplicates while keeping insertion order: one scope
+        # can hold both a discovery key and a legacy seestar-N.local key.
+        call_time_ips = list(dict.fromkeys(AVAILABLE_IPS.values()))
     if not isinstance(call_time_ips, list):
         call_time_ips = [call_time_ips]
     resolved = _resolve(call_time_ips)
@@ -185,41 +425,53 @@ def _get_device_id(ip, timeout=3):
         conn.close()
 
 
-def find_available_ips(n_ip, timeout=2):
+def find_available_ips(n_ip=None, timeout=2, mdns=False):
     """
-    Find all Seestars on the local network using parallel mDNS lookups.
+    Find all Seestars on the local network and fill :data:`AVAILABLE_IPS`.
 
-    Resolves hostnames ``seestar.local``, ``seestar-2.local``, …,
-    ``seestar-<n_ip>.local`` in parallel and updates the module-level
-    :data:`AVAILABLE_IPS` dictionary with the results.  Each found Seestar
-    is also queried for its model and serial number, which are shown in
-    the printed summary.  Use this when controlling multiple Seestars
-    from a single script.
+    By default this delegates to :func:`discover`, which broadcasts the
+    firmware's own ``scan_iscope`` probe over UDP and finds every scope on
+    the subnet regardless of how many there are or what they're called.
+    Pass ``mdns=True`` for the old behaviour: parallel lookups of the
+    hostnames ``seestar.local``, ``seestar-2.local``, …,
+    ``seestar-<n_ip>.local``, each found scope then queried for its model
+    and serial number.
 
     Parameters
     ----------
-    n_ip : int
-        Maximum Seestar index to search for.  For example, ``n_ip=3``
-        will probe ``seestar.local``, ``seestar-2.local``, and
-        ``seestar-3.local``.
+    n_ip : int, optional
+        Highest Seestar index to probe in the mDNS path.  Ignored (and
+        unnecessary) during UDP discovery, which needs no upper bound.
     timeout : float, optional
-        Maximum time in seconds to wait for all lookups.  Default is 2.
+        Maximum time in seconds to wait for replies.  Default is 2.
+    mdns : bool, optional
+        Use the legacy ``seestar-N.local`` hostname lookups instead of UDP
+        broadcast discovery.  Default False.
 
     Examples
     --------
 
         >>> from seestarpy import connection as conn
-        >>> conn.find_available_ips(3)
+        >>> conn.find_available_ips()
+        ✓ Found Seestar S50 at 192.168.1.55 (s50_a3497936)
+        ✓ Found Seestar S30 Pro at 192.168.1.82 (s30pro_ce545589)
+        Use connection.AVAILABLE_IPS to get active addresses
+        >>> conn.AVAILABLE_IPS
+        {'s50_a3497936': '192.168.1.55', 's30pro_ce545589': '192.168.1.82'}
+
+        >>> conn.find_available_ips(3, mdns=True)
         ✓ Found seestar.local at 192.168.1.243 (s50_a3497936)
         ✓ Found seestar-2.local at 192.168.1.244 (s50_b5210442)
         ✗ seestar-3.local has no active IP address
         Use connection.AVAILABLE_IPS to get active addresses
-        >>> conn.AVAILABLE_IPS
-        {'seestar.local': '192.168.1.243', 'seestar-2.local': '192.168.1.244'}
 
     """
+    if not mdns:
+        discover(timeout=timeout)
+        return
+
     hostnames = ['seestar.local'] + [f'seestar-{i}.local' for i in
-                                     range(2, n_ip + 1)]
+                                     range(2, (n_ip or 1) + 1)]
     found = {}
 
     def try_lookup(hostname):
@@ -263,12 +515,16 @@ def find_available_ips(n_ip, timeout=2):
 
 def set_default_ip(n):
     """
-    Set :data:`DEFAULT_IP` to the *n*-th Seestar in :data:`AVAILABLE_IPS`.
+    Point :data:`DEFAULT_IP` at one of the known Seestars.
 
     This is a convenience shorthand so you can switch between Seestars
-    with a single integer instead of typing full hostnames or IPs.
+    without typing IP addresses that change every time DHCP feels like it.
 
-    The mapping follows the Seestar naming convention:
+    Scope numbers map onto :func:`discovery_order` — serial-number order,
+    which is stable from run to run and from network to network, unlike
+    anything derived from IPs.  A registered ``seestar-N.local`` hostname
+    still takes precedence, so scripts written against the old mDNS path
+    keep their numbering:
 
     - ``1`` → ``seestar.local``
     - ``2`` → ``seestar-2.local``
@@ -277,37 +533,46 @@ def set_default_ip(n):
 
     Parameters
     ----------
-    n : int
-        Seestar number (1-based).
+    n : int or str
+        Either a 1-based scope number, or any name :func:`resolve_ips`
+        understands — a serial number (``'a3497936'``), a device name
+        (``'s50_a3497936'``), a ``seestar-N.local`` hostname, or an IP.
 
     Raises
     ------
     KeyError
-        If the corresponding hostname is not in :data:`AVAILABLE_IPS`.
-        Call :func:`find_available_ips` first to populate the dictionary.
+        If nothing matches.  Call :func:`discover` first to populate
+        :data:`AVAILABLE_IPS`.
 
     Examples
     --------
     ::
 
         >>> from seestarpy import connection as conn
-        >>> conn.find_available_ips(3)
+        >>> conn.discover()
         >>> conn.set_default_ip(2)
-        DEFAULT_IP → 192.168.1.83 (seestar-2.local, s50_b5210442)
+        DEFAULT_IP → 192.168.1.83 (s50_97783b61)
+        >>> conn.set_default_ip('ce545589')
+        DEFAULT_IP → 192.168.1.82 (s30pro_ce545589)
 
     """
     global DEFAULT_IP
-    hostname = f"seestar-{n}.local" if n > 1 else "seestar.local"
-    if hostname not in AVAILABLE_IPS:
+    key = _nth_scope(n) if isinstance(n, int) else n
+    if key in AVAILABLE_IPS:
+        DEFAULT_IP = AVAILABLE_IPS[key]
+    elif key in DISCOVERED:
+        DEFAULT_IP = DISCOVERED[key]["ip"]
+    elif key in AVAILABLE_IPS.values():
+        DEFAULT_IP = key
+    else:
         raise KeyError(
-            f"{hostname} not found in AVAILABLE_IPS. "
-            f"Call find_available_ips() first. "
+            f"{key} not found in AVAILABLE_IPS. "
+            f"Call discover() first. "
             f"Available: {list(AVAILABLE_IPS.keys())}"
         )
-    DEFAULT_IP = AVAILABLE_IPS[hostname]
     dev_id = _get_device_id(DEFAULT_IP)
-    suffix = f", {dev_id}" if dev_id else ""
-    print(f"DEFAULT_IP \u2192 {DEFAULT_IP} ({hostname}{suffix})")
+    suffix = f" ({dev_id})" if dev_id else ""
+    print(f"DEFAULT_IP \u2192 {DEFAULT_IP}{suffix}")
 
 
 class _Connection:
@@ -497,9 +762,12 @@ def send_command(params):
     return _get_connection(current_ip()).send(params)
 
 
-# Module-level auto-discovery.  This runs at the END of the module (not at
-# the top) because find_seestar() now queries the device id via
-# _get_device_id(), which needs the _Connection class to be defined.
+# Module-level auto-discovery: one UDP broadcast sweep at import, which
+# registers *every* scope on the subnet in AVAILABLE_IPS (not just the first)
+# and points DEFAULT_IP at the lowest-numbered one.  This runs at the END of
+# the module (not at the top) because the mDNS fallback inside find_seestar()
+# queries the device id via _get_device_id(), which needs _Connection.
 seestar_ip = find_seestar()
 DEFAULT_IP = seestar_ip if seestar_ip else "10.0.0.1"
-AVAILABLE_IPS = {'seestar.local': DEFAULT_IP}
+if not AVAILABLE_IPS:
+    AVAILABLE_IPS['seestar.local'] = DEFAULT_IP
