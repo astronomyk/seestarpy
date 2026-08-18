@@ -15,14 +15,19 @@ Welcome to SeeStar-Py's Documentation!
 
 .. important::
 
-   **Version compatibility.**  seestarpy **0.5.0+** targets the **Seestar
-   app v3.2.0 / firmware v7.75** generation.  The onboard batch-stacking
-   workflow (:mod:`~seestarpy.stack`, :mod:`~seestarpy.crowdsky`) sends
-   sub-frame paths in the form firmware v7.75 requires; on **earlier
-   firmware that format is not guaranteed to work**.
+   **Version compatibility.**  The **minor** version tracks the oldest
+   Seestar **major** firmware version supported.  seestarpy **0.7.x**
+   supports firmware **7.x** — tested on 7.18 and 7.75 — and everything
+   newer, including 8.46 and 8.89.  When firmware 7 support is dropped,
+   seestarpy becomes 0.8.
 
-   If your Seestar runs firmware **earlier than v7.75** (app < v3.2.0),
-   install a previous release instead:
+   The onboard batch-stacking workflow (:mod:`~seestarpy.stack`,
+   :mod:`~seestarpy.crowdsky`) sends sub-frame paths in the form firmware
+   v7.75 requires; on **earlier firmware that format is not guaranteed to
+   work**.
+
+   If your Seestar runs firmware **earlier than v7.18**, install an older
+   release instead:
 
    .. code-block:: bash
 
@@ -80,7 +85,7 @@ The shortest path from install to imaging:
 
    import seestarpy as ssp
 
-   # 1. Connect — the Seestar is auto-discovered via mDNS
+   # 1. Connect — the Seestar is auto-discovered by UDP broadcast
    ssp.connection.test_connection()
 
    # 2. Open the arm
@@ -105,6 +110,17 @@ frame and pop it up in a matplotlib window:
    stream.show_current_stack()              # one Seestar
    stream.show_current_stack(ips="all")     # all Seestars in a subplot grid
 
+Or, for a screen you can leave up all night, start the web dashboard —
+it finds every Seestar on the network by itself and gives each one a
+card with its live image and status:
+
+.. code-block:: bash
+
+   pip install "seestarpy[dashboard]"
+   python -m seestarpy.dashboard
+
+See :doc:`examples/live_dashboard`.
+
 If auto-discovery doesn't find your Seestar, set the IP manually:
 
 .. code-block:: python
@@ -124,7 +140,7 @@ Seestars at once:
 .. code-block:: python
 
    # Discover all Seestars on the network
-   ssp.connection.find_available_ips(n_ip=3)
+   ssp.connection.discover()
 
    # Open all arms simultaneously
    ssp.open(ips="all")
@@ -160,6 +176,7 @@ Contents
    examples/observation_plans
    examples/data_management
    examples/live_streaming
+   examples/live_dashboard
    examples/crowdsky_stacking
 
 .. toctree::
@@ -170,6 +187,7 @@ Contents
    info/connection_framework
    info/errors
    info/image_stream_protocol
+   info/sniffing_port_4700
    api/api_index
 
 

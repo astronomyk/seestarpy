@@ -1,6 +1,7 @@
 import atexit
 import json
 import socket
+import sys
 import threading
 import time
 from functools import wraps
@@ -35,6 +36,26 @@ AVAILABLE_IPS = {}
 
 # Replaced at the bottom of the module by the import-time discovery sweep.
 DEFAULT_IP = "10.0.0.1"
+
+
+#: ASCII stand-ins for the glyphs used in this module's status lines.
+_ASCII_FALLBACK = str.maketrans({"✓": "+", "✗": "x", "→": "->"})
+
+
+def _print(message):
+    """Print *message*, degrading its glyphs if the console can't encode them.
+
+    A Windows console defaults to cp1252, which has no ``✓``, ``✗`` or
+    ``→``.  Printing one raises ``UnicodeEncodeError`` — and because
+    :func:`find_seestar` runs at import time, that exception used to take
+    down ``import seestarpy`` entirely on an unconfigured terminal.
+    """
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        fallback = message.translate(_ASCII_FALLBACK)
+        print(fallback.encode(encoding, "replace").decode(encoding, "replace"))
 
 
 def _dev_id(model, sn):
@@ -207,11 +228,11 @@ def discover(timeout=None, port=None, update=True, quiet=False):
             for sn in sorted(found):
                 rec = found[sn]
                 model = rec["model"] or "Seestar"
-                print(f"✓ Found {model} at {rec['ip']} ({rec['dev_id']})")
+                _print(f"✓ Found {model} at {rec['ip']} ({rec['dev_id']})")
             print("Use connection.AVAILABLE_IPS to get active addresses")
         else:
-            print("✗ No Seestars answered the UDP discovery probe "
-                  f"(port {port})")
+            _print("✗ No Seestars answered the UDP discovery probe "
+                   f"(port {port})")
 
     return {sn: rec["ip"] for sn, rec in found.items()}
 
@@ -505,9 +526,9 @@ def find_available_ips(n_ip=None, timeout=2, mdns=False):
         if name in found:
             dev_id = device_ids.get(name)
             suffix = f" ({dev_id})" if dev_id else ""
-            print(f"✓ Found {name} at {found[name]}{suffix}")
+            _print(f"✓ Found {name} at {found[name]}{suffix}")
         else:
-            print(f"✗ {name} has no active IP address")
+            _print(f"✗ {name} has no active IP address")
 
     print("Use connection.AVAILABLE_IPS to get active addresses")
     AVAILABLE_IPS.update(found)
@@ -572,7 +593,7 @@ def set_default_ip(n):
         )
     dev_id = _get_device_id(DEFAULT_IP)
     suffix = f" ({dev_id})" if dev_id else ""
-    print(f"DEFAULT_IP \u2192 {DEFAULT_IP}{suffix}")
+    _print(f"DEFAULT_IP \u2192 {DEFAULT_IP}{suffix}")
 
 
 class _Connection:

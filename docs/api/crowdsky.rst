@@ -21,3 +21,15 @@ Server (web API)
     :members:
     :undoc-members:
     :show-inheritance:
+
+HEALPix (sky pixelisation)
+--------------------------
+
+A minimal, dependency-free implementation of the HEALPix RING scheme, used
+to encode a stack's sky position in its CrowdSky filename.  No ``healpy``
+install required.
+
+.. automodule:: seestarpy.crowdsky.healpix
+    :members:
+    :undoc-members:
+    :show-inheritance:

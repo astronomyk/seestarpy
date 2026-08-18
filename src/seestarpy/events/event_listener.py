@@ -3,7 +3,6 @@ import json
 import time
 import websockets
 import threading
-from pathlib import Path
 
 from ..connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
 from .event_stream import handle_event, LATEST_STATE
@@ -205,9 +204,8 @@ def start_listener(with_websocket: bool = True):
         tasks = [asyncio.create_task(run())]
         if with_websocket:
             tasks.append(asyncio.create_task(websocket_server()))
-            paths = [str(p.resolve()) for p in dashboard_url()]
-            br = "\n- "
-            print(f"[seestarpy] Dashboards are available:\n- {br.join(paths)}")
+            print("[seestarpy] For a live web dashboard of every Seestar on "
+                  "the network, run: python -m seestarpy.dashboard")
         await asyncio.gather(*tasks)
 
     def thread_entry():
@@ -250,27 +248,37 @@ def stop_listener():
     _loop = None
 
 
-def dashboard_url():
+def dashboard_url(port=None):
     """
-    Get file paths to the bundled HTML dashboard pages.
+    Get the URL of the seestarpy web dashboard.
 
-    These dashboards connect to the WebSocket server started by
-    :func:`start_listener` and display live Seestar state.  Open the
-    returned paths in a web browser.
+    .. versionchanged:: 0.7
+       The single-scope ``basic.html`` / ``fancy.html`` files this used to
+       return were replaced by :mod:`seestarpy.dashboard`, a served page
+       that discovers *every* Seestar on the network and gives each one a
+       card with its live image and status.  Start it with
+       :func:`seestarpy.dashboard.serve` (or ``python -m
+       seestarpy.dashboard``) — it does not need :func:`start_listener`,
+       as it runs its own per-scope event connections.
+
+    Parameters
+    ----------
+    port : int, optional
+        Port the dashboard is served on.  Defaults to
+        :data:`seestarpy.dashboard.server.DEFAULT_PORT` (8080).
 
     Returns
     -------
-    list of pathlib.Path
-        Paths to the ``basic.html`` and ``fancy.html`` dashboard files.
+    str
+        The dashboard URL.
 
     Examples
     --------
 
         >>> from seestarpy.events.event_listener import dashboard_url
         >>> dashboard_url()
-        [PosixPath('.../dashboards/basic.html'), PosixPath('.../dashboards/fancy.html')]
+        'http://localhost:8080/'
 
     """
-    paths = [Path(__file__).parent.parent / "dashboards" / f"{which}.html"
-             for which in ["basic", "fancy"]]
-    return paths
+    from ..dashboard.server import DEFAULT_PORT
+    return f"http://localhost:{port or DEFAULT_PORT}/"

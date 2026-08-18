@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seestar Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#128301;</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Seestar Dashboard</h1>
+    <div class="topbar-right">
+      <span id="fleet-count" class="fleet-count">&mdash;</span>
+      <span id="link-state" class="pill pill-muted">
+        <span class="dot"></span><span class="pill-text">connecting</span>
+      </span>
+    </div>
+  </header>
+
+  <main id="grid" class="grid" aria-live="polite"></main>
+
+  <p id="empty" class="empty">
+    Searching the network for Seestars&hellip;
+    <span class="empty-sub">Cards appear on their own as scopes are found.</span>
+  </p>
+
+  <footer class="footer">
+    <span id="scanned">&nbsp;</span>
+  </footer>
+
+  <!-- One card per Seestar, cloned and then updated in place so the image
+       element survives every refresh and never flickers. -->
+  <template id="card-template">
+    <article class="card">
+      <header class="card-head">
+        <span class="sn"></span>
+        <span class="sep">&mdash;</span>
+        <span class="ip"></span>
+        <span class="link-badge"></span>
+        <span class="status pill"><span class="dot"></span><span class="pill-text"></span></span>
+      </header>
+
+      <div class="card-body">
+        <div class="frame">
+          <img class="frame-img" alt="" decoding="async">
+          <div class="frame-placeholder">waiting for frame&hellip;</div>
+          <div class="frame-tag frame-tag-left"></div>
+          <div class="frame-tag frame-tag-right"></div>
+        </div>
+
+        <dl class="stats">
+          <div class="stat-group">
+            <div class="stat"><dt>Raw exposure</dt><dd data-k="exp"></dd></div>
+            <div class="stat"><dt>Stack time</dt><dd data-k="stacktime"></dd></div>
+            <div class="stat"><dt>Dropped</dt><dd data-k="dropped"></dd></div>
+            <div class="stat"><dt>Filter</dt><dd data-k="filter"></dd></div>
+          </div>
+          <div class="stat-group">
+            <div class="stat"><dt>Target</dt><dd data-k="target"></dd></div>
+            <div class="stat"><dt>RA / Dec</dt><dd data-k="radec"></dd></div>
+            <div class="stat"><dt>Alt / Az</dt><dd data-k="altaz"></dd></div>
+            <div class="stat"><dt>View status</dt><dd data-k="view"></dd></div>
+          </div>
+          <div class="stat-group">
+            <div class="stat"><dt>Mount</dt><dd data-k="mount"></dd></div>
+            <div class="stat"><dt>Battery</dt><dd data-k="battery"></dd></div>
+            <div class="stat"><dt>Temperature</dt><dd data-k="temp"></dd></div>
+            <div class="stat"><dt>Free space</dt><dd data-k="free"></dd></div>
+          </div>
+        </dl>
+      </div>
+    </article>
+  </template>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

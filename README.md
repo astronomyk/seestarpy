@@ -8,16 +8,28 @@ If you've found the package useful - how about [buying me a coffee](https://buym
 
 > **Version compatibility**
 >
-> seestarpy **0.5.0+** targets the **Seestar app v3.2.0 / firmware v7.75**
-> generation. The onboard batch-stacking workflow (`stack`, `crowdsky`)
-> sends sub-frame paths in the form firmware v7.75 requires; on earlier
-> firmware that format is not guaranteed to work.
+> The **minor** version tracks the oldest Seestar **major** firmware version
+> supported. **seestarpy 0.7.x** supports firmware **7.x** (tested on 7.18 and
+> 7.75) and everything newer — 8.46 and 8.89 included. When firmware 7 support
+> is dropped, seestarpy becomes 0.8.
 >
-> If your Seestar runs firmware **earlier than v7.75** (app < v3.2.0),
-> install a previous release instead: `pip install "seestarpy<0.5"`.
+> If your Seestar runs firmware **earlier than v7.18**, install an older
+> release: `pip install "seestarpy<0.5"`.
 >
-> Firmware 7.18+ also requires authentication — see the
+> Firmware 7.18+ requires authentication — see the
 > [authentication docs](https://seestarpy.readthedocs.io/en/latest/info/authentication.html).
+
+
+Live dashboard
+--------------
+One screen for every Seestar on the network — each gets a card with its
+current stacked image and status, and cards appear as scopes are switched on:
+
+    $ pip install "seestarpy[dashboard]"
+    $ python -m seestarpy.dashboard
+
+Add `--lan` to reach it from a phone or tablet. See the
+[dashboard tutorial](https://seestarpy.readthedocs.io/en/latest/examples/live_dashboard.html).
 
 
 Quickstart

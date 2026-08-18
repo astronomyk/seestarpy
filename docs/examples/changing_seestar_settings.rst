@@ -3,7 +3,70 @@ Changing the Seestar's settings
 
 .. note::
     **Assumption**: That you have already set up a connection to the seestar.
-    If not, see :doc:`basic_connection`.
+    If not, see :doc:`basic_connection`.  All the examples below assume
+    ``from seestarpy import raw``.
+
+
+One dictionary, many settings
+-----------------------------
+
+Almost everything configurable about a Seestar lives in a single settings
+dictionary.  Read it whole:
+
+.. code-block:: python
+
+    raw.get_setting()["result"]
+    # {'temp_unit': 'C', 'exp_ms': {'stack_l': 10000, 'continuous': 500},
+    #  'stack_dither': {'pix': 60, 'interval': 5, 'enable': True},
+    #  'auto_af': False, 'heater_enable': False, 'focal_pos': 1580, ...}
+
+...and write to it by keyword:
+
+.. code-block:: python
+
+    raw.set_setting(temp_unit="F")
+    raw.set_setting(auto_power_off=False)
+    raw.set_setting(heater_enable=True)          # dew heater on
+
+Two things to know before you start poking at it.
+
+**Nested settings are replaced, not merged.**  Keys like ``exp_ms``,
+``stack_dither`` and ``stack`` hold sub-dictionaries, and the firmware
+overwrites the whole block with what you send.  Read the current value,
+change one field, send the lot back:
+
+.. code-block:: python
+
+    dither = raw.get_setting()["result"]["stack_dither"]
+    dither["interval"] = 6
+    raw.set_setting(stack_dither=dither)
+
+This is exactly what the convenience wrappers do for you, which is why
+``ssp.dither(every_n_subs=6)`` and ``ssp.exposure(20)`` are the safer way
+to touch those two blocks (see :doc:`basic_observing`).
+
+**Settings are persistent and shared.**  They are stored on the scope, not
+scoped to your connection, so a change you make here is what the phone app
+will see next time it connects — and it stays that way until something
+changes it back.
+
+The full list of known keys, with types and defaults, is in the
+:func:`~seestarpy.raw.set_setting` API reference.  The most useful ones:
+
+======================  ===================================================
+``exp_ms``              sub-exposure lengths — use ``ssp.exposure()``
+``stack_dither``        dither throw and cadence — use ``ssp.dither()``
+``auto_af``             auto-focus after every goto (default ``False``)
+``plan_target_af``      auto-focus between plan targets (default ``False``)
+``stack_after_goto``    start stacking as soon as a goto completes
+``heater_enable``       dew heater
+``auto_power_off``      power down after ~15 min idle (default ``True``)
+``expert_mode``         unlocks the 2 s and 5 s sub lengths
+``stack_lenhance``      dark subtraction (moves the filter, so call alone)
+``beep_volume``         ``'close'`` to silence the scope
+``preview``             image/RTSP stream transport, firmware 8.46+
+``wide_cam``            use the wide camera (S30 Pro)
+======================  ===================================================
 
 
 Time and location
@@ -24,6 +87,44 @@ the year your parents were courting, you may want to run the following:
     raw.pi_set_time()
     # For Vienna, Austria
     raw.set_user_location(48.2, 16.4)
+
+Both matter more than they look.  Plate-solving, the Alt/Az conversion, and
+the ``start_min`` field of an observation plan are all interpreted against
+the scope's own clock and coordinates, so a scope that thinks it is in 1985
+will plan a night that never happens.  ``pi_set_time()`` syncs to the clock
+and timezone of the machine you are calling from.
+
+
+Image stream transport (firmware 8.46+)
+---------------------------------------
+
+Firmware 8.46 added a ``preview`` settings block that decides how stacked
+frames cross the network.  On an 8 MP S30 Pro over Wi-Fi the difference is
+twentyfold:
+
+.. code-block:: python
+
+    raw.get_preview_setting()
+    # {'image_transfer_mode': 'Raw', 'rtsp_quality': 'HighQuality', ...}
+    # None on firmware older than 8.46
+
+    raw.set_image_transfer_mode("Jpg")      # ~2.5 MB per frame, ~5 s
+    raw.set_image_transfer_mode("Raw")      # ~50 MB per frame, ~30 s
+
+``'Jpg'`` gives you a finished, firmware-stretched JPEG — ideal for
+monitoring.  ``'Raw'`` gives linear 16-bit data, which is what you want if
+you intend to process the frames yourself, because the JPEG's tone-mapping
+cannot be undone.  Aliases ``'jpeg'``/``'compressed'`` and
+``'lossless'``/``'full'`` are accepted and validated before the round-trip.
+
+.. warning::
+    This is a persistent device setting shared with the phone app, not a
+    per-connection option.  Switching to ``Jpg`` to make a dashboard
+    responsive also changes what every other client gets, until you change
+    it back.
+
+See :doc:`live_streaming` and :doc:`live_dashboard` for what to do with the
+frames once they arrive.
 
 
 USB-C port: drive or wired LAN

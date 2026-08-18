@@ -29,6 +29,7 @@ from .conftest import wait_for_event, wait_for_app_event
 
 pytestmark = [
     pytest.mark.integration,
+    pytest.mark.movement,
     pytest.mark.sequence,
     pytest.mark.slow,
     pytest.mark.usefixtures("event_listener_session", "module_safety_net"),

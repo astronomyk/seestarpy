@@ -16,7 +16,8 @@ from seestarpy import raw
 from seestarpy.events import event_stream
 from seestarpy.events.event_listener import start_listener, stop_listener
 
-pytestmark = [pytest.mark.integration, pytest.mark.slow]
+pytestmark = [pytest.mark.integration, pytest.mark.movement,
+              pytest.mark.slow]
 
 
 @pytest.fixture(scope="module")

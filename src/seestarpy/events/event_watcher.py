@@ -3,8 +3,8 @@ import json
 import time
 from typing import List, Type
 
-from src.seestarpy.connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
-from src.seestarpy.events import event_definitions as evs
+from ..connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
+from . import event_definitions as evs
 
 
 class EventWatcher:

@@ -4,6 +4,58 @@ from . import raw
 from .connection import send_command, multiple_ips
 
 
+#: Sensor pixel pitch in microns (IMX462, used by the S50 and S30 Pro).
+PIXEL_SIZE_UM = 2.9
+
+#: Plate scale in arcsec/pixel used if the focal length can't be read back.
+#: 206.265 * 2.9 / 250 mm = 2.39 "/px for the S50 telephoto.
+DEFAULT_PIXEL_SCALE = 2.39
+
+
+def pixel_scale(focal_mm=None):
+    """
+    Return the plate scale in arcsec per pixel for the connected Seestar.
+
+    Derived from the focal length reported by the device, so it stays
+    correct for the S30 Pro's wide camera (160 mm, 3.74 "/px) as well as
+    the S50 telephoto (250 mm, 2.39 "/px).  Falls back to
+    :data:`DEFAULT_PIXEL_SCALE` if the device can't be read.
+
+    Parameters
+    ----------
+    focal_mm : float or None, optional
+        Focal length in mm.  If ``None`` (default) it is queried from the
+        device.  Pass it explicitly to save a round-trip when you have
+        already fetched the device block.
+
+    Returns
+    -------
+    float
+        Plate scale in arcsec/pixel.
+
+    Examples
+    --------
+
+        >>> from seestarpy import status
+        >>> status.pixel_scale()
+        2.3926...
+
+    """
+    if focal_mm is None:
+        try:
+            device = raw.get_device_state(keys=["device"])["result"]["device"]
+            focal_mm = device.get("focal_len")
+        except Exception:
+            focal_mm = None
+    try:
+        focal_mm = float(focal_mm or 0)
+    except (TypeError, ValueError):
+        focal_mm = 0
+    if focal_mm > 0:
+        return 206.265 * PIXEL_SIZE_UM / focal_mm
+    return DEFAULT_PIXEL_SCALE
+
+
 def _num(val, nd=None):
     """Round *val* for display, or return ``"---"`` if it isn't numeric.
 
@@ -75,6 +127,7 @@ def status_bar(return_type="str"):
         | STATE          | CURRENT RA/DEC | EXPOSURE TIME  | FOCUS POSITION | FREE MB  |
         | ERROR          | ALT  AZ  COMP  | STACK    DROP  | PLATE SOLVE    | EQ_MODE  |
         | TARGET NAME    | BALANCE ANGLE  | TRACKING       | SOLVE ERROR    | TIME     |
+        | STAGE          | ARCSEC / PIX   | DITHER         | GAIN           | FIRMWARE |
         |================|================|================|================|==========|
 
     Examples
@@ -86,7 +139,7 @@ def status_bar(return_type="str"):
     """
 
     dev = raw.get_device_state(["balance_sensor", "mount", "pi_status",
-                            "storage"]).get("result", {})
+                            "storage", "setting", "device"]).get("result", {})
     app = raw.iscope_get_app_state().get("result", {})
     view = app.get("View", {})
     azalt = _pair(raw.scope_get_horiz_coord(), ("alt", "az"))
@@ -101,7 +154,12 @@ def status_bar(return_type="str"):
     t11 = f'{view.get("mode", "---"):^14}'
     t12 = f'{view.get("state", "---"):^14}'
     t13 = f'{view.get("error", "---"):^14}'
-    t14 = f'{view.get("target_name", "---"):^14}'
+    # Target names are user-set and can be longer than the cell, which would
+    # push the whole table out of alignment -- truncate rather than overflow.
+    target_name = str(view.get("target_name", "---"))
+    if len(target_name) > 14:
+        target_name = target_name[:13] + "…"
+    t14 = f'{target_name:^14}'
 
     target_ra_dec = view.get("target_ra_dec", ["---", "---"])
     t21a = f'{_num(target_ra_dec[0], 3):<7}'
@@ -124,10 +182,34 @@ def status_bar(return_type="str"):
     t43 = f'{app.get("PlateSolve", view.get("PlateSolve", {}).get("PlateSolve",{})).get("state", "---"):^14}'
     t44 = f'{app.get("PlateSolve", view.get("PlateSolve", {}).get("PlateSolve",{})).get("error", "---"):^14}'
 
-    t51 = f'{str(dev.get("pi_status", {}).get("battery_capacity"))+"%":^7}'
+    # ^8 to match the other cells in this column -- at ^7 the BATTERY row
+    # rendered one character short and the table came out ragged.
+    t51 = f'{str(dev.get("pi_status", {}).get("battery_capacity"))+"%":^8}'
     t52 = f'{dev.get("storage", {}).get("storage_volume", [{}])[0].get("free_mb", "---"):^8}'
     t53 = f'{str(dev.get("mount", {}).get("equ_mode")):^8}'
     t54 = f'{dt.now().strftime("%H:%M:%S"):^8}'
+
+    # Fifth row.  DITHER is shown because an undithered run and a dithered
+    # one are otherwise indistinguishable at a glance, and the firmware
+    # ships with dithering ON by default.
+    setting = dev.get("setting", {})
+    dith = setting.get("stack_dither") or {}
+    if dith.get("enable"):
+        scale = pixel_scale(dev.get("device", {}).get("focal_len"))
+        dither_txt = f"{dith.get('pix', 0) * scale / 60.0:.1f}' /{dith.get('interval', '?')} sub"
+    else:
+        dither_txt = "off" if dith else "---"
+    t61 = f'{view.get("stage", "---"):^14}'
+    t62 = f'{_num(pixel_scale(dev.get("device", {}).get("focal_len")), 2):^14}'
+    t63 = f'{dither_txt:^14}'
+    # The live gain lives on the View block; ``isp_gain`` is a sentinel
+    # (-9990.0) unless manual exposure is in use, so only trust it if sane.
+    gain = view.get("gain")
+    if gain is None:
+        isp = setting.get("isp_gain")
+        gain = isp if isinstance(isp, (int, float)) and isp >= 0 else "---"
+    t64 = f'{gain:^14}'
+    t65 = f'{str(dev.get("device", {}).get("firmware_ver_string", "---")):^8}'
 
     return f"""
 |================|================|================|================|==========|
@@ -144,6 +226,9 @@ def status_bar(return_type="str"):
 |----------------|----------------|----------------|----------------|----------|
 |  TARGET NAME   | BALANCE ANGLE  |    TRACKING    |  SOLVE ERROR   |   TIME   |
 | {t14         } | {t24         } | {t34         } | {t44         } | {t54   } |
+|----------------|----------------|----------------|----------------|----------|
+|     STAGE      |  ARCSEC / PIX  |     DITHER     |      GAIN      | FIRMWARE |
+| {t61         } | {t62         } | {t63         } | {t64         } | {t65   } |
 |================|================|================|================|==========|
 """
 

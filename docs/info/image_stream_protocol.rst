@@ -59,22 +59,40 @@ The protocol was reverse-engineered in two phases:
 Binary frame protocol
 ---------------------
 
-Each frame on port 4800/4804 consists of a **34-byte header** followed by an
+Each frame on port 4800/4804 consists of an **80-byte header** followed by an
 **image payload**.
 
-Header format (34 bytes, big-endian)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Only the first **34 bytes** of that header carry named fields; the remaining
+46 are zero padding.  The full size is announced by the header itself, at
+offset 4.
+
+.. warning::
+
+   Read the header size from offset 4 and skip to it — do **not** assume the
+   payload starts at byte 34.  A reader that skips only 34 bytes leaves 46
+   stray bytes in the stream, so every payload comes back 46 bytes early and
+   46 bytes short, and the next frame is misaligned.  (This is also why the
+   ZIP payloads described below appear to begin with "a variable number of
+   zero bytes": those bytes are the rest of the header.  ZIP survives it
+   because its reader scans for the ``PK\x03\x04`` signature; a raw or JPEG
+   payload does not.)
+
+Header format (80 bytes total, 34 named, big-endian)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ======  ======  =============  ==============================================
 Offset  Size    Field          Notes
 ======  ======  =============  ==============================================
 0-1     uint16  magic          Must be ``0x03C3`` (963 decimal)
 2-3     uint16  version        Protocol version (observed: 2)
-4-5     uint16  (gap)          Unused by the app's header parser
-6-9     uint32  length         Image payload size in bytes (big-endian)
+4-5     uint16  header_size    **Total** header size (observed: 80).  The
+                               payload starts here, not at byte 34.
+6-9     uint32  length         Image payload size in bytes (big-endian),
+                               counted from the end of the full header
 10-11   uint16  (gap)          Unused
 12      byte    is_big_endian  Endianness flag
-13      byte    img_type       1 = preview, 5 = stacked
+13      byte    img_type       0 = ack, 1 = preview, 4 = JPEG stack,
+                               5 = raw stack
 14      byte    data_type      Data format identifier (observed: 3)
 15      byte    frame_id       Frame identifier
 16-17   uint16  width          Image width in pixels
@@ -95,41 +113,86 @@ in the APK source (``com.wss.rxscoketclient.deal.FileDealUtil``).
 Image payload formats
 ~~~~~~~~~~~~~~~~~~~~~
 
-The payload format depends on the frame type.  There are **three** kinds of
+The payload format depends on the frame type.  There are **four** kinds of
 frame, distinguished by ``img_type`` and ``data_type`` in the header:
 
 Stacked frames (img_type=5, data_type=3)
 """""""""""""""""""""""""""""""""""""""""
 
-Returned by ``get_stacked_img`` and during active observation.  The payload
-is a **streaming ZIP archive** containing deflate-compressed raw pixel data.
+Returned by ``get_stacked_img`` and during active observation.  The pixel
+data is **16-bit RGB** (48 bpp) and arrives one of two ways depending on
+firmware:
 
-Structure::
+- **Uncompressed** — firmware 7.75+ (measured on an S30 Pro) sends the
+  pixels raw, so the payload is exactly ``height × width × 3 × 2`` bytes.
+- **ZIP-compressed** — older firmware wraps them in a streaming ZIP
+  archive, as described below.
 
-    [zero padding]  [ZIP local file header]  [deflate stream]
+.. tip::
+
+   Identify the format by **payload size first**, and only fall back to
+   scanning for the ZIP signature.  Those four bytes turn up by chance in
+   roughly one uncompressed 50 MB frame in a hundred, so a
+   signature-first test intermittently routes good frames into the
+   decompressor.
+
+The ZIP structure is::
+
+    [ZIP local file header]  [deflate stream]
 
 Specifically:
 
-1. A variable number of zero bytes (observed: 46 bytes)
-2. A ZIP local-file header (``PK\x03\x04``) with:
+1. A ZIP local-file header (``PK\x03\x04``) with:
 
    - Version 4.5 (ZIP64)
    - Compression method: deflate (8)
    - Bit flag 0x0008 (data descriptor, streaming — sizes not in header)
    - Filename: ``raw_data``
 
-3. The deflate-compressed pixel data
+2. The deflate-compressed pixel data
 
-The decompressed data is **16-bit RGB** (48 bits per pixel)::
+Either way the pixel data is **16-bit RGB** (48 bits per pixel)::
 
     height × width × 3 × sizeof(uint16) bytes
 
-For a 4K S50: 3840 × 2160 × 3 × 2 = 49,766,400 bytes (decompressed from
-~24 MB compressed).
+For a 4K S50 or S30 Pro: 3840 × 2160 × 3 × 2 = 49,766,400 bytes.
 
 This can be loaded directly into a NumPy array::
 
     np.frombuffer(raw, dtype=np.uint16).reshape((height, width, 3))
+
+JPEG stack frames (img_type=4)
+""""""""""""""""""""""""""""""
+
+**Firmware 8.46+.**  The same stacked image, but tone-mapped by the firmware
+and delivered as a finished JPEG.  Measured on an 8 MP S30 Pro over Wi-Fi,
+this is a twentyfold saving::
+
+    img_type=4 (Jpg)   ~2.5 MB    ~5 s
+    img_type=5 (Raw)  ~49.8 MB   ~30 s
+
+Two things differ from every other frame type:
+
+- ``width`` and ``height`` are reported as **0**.  The real dimensions are
+  inside the JPEG, so any "is this an image or an ack?" test based on the
+  header dimensions will throw these frames away.
+- The pixels are **already stretched**.  Applying an auto-stretch on top of
+  them ruins the image, and the tone mapping cannot be undone — use
+  ``Raw`` when you need linear data.
+
+The payload is a plain JFIF file, decodable with Pillow directly.
+
+Which of the two a scope sends is a **device setting**, not a firmware
+behaviour: ``preview.image_transfer_mode``, with values ``"Jpg"`` and
+``"Raw"`` (the app's ``StackImageQuality`` enum).  Firmware before 8.46 has
+no ``preview`` block at all and always sends ``Raw``.  See
+:func:`~seestarpy.raw.set_image_transfer_mode`::
+
+    >>> from seestarpy import raw
+    >>> raw.get_preview_setting()
+    {'rtsp_quality': 'HighQuality', 'image_transfer_mode': 'Jpg',
+     'rtsp_width': 1080, 'rtsp_height': 1920}
+    >>> raw.set_image_transfer_mode("Jpg")
 
 Preview frames (img_type=1, data_type=2)
 """"""""""""""""""""""""""""""""""""""""
@@ -193,7 +256,8 @@ The official app follows this pattern:
 1. Open TCP socket to port 4800 with ``TCP_NODELAY``, 64 KB buffers, keepalive
 2. Start a heartbeat thread sending ``test_connection`` every 4000 ms
 3. Send ``begin_streaming`` (or ``get_stacked_img`` for one-shot)
-4. Read loop: 34-byte header → validate magic → read ``length`` bytes → process
+4. Read loop: 34 named header bytes → validate magic → skip to
+   ``header_size`` (80) → read ``length`` bytes → process
 5. Send ``stop_streaming`` → close socket
 
 
@@ -223,7 +287,8 @@ All paths relative to the decompiled APK (``sources/``):
 - ``com/wss/rxscoketclient/SocketObservable.java`` — TCP socket + ReadThread
   (binary frame reader; the ``run()`` method was too complex for JADX to
   decompile — 1285 bytecode instructions)
-- ``com/wss/rxscoketclient/deal/HeaderData.java`` — 34-byte header parser
+- ``com/wss/rxscoketclient/deal/HeaderData.java`` — header parser (reads
+  the 34 named fields; the app skips to ``header_size`` for the payload)
 - ``com/wss/rxscoketclient/deal/FileDealUtil.java`` — ``MAGIC_NUMBER = 963``,
   ``bytes2int()`` helper
 - ``com/wss/rxscoketclient/deal/ImageEvent.java`` — Image metadata DTO
@@ -242,7 +307,7 @@ Data flow in the app
         │
         ▼
     SocketObservable.ReadThread.run()
-        │  1. Read 34-byte header
+        │  1. Read header (34 named bytes, skip to header_size)
         │  2. Validate magic == 0x03C3
         │  3. Read `length` bytes of image payload
         │  4. Write payload to temp file on disk

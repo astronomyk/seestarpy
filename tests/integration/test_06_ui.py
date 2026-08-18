@@ -58,6 +58,7 @@ def test_focuser_get(verified_connection):
 
 @pytest.mark.slow
 @pytest.mark.destructive
+@pytest.mark.movement
 def test_open_and_close(verified_connection):
     """Open the arm, verify not parked, close, verify parked."""
     ui.open()

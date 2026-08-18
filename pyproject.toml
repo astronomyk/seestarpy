@@ -4,7 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "seestarpy"
-version = "0.6.0"
+# Versioning policy: the MINOR number tracks the oldest Seestar MAJOR
+# firmware version still supported.  0.7.x supports firmware 7.x (tested
+# on 7.18 and 7.75) and newer.  When support for firmware 7 is dropped,
+# this becomes 0.8.
+version = "0.7.0"
 authors = [ { name = "Kieran Leschinski", email = "kdleschinski@gmail.com" },]
 description = "Python interface for the SeeStar telescope control system"
 readme = "README.md"
@@ -29,8 +33,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The core package stays light: JSON-RPC control needs no array stack.
+# Anything that decodes pixels does, so those live behind extras.
+stream = [
+    "numpy",            # decode_payload, auto_stretch
+    "pillow",           # save_image, JPEG frames (firmware 8.46+)
+]
+# The dashboard is the stream module plus an HTTP server built on stdlib.
+dashboard = [
+    "seestarpy[stream]",
+]
 dev = [
     "pytest>=7.0",
+    "seestarpy[stream]",
 ]
 docs = [
     "sphinx",
@@ -64,7 +79,8 @@ only-include = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "integration: requires a live Seestar",
+    "integration: requires a live Seestar (opt in with --live)",
+    "movement: moves the telescope - slew, park, open arm, focus (skip with --no-movement)",
     "destructive: modifies telescope or data state",
     "sequence: multi-step observational sequence",
     "slow: takes more than 30 seconds",

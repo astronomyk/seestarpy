@@ -82,7 +82,17 @@ RTSP_PORT_WIDE = 4555
 """RTSP port for the wide-angle live video feed."""
 
 HEADER_SIZE = 34
-"""Size of the binary frame header in bytes."""
+"""Size of the *fixed* part of the binary frame header, in bytes.
+
+The frame header is longer than this — 80 bytes in every firmware
+observed — but only the first 34 bytes carry named fields.  The true
+size is announced by the header itself (see :func:`parse_header`'s
+``header_size``); the remainder is zero padding that must still be
+consumed before the payload starts.
+"""
+
+HEADER_SIZE_DEFAULT = 80
+"""Header size assumed when a frame announces an implausible one."""
 
 MAGIC_NUMBER = 0x03C3
 """Magic number (963) that marks the start of every image frame."""
@@ -94,14 +104,88 @@ _RECV_BUF = 65536
 """Socket receive buffer size (64 KB, matches the app's setting)."""
 
 # Image-type constants from the header's ``img_type`` field.
+IMG_TYPE_ACK = 0
+"""Zero-dimension keepalive / "nothing to send" reply."""
+
 IMG_TYPE_PREVIEW = 1
 """Single unstacked preview frame."""
 
+IMG_TYPE_JPEG = 4
+"""JPEG-encoded stacked image (firmware 8.46+).
+
+The firmware does the stretch and hands over a finished JPEG — roughly
+2.5 MB against the 50 MB of an :data:`IMG_TYPE_STACKED` frame.  The
+header reports ``width`` and ``height`` as **0**; the real dimensions
+are inside the JPEG.
+"""
+
 IMG_TYPE_STACKED = 5
-"""Progressively stacked deep-sky image."""
+"""Progressively stacked deep-sky image, as raw 16-bit pixels."""
+
+# Auto-stretch tuning (see auto_stretch).
+TARGET_BACKGROUND = 0.15
+"""Where :func:`auto_stretch` puts the sky background, 0-1.
+
+0.15 keeps a frame reading as a night sky while still showing faint
+structure."""
+
+SHADOW_CLIP = 2.8
+"""Black point for :func:`auto_stretch`, in normalised MADs below the median."""
+
+WHITE_PERCENTILE = 99.95
+"""Percentile :func:`auto_stretch` takes as the white point."""
 
 _ZIP_LOCAL_SIG = b'PK\x03\x04'
 """ZIP local-file-header signature used to locate the compressed data."""
+
+_JPEG_SOI = b'\xff\xd8\xff'
+"""JPEG start-of-image marker, which opens an :data:`IMG_TYPE_JPEG` payload."""
+
+
+def is_image_frame(header):
+    """Does this frame carry an image, or is it just an ack?
+
+    The Seestar answers a request it cannot satisfy — "no stack exists
+    yet" — with a zero-length keepalive, and that ack is how callers
+    detect that the scope is not stacking.  Testing ``width``/``height``
+    alone is not enough: an :data:`IMG_TYPE_JPEG` frame reports 0x0 and
+    is nonetheless a full image.
+
+    Parameters
+    ----------
+    header : dict
+        Parsed header from :func:`parse_header`.
+
+    Returns
+    -------
+    bool
+    """
+    if header.get('img_type') == IMG_TYPE_ACK:
+        return False
+    if not header.get('length'):
+        return False
+    if header.get('img_type') == IMG_TYPE_JPEG:
+        return True
+    return bool(header.get('width') and header.get('height'))
+
+
+def is_stacked_frame(header):
+    """Is this a stacked image rather than a single live preview?
+
+    Both :data:`IMG_TYPE_STACKED` (raw pixels, firmware 7.75 and
+    earlier) and :data:`IMG_TYPE_JPEG` (firmware 8.46+) are stacks —
+    they differ only in how the pixels are carried.
+
+    Parameters
+    ----------
+    header : dict
+        Parsed header from :func:`parse_header`.
+
+    Returns
+    -------
+    bool
+    """
+    return header.get('img_type') in (IMG_TYPE_STACKED, IMG_TYPE_JPEG)
 
 
 # ---------------------------------------------------------------------------
@@ -111,12 +195,21 @@ _ZIP_LOCAL_SIG = b'PK\x03\x04'
 def decode_payload(payload, header):
     """Decode a raw frame payload into a NumPy pixel array.
 
-    Handles both payload formats the Seestar sends:
+    Handles every payload format the Seestar sends:
 
-    - **Stacked frames** (img_type=5, data_type=3): ZIP-compressed
-      16-bit RGB → ``(H, W, 3)`` uint16.
+    - **Stacked frames** (img_type=5, data_type=3): 16-bit RGB →
+      ``(H, W, 3)`` uint16.  Older firmware ZIP-compresses these; the
+      S30 Pro (and firmware 7.75+ generally) sends the same pixels
+      uncompressed, so both are accepted.
+    - **JPEG frames** (img_type=4): a finished, already-stretched JPEG
+      from firmware 8.46+ → ``(H, W, 3)`` **uint8**.
     - **Preview frames** (img_type=1, data_type=2): Raw (uncompressed)
       16-bit Bayer → ``(H, W)`` uint16.
+
+    .. note::
+       Check the returned ``dtype``.  Every format except JPEG gives
+       linear uint16 data that still needs stretching; a JPEG frame is
+       uint8 and has already been stretched by the firmware.
 
     Parameters
     ----------
@@ -145,28 +238,46 @@ def decode_payload(payload, header):
     w = header['width']
     h = header['height']
 
+    # Firmware 8.46+ sends the stack as a finished JPEG.  It carries its
+    # own dimensions, so the header reports 0x0 — check this before the
+    # zero-dimension guard below, which would otherwise reject it.
+    if payload[:3] == _JPEG_SOI:
+        import io
+        from PIL import Image
+        return np.asarray(Image.open(io.BytesIO(payload)).convert('RGB'))
+
     if w == 0 or h == 0:
         raise ValueError("Zero-dimension frame (ack/keepalive)")
 
-    # Stacked frames are ZIP-compressed RGB
+    expected_rgb = h * w * 3 * 2
+    expected_bayer = h * w * 2
+
+    # Exact sizes are decisive, so test them before scanning for the ZIP
+    # signature.  The scan is not only the expensive option on a 50 MB
+    # frame, it is also the unreliable one: those four bytes turn up by
+    # chance in roughly one uncompressed frame in a hundred.
+
+    # Stacked frames, sent uncompressed (S30 Pro, firmware 7.75+)
+    if len(payload) == expected_rgb:
+        return np.frombuffer(payload, dtype=np.uint16).reshape((h, w, 3))
+
+    # Preview frames are raw 16-bit single-channel (Bayer)
+    if len(payload) == expected_bayer:
+        return np.frombuffer(payload, dtype=np.uint16).reshape((h, w))
+
+    # Stacked frames, ZIP-compressed (older firmware)
     if _ZIP_LOCAL_SIG in payload:
         raw = _decompress_payload(payload)
-        expected = h * w * 3 * 2
-        if len(raw) != expected:
+        if len(raw) != expected_rgb:
             raise ValueError(
-                f"Decompressed size {len(raw)} != expected {expected} "
+                f"Decompressed size {len(raw)} != expected {expected_rgb} "
                 f"({w}x{h}x3x2)"
             )
         return np.frombuffer(raw, dtype=np.uint16).reshape((h, w, 3))
 
-    # Preview frames are raw 16-bit single-channel (Bayer)
-    expected_bayer = h * w * 2
-    if len(payload) == expected_bayer:
-        return np.frombuffer(payload, dtype=np.uint16).reshape((h, w))
-
     raise ValueError(
         f"Unknown payload format: {len(payload)} bytes for "
-        f"{w}x{h} (expected {h * w * 3 * 2} RGB or {expected_bayer} Bayer)"
+        f"{w}x{h} (expected {expected_rgb} RGB or {expected_bayer} Bayer)"
     )
 
 
@@ -215,7 +326,9 @@ def _save_fits(payload, header, path):
     # FITS convention: (channels, height, width)
     fits_data = np.moveaxis(arr, 2, 0)
     hdu = fits.PrimaryHDU(data=fits_data)
-    hdu.header['BITPIX'] = 16
+    # A firmware 8.46+ JPEG frame decodes to 8-bit, already stretched —
+    # claiming 16 bits for it would put a lie in the header.
+    hdu.header['BITPIX'] = 8 if arr.dtype == np.uint8 else 16
     hdu.header['IMGTYPE'] = header['img_type']
     hdu.header['IMAGEID'] = header['image_id']
     hdu.header['HFD'] = header['hfd']
@@ -228,62 +341,129 @@ def _save_image_pil(payload, header, path, stretch):
     from PIL import Image
 
     arr = decode_payload(payload, header)
+    img = Image.fromarray(to_display8(arr, stretch))
+    img.save(path)
+
+
+def to_display8(arr, stretch=True):
+    """Turn a decoded frame into 8-bit RGB ready for display.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Output of :func:`decode_payload` — ``(H, W)`` or ``(H, W, 3)``,
+        uint16 (linear) or uint8 (an already-stretched JPEG frame).
+    stretch : bool, optional
+        Apply :func:`_auto_stretch` to linear data.  Ignored for JPEG
+        frames, which the firmware has already stretched.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(H, W, 3)`` uint8.
+    """
+    import numpy as np
 
     if arr.ndim == 2:
         # Single-channel Bayer → stack to RGB for consistent processing
         arr = np.stack([arr, arr, arr], axis=2)
 
+    if arr.dtype == np.uint8:
+        # A JPEG frame from firmware 8.46+: re-stretching would wreck it
+        # and ``>> 8`` would black it out.
+        return arr
     if stretch:
-        arr8 = _auto_stretch(arr)
-    else:
-        arr8 = (arr >> 8).astype(np.uint8)
-
-    img = Image.fromarray(arr8, 'RGB')
-    img.save(path)
+        return _auto_stretch(arr)
+    return (arr >> 8).astype(np.uint8)
 
 
-def _auto_stretch(arr):
-    """Apply an aggressive midtone stretch to reveal faint nebulosity.
+def auto_stretch(arr, target_bg=TARGET_BACKGROUND, shadow_clip=SHADOW_CLIP,
+                 white_pct=WHITE_PERCENTILE):
+    r"""Auto-stretch a linear frame so the sky lands at a known brightness.
 
-    Uses the Midtone Transfer Function (MTF) from PixInsight:
+    This is the screen-transfer function (STF) that astronomical imaging
+    software uses.  Two things make it work on live Seestar data where a
+    fixed curve does not:
 
-    .. math::
+    - The **black point** comes from the noise distribution — the median
+      minus *shadow_clip* normalised MADs — rather than a low percentile,
+      so the faint tail is not clipped away.
+    - The **midtone is solved**, not chosen, so the sky background lands
+      exactly on *target_bg* whatever the exposure, gain or sky
+      brightness:
 
-        \\text{MTF}(x, m) = \\frac{(m - 1)\\,x}{(2m - 1)\\,x - m}
+      .. math::
 
-    where *m* is the midtone balance (lower = more aggressive).
-    Black and white points are set from percentiles so the stretch
-    adapts automatically to whatever the telescope is imaging.
+          m = \frac{x_0 (B - 1)}{2 B x_0 - B - x_0}
+
+      for background level :math:`x_0` and target :math:`B`, then
+      :math:`\text{MTF}(x, m) = \frac{(m - 1)x}{(2m - 1)x - m}`.
+
+    It matters because a live Seestar frame is faint: the sky sits only
+    ~30 ADU above the black point in a ~3900-wide range.  A fixed midtone
+    renders that at roughly 4 % grey — an image that looks empty.
+
+    The stretch is *linked* — one curve derived from the luminance and
+    applied to all three channels — so it never invents a colour cast to
+    balance the channels against each other.
 
     Parameters
     ----------
     arr : numpy.ndarray
-        ``(H, W, 3)`` uint16 array.
+        ``(H, W)`` or ``(H, W, 3)`` **linear** image data.  Do not pass
+        an already-stretched JPEG frame; see :func:`to_display8`.
+    target_bg : float, optional
+        Where to put the sky background, 0-1.  Default
+        :data:`TARGET_BACKGROUND`.
+    shadow_clip : float, optional
+        Black point, in normalised MADs below the median.  Default
+        :data:`SHADOW_CLIP`.
+    white_pct : float, optional
+        Percentile taken as the white point.  Default
+        :data:`WHITE_PERCENTILE`.  Bright stars clip, which is both
+        expected and what keeps the rest of the frame visible.
 
     Returns
     -------
     numpy.ndarray
-        ``(H, W, 3)`` uint8 array, stretched.
+        Same shape as *arr*, uint8.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import stream
+        >>> header, payload = stream.get_live_image()
+        >>> arr8 = stream.auto_stretch(stream.decode_payload(payload, header))
     """
     import numpy as np
 
-    # Work in float32 for the nonlinear curve
-    img = arr.astype(np.float32)
+    arr = arr.astype(np.float32, copy=False)
+    lum = arr.mean(axis=2) if arr.ndim == 3 else arr
 
-    # Per-channel percentile clipping
-    black = np.percentile(img, 0.5, axis=(0, 1), keepdims=True)
-    white = np.percentile(img, 99.95, axis=(0, 1), keepdims=True)
+    median = float(np.median(lum))
+    madn = 1.4826 * float(np.median(np.abs(lum - median)))
+    black = median - shadow_clip * madn
+    white = float(np.percentile(lum, white_pct))
+    if white <= black:
+        # Flat frame (lens cap on, or a dead sensor) - nothing to stretch.
+        white = black + 1.0
+    span = white - black
 
-    # Normalise to 0-1
-    img = (img - black) / (white - black + 1e-6)
-    np.clip(img, 0.0, 1.0, out=img)
+    x = np.clip((arr - black) / span, 0.0, 1.0)
+    x0 = min(max((median - black) / span, 1e-6), 0.999)
 
-    # Midtone Transfer Function — m=0.15 is aggressive but keeps
-    # star colours intact.  MTF(x,m) = (m-1)*x / ((2m-1)*x - m)
-    m = 0.15
-    img = (m - 1.0) * img / ((2.0 * m - 1.0) * img - m)
+    m = (x0 * (target_bg - 1.0)) / (2.0 * target_bg * x0 - target_bg - x0)
+    m = min(max(m, 1e-4), 0.9999)
 
-    return (img * 255.0 + 0.5).astype(np.uint8)
+    out = (m - 1.0) * x / ((2.0 * m - 1.0) * x - m)
+    return (np.clip(out, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+
+
+#: Backwards-compatible alias.  ``_auto_stretch`` was the fixed-midtone
+#: implementation this replaced.
+_auto_stretch = auto_stretch
+
 
 
 def _decompress_payload(payload):
@@ -330,7 +510,13 @@ def parse_header(buf):
 
         - ``magic`` (int): Must equal :data:`MAGIC_NUMBER` (0x03C3).
         - ``version`` (int): Protocol version.
-        - ``length`` (int): Payload size in bytes.
+        - ``header_size`` (int): Total header size in bytes — 80 in every
+          firmware seen so far, of which only the first
+          :data:`HEADER_SIZE` (34) carry named fields and the rest is
+          zero padding.  The payload begins at this offset, **not** at
+          byte 34.
+        - ``length`` (int): Payload size in bytes, counted from the end
+          of the full header.
         - ``is_big_endian`` (int): Endianness flag.
         - ``img_type`` (int): 1 = preview, 5 = stacked.
         - ``data_type`` (int): Data format identifier.
@@ -356,7 +542,14 @@ def parse_header(buf):
     # Unpack all uint16 fields in one go, plus the uint32 length.
     magic = struct.unpack_from('>H', buf, 0)[0]
     version = struct.unpack_from('>H', buf, 2)[0]
+    header_size = struct.unpack_from('>H', buf, 4)[0]
     length = struct.unpack_from('>I', buf, 6)[0]
+
+    # Guard against a garbled frame claiming a nonsense header size — the
+    # value is used to skip bytes, so a wild one would desync the stream
+    # far worse than assuming the observed default.
+    if not HEADER_SIZE <= header_size <= 4096:
+        header_size = HEADER_SIZE_DEFAULT
     width = struct.unpack_from('>H', buf, 16)[0]
     height = struct.unpack_from('>H', buf, 18)[0]
     hfd_x = struct.unpack_from('>H', buf, 20)[0]
@@ -368,6 +561,7 @@ def parse_header(buf):
     return {
         'magic': magic,
         'version': version,
+        'header_size': header_size,
         'length': length,
         'is_big_endian': buf[12],
         'img_type': buf[13],
@@ -454,10 +648,17 @@ def _read_frame(sock):
 
         # Else: skip stray byte (zero padding, etc.)
 
-    # Read remaining 32 bytes of header (we already consumed bytes 0-1)
+    # Read remaining 32 bytes of the named header fields (0-1 consumed above)
     rest = _recv_exact(sock, HEADER_SIZE - 2)
     raw_header = b'\x03\xC3' + rest
     header = parse_header(raw_header)
+
+    # The header is longer than its named part (80 bytes vs 34).  Consume
+    # the padding, or every frame leaves 46 stray bytes in the stream and
+    # the payload comes back shifted and truncated.
+    padding = header['header_size'] - HEADER_SIZE
+    if padding > 0:
+        _recv_exact(sock, padding)
 
     payload = _recv_exact(sock, header['length'])
     return header, payload
@@ -564,13 +765,26 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
         last_header = None
         for m in methods:
             _send_json(sock, m)
-            for _ in range(max_ack_frames):
-                header, payload = _read_frame(sock)
-                last_header = header
-                if header.get('width') and header.get('height'):
-                    break
-            else:
-                continue  # exhausted budget for this method — try the next
+            try:
+                for _ in range(max_ack_frames):
+                    header, payload = _read_frame(sock)
+                    last_header = header
+                    if is_image_frame(header):
+                        break
+                else:
+                    continue  # exhausted budget for this method — try the next
+            except ConnectionError as exc:
+                # A parked or idle Seestar has no image to give: it answers
+                # with acks (or nothing) and then drops the idle socket.
+                # Reported verbatim that reads as a network fault, which is
+                # exactly the wrong thing to go and debug.
+                raise RuntimeError(
+                    f"{ip} closed the image connection without sending an "
+                    f"image (method {m!r}). The Seestar is most likely "
+                    f"parked or idle, so no {'stack' if 'stacked' in m else 'frame'} "
+                    f"exists yet — open the arm and start a view first. "
+                    f"(underlying error: {exc})"
+                ) from exc
             break
         else:
             raise RuntimeError(
@@ -593,14 +807,8 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
 
 def _grab_one(ip, port, stretch):
     """Fetch a frame from one Seestar and return ``(header, arr8)``."""
-    import numpy as np
-
     header, payload = get_live_image(ip=ip, port=port)
-    arr = decode_payload(payload, header)
-    if arr.ndim == 2:
-        arr = np.stack([arr, arr, arr], axis=2)
-    arr8 = _auto_stretch(arr) if stretch else (arr >> 8).astype(np.uint8)
-    return header, arr8
+    return header, to_display8(decode_payload(payload, header), stretch)
 
 
 def _frame_label(ip, header):
@@ -608,7 +816,7 @@ def _frame_label(ip, header):
         f"{ip}  |  "
         f"{header['width']}x{header['height']}  |  "
         f"frame {header['image_id']}  |  "
-        f"{'stacked' if header['img_type'] == IMG_TYPE_STACKED else 'preview'}"
+        f"{'stacked' if is_stacked_frame(header) else 'preview'}"
     )
 
 
@@ -787,12 +995,14 @@ class StreamSession:
     def _display_callback(self, header, payload):
         """Internal callback that decodes and stretches each frame.
 
-        Once a stacked frame (img_type=5) has been received, preview
-        frames are ignored so the display stays on the better image.
+        Once a stacked frame has been received, preview frames are
+        ignored so the display stays on the better image.  Firmware
+        8.46+ delivers the stack as :data:`IMG_TYPE_JPEG`, so both
+        stacked types count.
         """
-        import numpy as np
+        stacked_types = (IMG_TYPE_STACKED, IMG_TYPE_JPEG)
 
-        if self._has_stacked and header['img_type'] != IMG_TYPE_STACKED:
+        if self._has_stacked and header['img_type'] not in stacked_types:
             return
 
         try:
@@ -800,14 +1010,10 @@ class StreamSession:
         except ValueError:
             return  # skip ack/keepalive frames
 
-        if header['img_type'] == IMG_TYPE_STACKED:
+        if header['img_type'] in stacked_types:
             self._has_stacked = True
 
-        if arr.ndim == 2:
-            # Single-channel Bayer → convert to pseudo-RGB for display
-            arr = np.stack([arr, arr, arr], axis=2)
-
-        self._latest_frame = (header, _auto_stretch(arr))
+        self._latest_frame = (header, to_display8(arr))
 
     def show(self):
         """Open a live matplotlib window showing streamed frames.
@@ -864,7 +1070,7 @@ class StreamSession:
                 f"Seestar {self.ip}  |  "
                 f"{header['width']}x{header['height']}  |  "
                 f"frame {header['image_id']}  |  "
-                f"{'stacked' if header['img_type'] == IMG_TYPE_STACKED else 'preview'}"
+                f"{'stacked' if is_stacked_frame(header) else 'preview'}"
             )
 
         anim = FuncAnimation(fig, _update, interval=500, cache_frame_data=False)  # noqa: F841

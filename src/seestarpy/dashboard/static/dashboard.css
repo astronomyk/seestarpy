@@ -1,0 +1,347 @@
+/* Seestar dashboard — dark by design, not by preference.
+ *
+ * This page is read next to a working telescope in the dark, so the dark
+ * palette is the selected one rather than an inverted light theme: page
+ * plane #0d0d0d, card surface #1a1a19, and every colour stepped for that
+ * surface.  Status hues (good / warning / serious / critical) are reserved
+ * and always ship beside their own text label, so nothing is carried by
+ * colour alone.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --plane:          #0d0d0d;
+  --surface:        #1a1a19;
+  --surface-sunken: #131312;
+
+  --ink:            #ffffff;
+  --ink-2:          #c3c2b7;
+  --ink-muted:      #898781;
+
+  --hairline:       #2c2c2a;
+  --ring:           rgba(255, 255, 255, 0.10);
+
+  --accent:         #3987e5;   /* neutral "busy" accent, not a status */
+  --good:           #0ca30c;
+  --warning:        #fab219;
+  --serious:        #ec835a;
+  --critical:       #d03b3b;
+
+  --gap:            16px;
+  --radius:         10px;
+
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 var(--gap) 0;
+  background: var(--plane);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- topbar */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 14px 2px 12px;
+  background: var(--plane);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fleet-count {
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ status pill */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px 2px 7px;
+  border: 1px solid var(--ring);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+.pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill-muted    { color: var(--ink-muted); }
+.pill-busy     { color: var(--accent); }
+.pill-good     { color: var(--good); }
+.pill-warning  { color: var(--warning); }
+.pill-serious  { color: var(--serious); }
+.pill-critical { color: var(--critical); }
+
+.pill-good .dot { animation: breathe 2.6s ease-in-out infinite; }
+.pill-busy .dot { animation: breathe 2.6s ease-in-out infinite; }
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill .dot { animation: none; }
+}
+
+/* ------------------------------------------------------------------ grid */
+
+/* auto-fit (not auto-fill) so three scopes spread into three columns on a wide
+ * monitor instead of huddling beside empty tracks.  The track is free to grow;
+ * .card's max-width is what stops a lone scope becoming one absurd
+ * full-width card. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  justify-content: start;
+  gap: var(--gap);
+  padding: var(--gap) 0;
+  align-items: start;
+}
+
+.empty {
+  display: none;
+  margin: 64px auto;
+  max-width: 34em;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.empty.show { display: block; }
+
+.empty-sub {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  opacity: 0.75;
+}
+
+.footer {
+  padding: 4px 2px 18px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+}
+
+/* ------------------------------------------------------------------ card */
+
+.card {
+  max-width: 660px;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.card.offline { opacity: 0.62; }
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.card-head .sn {
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.card-head .sep { color: var(--ink-muted); }
+
+.card-head .ip {
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-head .link-badge {
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.card-head .status { margin-left: auto; }
+
+.card-body {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  align-items: stretch;
+}
+
+/* ----------------------------------------------------------------- frame */
+
+/* The panel stretches to the height of the stat column, so a portrait frame
+ * is letterboxed inside it.  Painting the panel black rather than a surface
+ * tone makes those bands vanish into the sky the image already ends in. */
+.frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  aspect-ratio: 9 / 16;         /* floor; replaced from the frame header */
+  max-height: 600px;            /* a portrait frame would otherwise make a
+                                   wide card absurdly tall */
+  background: #000;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.frame-img {
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.frame.has-image .frame-img { display: block; }
+.frame.has-image .frame-placeholder { display: none; }
+
+.frame-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.frame-tag {
+  position: absolute;
+  bottom: 6px;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  background: rgba(13, 13, 13, 0.72);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.frame-tag:empty { display: none; }
+.frame-tag-left  { left: 6px; }
+.frame-tag-right { right: 6px; }
+
+.frame-tag.stacked { color: var(--good); }
+
+/* ----------------------------------------------------------------- stats */
+
+/* space-between rather than a fixed gap: on a tall card the three groups
+ * spread down the full height of the image beside them, instead of bunching
+ * at the top over a block of dead space. */
+.stats {
+  flex: 0 0 178px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.stat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.stat-group:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.stat dt {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.stat dd {
+  margin: 1px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.stat dd .sub {
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat dd.is-good     { color: var(--good); }
+.stat dd.is-warning  { color: var(--warning); }
+.stat dd.is-serious  { color: var(--serious); }
+.stat dd.is-critical { color: var(--critical); }
+.stat dd.is-none     { color: var(--ink-muted); }
+
+/* -------------------------------------------------------------- narrow */
+
+@media (max-width: 560px) {
+  .grid { grid-template-columns: 1fr; }
+  .card-body { flex-direction: column; }
+  .stats { flex: 1 1 auto; }
+  .stat-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px 14px;
+  }
+}

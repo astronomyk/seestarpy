@@ -1,5 +1,164 @@
 # Changelog
 
+## v0.7.0 — 2026-08-18
+
+> **One screen for the whole fleet.** A new web dashboard replaces the old
+> single-scope HTML pages: it discovers every Seestar on the network by
+> itself, gives each one a card with its live stacked image and status, and
+> adds or drops cards as scopes come and go.
+
+### New: `seestarpy.dashboard`
+
+- **`python -m seestarpy.dashboard`** (or `dashboard.serve()`) starts an
+  HTTP server that finds every Seestar via UDP discovery, holds an event
+  connection and an image stream open to each, and serves one card per
+  scope. Cards show the current **stacked** image, falling back to the live
+  preview when the scope isn't stacking, with exposure/stack/dropped/filter,
+  target/RA-Dec/Alt-Az/view-state, and mount/battery/temperature/free-space
+  down the side.
+- Scopes powered on later appear on their own — discovery re-runs every 60 s
+  (`--rescan`), and a scope that moved address is re-pointed at it. Cards are
+  ordered by serial number so a scope holds its place in the grid.
+- The browser is fed by **Server-Sent Events** (`/api/events`, one fleet
+  snapshot a second); images are served separately and versioned by frame
+  sequence, so a card only re-fetches a JPEG when there is a new one.
+- Bind defaults to `0.0.0.0`, so the dashboard is readable from a phone or
+  tablet elsewhere on the network.
+- Needs NumPy and Pillow for image decoding: `pip install "seestarpy[dashboard]"`.
+  Without them the status half of every card still works.
+- **Removed** `seestarpy/dashboards/` (`basic.html`, `fancy.html` and their
+  JS). Those pages rendered one scope from the `start_listener` WebSocket;
+  the new dashboard runs its own per-scope connections and does not need
+  `start_listener`. `events.event_listener.dashboard_url()` now returns the
+  new dashboard's URL.
+
+### Image stream: firmware 8.46 JPEG mode
+
+Firmware 8.46 added a `preview` settings block that changes how stacked
+frames cross the wire. Measured on an 8 MP S30 Pro over Wi-Fi:
+
+| `image_transfer_mode` | `img_type` | frame size | time |
+|---|---|---|---|
+| `"Jpg"` | 4 | ~2.5 MB | ~5 s |
+| `"Raw"` | 5 | ~49.8 MB | ~30 s |
+
+- **`raw.set_image_transfer_mode`** — New. Selects `'Jpg'` or `'Raw'`
+  (aliases `'jpeg'`, `'compressed'`, `'lossless'`, `'full'`), validated
+  before the round-trip. Note this is a **persistent device setting** shared
+  with the phone app, not a per-connection option.
+- **`raw.get_preview_setting`** — New. Returns the `preview` block
+  (`image_transfer_mode`, `rtsp_quality`, `rtsp_width`, `rtsp_height`), or
+  `None` on firmware that predates it.
+- **`stream.decode_payload`** now decodes JPEG payloads, returning **uint8**
+  RGB (already stretched by the firmware) rather than linear uint16. New
+  `stream.to_display8` centralises the "stretch unless it is already 8-bit"
+  decision, so `save_image`, `show_current_stack` and the live matplotlib
+  display all handle both.
+- New helpers **`stream.is_image_frame`** and **`stream.is_stacked_frame`**,
+  plus the `IMG_TYPE_ACK` / `IMG_TYPE_JPEG` constants.
+
+### Fixed
+
+- **The frame header is 80 bytes, not 34** — only its first 34 bytes carry
+  named fields, and the true size is announced at offset 4. `_read_frame`
+  skipped 34 and left the other 46 in the stream, so *every* payload came
+  back 46 bytes early and 46 bytes short and the stream desynced after each
+  frame (masked until now because the reader re-syncs on the magic number,
+  and because a 46-byte shift in raw pixel data is invisible). This is also
+  the real explanation for the old "the Seestar prepends a variable number
+  of zero bytes before the ZIP header" comment. `parse_header` now returns
+  `header_size` and `_read_frame` consumes it.
+- **JPEG frames were discarded as acks** — they report `width`/`height` as
+  `0` (the dimensions live inside the JPEG), and the "is this an image?"
+  test was `width and height`. On firmware 8.46 the reader waited for a
+  frame that had already arrived until the scope dropped the connection,
+  which looked exactly like a scope refusing to stream.
+- **`stream.decode_payload` on firmware 7.75+** — `get_stacked_img` returns
+  16-bit RGB **uncompressed** on the S30 Pro, not ZIP-wrapped, and the
+  decoder rejected it outright (`Unknown payload format: 49766400 bytes`).
+  Both transports are now accepted. Payload sizes are also checked *before*
+  scanning for the ZIP signature, which is both faster and safer — those
+  four bytes occur by chance in roughly one uncompressed 50 MB frame in a
+  hundred.
+- **`import seestarpy` crashed on a cp1252 console** — discovery prints
+  `✓`/`✗`/`→`, and since `find_seestar()` runs at import time the resulting
+  `UnicodeEncodeError` took the whole package down on an unconfigured
+  Windows terminal. Those lines now degrade to ASCII when the console
+  cannot encode them.
+- **`events.event_watcher` could not be imported at all** — it imported
+  `from src.seestarpy.connection import ...`, which only resolves when the
+  repository root happens to be on `sys.path`. Now a relative import, so
+  the module (and its API page) works from an installed package.
+
+### Docs
+
+The tutorial pages were brought back in line with the code:
+
+- *Connecting to your Seestar* rewritten around **UDP broadcast discovery**
+  — the old page still described mDNS as the mechanism rather than the
+  fallback. Now covers `discover()`, `DISCOVERED` / `AVAILABLE_IPS`, every
+  shape the `ips=` keyword accepts, `set_default_ip`, and the persistent
+  connection pool.
+- *Live Image Streaming* covers the **80-byte header**, the firmware 8.46
+  **JPEG transfer mode** (and why you must check the returned dtype),
+  `to_display8`, `is_image_frame` / `is_stacked_frame`.
+- *Observing* documents `ui.dither()`, which shipped undocumented, and
+  fixes `set_user_location(long=…)` → `lon=`.
+- *Managing files* documents `upload_files` / `upload_folder`, names the
+  transport each operation uses, and warns about the two ways a bulk
+  download bites: silent HTTP truncation on weak Wi-Fi, and the per-device
+  listing cursor that must never be walked concurrently.
+- *CrowdSky* documents `sync()` and corrects the HEALPix parameters in the
+  filename convention (**NSIDE=128, RING** — was documented as 64, nested).
+- *Changing settings* gained a section on the settings dictionary itself
+  (nested blocks are replaced, not merged) and on `image_transfer_mode`.
+- *Observation plans* gained the operational traps: backdating `start_min`
+  to start or restart a plan immediately, app-triggered autofocus silently
+  cancelling a running plan, `plan_target_af` / `viewplan_gohome`, and why
+  Alt-Az mosaics must be planned around the inscribed circle.
+- *Status checks* and *Setting the gain* expanded from stubs; status checks
+  now also covers the event listener as an alternative to polling.
+- `crowdsky.healpix` added to the API reference; the orphaned
+  *Sniffing port 4700* page is now in the toctree.
+
+### Packaging and testing
+
+- **Versioning policy.** From this release the **minor** version tracks the
+  oldest Seestar **major** firmware version still supported. `0.7.x` supports
+  firmware 7.x (tested against 7.18 and 7.75) and everything newer, up to
+  8.89 at the time of writing. When support for firmware 7 is dropped, this
+  becomes `0.8`.
+- **`pytest` no longer touches a telescope.** The suite used to run the live
+  integration tests automatically whenever a Seestar answered on port 4700,
+  which meant an innocent `pytest` on the observing laptop started driving
+  the mount. Live tests are now strictly opt-in:
+
+  | command | what runs |
+  |---|---|
+  | `pytest` | offline only — nothing reaches the network |
+  | `pytest --live` | adds the live-hardware tests |
+  | `pytest --live --no-movement` | live, minus anything that slews, parks, opens the arm or focuses |
+
+  The new `movement` marker covers the 31 tests that physically move the
+  scope, for when it is still in its box.
+- **New `[stream]` extra.** `numpy` and `pillow` were only reachable through
+  `[dashboard]`, but `stream.decode_payload` and `save_image` have always
+  needed them — `pip install seestarpy` then saving a frame raised
+  `ImportError`. The core package stays dependency-light; install
+  `seestarpy[stream]` for pixels, `seestarpy[dashboard]` for the web UI
+  (which now pulls `[stream]` in).
+- **The dashboard binds loopback by default.** It has no authentication, so
+  `0.0.0.0` is now opt-in via `serve(lan=True)` / `--lan` rather than the
+  default.
+- **CI** runs the offline suite on Python 3.11-3.13 and builds the docs with
+  warnings-as-errors. It also imports every module from outside the repo
+  root, which is the check that would have caught the `event_watcher` bug.
+- `stream.auto_stretch` is now public (the STF described above), replacing
+  the private `_auto_stretch`; the old name remains as an alias.
+- `get_live_image` against a parked or idle scope raised
+  `ConnectionError: Connection closed after 0/1 bytes`, which reads as a
+  network fault. It now explains that the scope has no image to send.
+
 ## v0.6.0 — 2026-08-06
 
 > **Getting data on and off the scope.** Three new capabilities: switch the

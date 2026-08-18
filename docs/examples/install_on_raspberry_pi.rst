@@ -127,9 +127,40 @@ Confirm seestarpy discovers it:
    python -c "from seestarpy import auth; print(auth.KEY_PATH)"
    # -> /home/pi/.seestarpy/seestar.pem
 
+``KEY_PATH`` is resolved once, at import.  If the key lives somewhere else —
+a mounted volume, a secrets directory — point at it before connecting:
+
+.. code-block:: python
+
+   from seestarpy import auth
+
+   auth.set_key_path("/mnt/secrets/seestar.pem")   # raises if missing
+
 .. warning::
    The ``.pem`` file is a **secret**.  Keep it at mode ``600``, never commit
    it to version control, and do not share it.
+
+
+Optional extras on a Pi
+-----------------------
+
+The base install is deliberately light.  Two extras are worth knowing about
+before you plan a Pi Zero deployment:
+
+- ``pip install "seestarpy[dashboard]"`` adds NumPy and Pillow, needed to
+  **decode the binary image stream** (:doc:`live_streaming`,
+  :doc:`live_dashboard`).  Both have piwheels builds, so they install
+  without compiling — but decoding a 50 MB frame on a 512 MB single-core
+  board is slow.  Switch the scope to ``Jpg`` transfer mode (see
+  :doc:`changing_seestar_settings`) if you want a Pi Zero to serve a
+  dashboard.
+- ``astropy`` is only needed for FITS output and is a heavy install.  Skip
+  it on a Pi Zero unless you actually write FITS there; the stacking
+  workflow in :doc:`crowdsky_stacking` reads FITS headers without it.
+
+Everything that is only about **commanding** the scope — discovery, gotos,
+plans, stacking, file transfer — runs comfortably on a Pi Zero with the base
+install.
 
 That's it — seestarpy is installed and can authenticate.  From here you can
 connect (:doc:`basic_connection`) or run the automated stacking workflow

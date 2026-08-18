@@ -2,7 +2,7 @@ from . import raw
 from . import connection as conn
 from .connection import multiple_ips
 from .plan import resolve_name
-from .status import get_filter, is_eq_mode
+from .status import get_filter, is_eq_mode, pixel_scale
 
 
 @multiple_ips
@@ -193,6 +193,124 @@ def exposure(exptime: int | None = None, which="stack_l"):
         return raw.set_setting(expert_mode=True, exp_ms={which: exptime * 1000})
     else:
         raise ValueError(f"exptime must be one of [None, int]: {exptime}")
+
+
+#: Per-sub overhead (readout + save) in seconds, used to convert a dither
+#: interval given in seconds into a whole number of sub-exposures.
+SUB_OVERHEAD_S = 1.5
+
+
+@multiple_ips
+def dither(enabled: bool | None = None,
+           radius_arcmin: float | None = None,
+           every_n_subs: int | None = None,
+           interval_s: float | None = None):
+    """
+    Get or set the dither pattern used while stacking.
+
+    Dithering nudges the mount by a small random offset every few
+    sub-exposures.  This matters for deep stacks: on an equatorially
+    tracked field every sub lands on the *same* pixels, so flat-field and
+    dark residuals add coherently and stop averaging down.  Dithering
+    sweeps the field across the detector and breaks that up.  Alt-azimuth
+    mounts get the same effect for free from field rotation.
+
+    The firmware stores the throw in *pixels*; this function takes and
+    reports it in *arcminutes*, converting with :func:`pixel_scale`.
+
+    Parameters
+    ----------
+    enabled : bool or None, optional
+        - ``None`` (and no other argument) : return the current settings.
+        - ``bool`` : turn dithering on or off.
+    radius_arcmin : float or None, optional
+        Maximum offset from the field centre, in arcminutes.  2--3' is a
+        good default: a few tens of pixels already averages over
+        pixel-scale flat error, while a large radius shrinks the area
+        common to every sub.  Large-scale vignetting cannot be dithered
+        away at any amplitude.
+    every_n_subs : int or None, optional
+        Dither once every this many sub-exposures.  Every 5--6 subs
+        (~2 min at 20 s) is a good default; at longer intervals short
+        stacks see only a single position and gain nothing.
+    interval_s : float or None, optional
+        Alternative to *every_n_subs*: the desired cadence in seconds,
+        converted to a whole number of subs using the current stacking
+        exposure time.  Mutually exclusive with *every_n_subs*.
+
+    Returns
+    -------
+    dict
+        The current settings when called with no arguments, otherwise the
+        firmware's reply to the set.
+
+    Notes
+    -----
+    Setting *radius_arcmin*, *every_n_subs* or *interval_s* without
+    passing *enabled* turns dithering on, on the assumption that you are
+    configuring it because you want it.  Pass ``enabled=False``
+    explicitly to configure it but leave it off.
+
+    Firmware ships with dithering **enabled** by default, so a run that
+    is meant to be undithered must disable it explicitly.
+
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+    ::
+
+        >>> import seestarpy as ssp
+        >>> ssp.dither()
+        {'enabled': True, 'radius_arcmin': 2.39, 'radius_px': 60, 'every_n_subs': 5}
+        >>> ssp.dither(radius_arcmin=2.5, every_n_subs=5)   # enables it too
+        >>> ssp.dither(radius_arcmin=3, interval_s=120)     # cadence in seconds
+        >>> ssp.dither(False)                               # undithered control
+        >>> ssp.dither(False, ips="all")                    # ...on every Seestar
+
+    """
+    setting = raw.get_setting().get("result", {}) or {}
+    cur = setting.get("stack_dither") or {}
+    scale = pixel_scale()
+
+    if enabled is None and radius_arcmin is None \
+            and every_n_subs is None and interval_s is None:
+        px = cur.get("pix") or 0
+        return {"enabled": cur.get("enable"),
+                "radius_arcmin": round(px * scale / 60.0, 2),
+                "radius_px": px,
+                "every_n_subs": cur.get("interval")}
+
+    if every_n_subs is not None and interval_s is not None:
+        raise ValueError("pass either every_n_subs or interval_s, not both")
+
+    new = {"pix": cur.get("pix", 50),
+           "interval": cur.get("interval", 5),
+           "enable": cur.get("enable", False)}
+
+    if radius_arcmin is not None:
+        px = int(round(float(radius_arcmin) * 60.0 / scale))
+        if not 1 <= px <= 500:
+            raise ValueError(
+                f"radius_arcmin={radius_arcmin} is {px} px, outside [1, 500]"
+            )
+        new["pix"] = px
+
+    if interval_s is not None:
+        exp_ms = (setting.get("exp_ms") or {}).get("stack_l") or 10000
+        every_n_subs = max(1, round(float(interval_s)
+                                    / (exp_ms / 1000.0 + SUB_OVERHEAD_S)))
+
+    if every_n_subs is not None:
+        if int(every_n_subs) < 1:
+            raise ValueError(f"every_n_subs must be >= 1: {every_n_subs}")
+        new["interval"] = int(every_n_subs)
+
+    # Configuring the pattern implies wanting it on, unless told otherwise.
+    new["enable"] = bool(enabled) if enabled is not None else True
+
+    return raw.set_setting(stack_dither=new)
 
 
 @multiple_ips

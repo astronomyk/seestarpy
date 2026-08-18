@@ -14,4 +14,5 @@ Python API index
    data
    status
    events
+   dashboard
    auth

@@ -124,11 +124,12 @@ Where:
 - ``<YYYYMMDD.CC>`` is the **UTC chunk key** — the UTC date plus a
   chunk index (0--95) representing which 15-minute slot of the day the
   block falls in.
-- ``HP<nnnnnn>`` is the **HEALPix pixel** (NSIDE=64, nested) derived
+- ``HP<nnnnnn>`` is the **HEALPix pixel** (NSIDE=128, RING scheme) derived
   from the RA/Dec in the stacked FITS header.  This encodes the sky
   position so that stacks from different Seestars pointing at the same
   area can be matched.  If RA/Dec cannot be read, it falls back to
-  ``HP000000``.
+  ``HP000000``.  The HEALPix maths is self-contained
+  (:mod:`seestarpy.crowdsky.healpix`) — no ``healpy`` install required.
 
 For example::
 
@@ -222,6 +223,15 @@ CrowdSky collaboration server for aggregation with other observers.
     # Download stacks by chunk key
     crowdsky.download_stack(["20260227.81_HP049152"], dest="./downloads")
 
+Credentials can also come from the ``CROWDSKY_USERNAME`` and
+``CROWDSKY_PASSWORD`` environment variables, which keeps them out of your
+scripts.  To point at a different server (a local instance, or a staging
+deployment):
+
+.. code-block:: python
+
+    crowdsky.set_base_url("http://localhost:8000")
+
 
 Bulk uploading stacks
 ---------------------
@@ -272,3 +282,51 @@ uploads the results to the CrowdSky server:
 
     # Upload everything to CrowdSky
     crowdsky.upload_all_stacks(dest="./downloads")
+
+
+One call for the whole pipeline
+-------------------------------
+
+:func:`~seestarpy.crowdsky.sync` is the above in a single call — stack
+every unstacked block for every target, then upload everything the server
+does not already have:
+
+.. code-block:: python
+
+    from seestarpy import crowdsky
+
+    crowdsky.sync(username="alice", password="s3cret")
+
+    # Preview both phases without stacking or uploading anything
+    crowdsky.sync(dry_run=True)
+
+Credentials are validated against the server **before** stacking starts, so
+a typo fails in seconds instead of after an hour of work.  If you omit them,
+previously configured credentials are used — either from
+:func:`~seestarpy.crowdsky.set_credentials` or from the
+``CROWDSKY_USERNAME`` / ``CROWDSKY_PASSWORD`` environment variables, which
+is what you want for an unattended job:
+
+.. code-block:: bash
+
+    export CROWDSKY_USERNAME=alice
+    export CROWDSKY_PASSWORD=s3cret
+    python -c "from seestarpy import crowdsky; crowdsky.sync()"
+
+``sync()`` takes the same ``block_minutes``, ``min_exptime`` and
+``dry_run`` arguments as the individual steps, plus ``dest`` for where
+downloaded stacks land and ``max_wait_sec`` (default 3600) for how long to
+wait on the firmware per block.  It returns
+``{"stack": <stack_all summary>, "upload": <upload_all_stacks summary>}``.
+
+.. warning::
+    **Never run two ``sync()`` calls against one scope at the same time**,
+    and do not try to overlap the stacking and uploading phases yourself.
+    The Seestar's file-listing API keeps a single "current directory" cursor
+    per device; two listing sequences on one scope interleave and silently
+    skip blocks — no error, just missing data.  The two phases run strictly
+    sequentially on purpose.
+
+    Different scopes in parallel are fine.  This is a good candidate for an
+    unattended job on a small always-on machine — see
+    :doc:`install_on_raspberry_pi`.

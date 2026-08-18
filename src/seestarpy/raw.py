@@ -924,7 +924,7 @@ def get_wheel_setting():
 @multiple_ips
 def iscope_get_app_state():
     """
-    Get the full application state from the Seestar.
+        Get the full application state from the Seestar.
 
     Returns
     -------
@@ -1466,6 +1466,13 @@ def set_setting(**kwargs):
         Default ``True``.
     calib_location : int
         Default ``2``.
+    preview : dict
+        **Firmware 8.46+ only.** Image- and video-stream transport
+        settings. Keys: ``'image_transfer_mode'`` (``'Jpg'`` or
+        ``'Raw'`` — see :func:`set_image_transfer_mode`),
+        ``'rtsp_quality'`` (``'HighQuality'`` or ``'Smooth'``),
+        ``'rtsp_width'``, ``'rtsp_height'``. Absent on earlier firmware,
+        which always sends ``Raw``.
     wide_cam : bool
         Use the wide-field camera (S30pro). Default ``False``.
     wide_4k : bool
@@ -1530,6 +1537,124 @@ def set_setting(**kwargs):
     """
     params = {"method": "set_setting", "params": kwargs}
     return send_command(params)
+
+
+#: Accepted ``image_transfer_mode`` values, keyed by the friendly aliases
+#: :func:`set_image_transfer_mode` understands.  The firmware itself takes
+#: only ``'Jpg'`` and ``'Raw'`` (the ``StackImageQuality`` enum in the app).
+_TRANSFER_MODE_ALIASES = {
+    "jpg": "Jpg", "jpeg": "Jpg", "compressed": "Jpg",
+    "raw": "Raw", "lossless": "Raw", "full": "Raw",
+}
+
+
+@multiple_ips
+def get_preview_setting():
+    """
+    Read the image-stream preview settings (firmware 8.46+).
+
+    Firmware 8.46 added a ``preview`` block to :func:`get_setting`,
+    controlling how frames are sent over the binary image ports
+    (4800/4804) and the RTSP video ports:
+
+    - ``image_transfer_mode`` — ``'Jpg'`` or ``'Raw'``.  See
+      :func:`set_image_transfer_mode`; this is the setting that decides
+      whether a stacked frame costs 2.5 MB or 50 MB.
+    - ``rtsp_quality`` — ``'HighQuality'`` or ``'Smooth'``.
+    - ``rtsp_width`` / ``rtsp_height`` — video stream dimensions.
+
+    Returns
+    -------
+    dict or None
+        The preview block, or ``None`` on firmware that predates it
+        (7.75 and earlier have no such setting and always send ``Raw``).
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.get_preview_setting()
+        {'rtsp_quality': 'HighQuality', 'image_transfer_mode': 'Jpg',
+         'rtsp_width': 1080, 'rtsp_height': 1920}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    return (send_command({"method": "get_setting"})
+            .get("result", {})
+            .get("preview"))
+
+
+@multiple_ips
+def set_image_transfer_mode(mode):
+    """
+    Choose how stacked images cross the wire (firmware 8.46+).
+
+    The binary image stream can deliver a stacked frame two ways, and
+    the difference is not small — measured on an 8 MP S30 Pro over
+    Wi-Fi:
+
+    ==========  ============  ==========  ==================================
+    mode        frame size    time        what you get
+    ==========  ============  ==========  ==================================
+    ``'Jpg'``   ~2.5 MB       ~5 s        a finished, firmware-stretched
+                                          JPEG (``img_type`` 4)
+    ``'Raw'``   ~50 MB        ~30 s       linear 16-bit RGB you stretch
+                                          yourself (``img_type`` 5)
+    ==========  ============  ==========  ==================================
+
+    ``'Jpg'`` is the right choice for monitoring — a dashboard, a live
+    view, anything that just wants to see the frame.  Keep ``'Raw'`` when
+    you need the linear data for your own processing; the JPEG has
+    already been tone-mapped and cannot be undone.
+
+    :func:`seestarpy.stream.decode_payload` handles both, so nothing
+    downstream has to care which is in force.
+
+    Parameters
+    ----------
+    mode : str
+        ``'Jpg'`` or ``'Raw'``.  The aliases ``'jpeg'``, ``'compressed'``,
+        ``'lossless'`` and ``'full'`` are also accepted, case-insensitively.
+
+    Returns
+    -------
+    dict
+        The ``set_setting`` response.
+
+    Raises
+    ------
+    ValueError
+        If *mode* is not a recognised value.  Checked before the
+        round-trip, because the firmware answers an unknown value with a
+        bare error code.
+
+    Examples
+    --------
+
+        >>> from seestarpy import raw
+        >>> raw.set_image_transfer_mode("Jpg")
+        >>> raw.set_image_transfer_mode("raw", ips="all")
+
+    Notes
+    -----
+    This is a **persistent device setting**, shared with the phone app —
+    it is not scoped to your connection.  Firmware earlier than 8.46 has
+    no ``preview`` block and always sends ``Raw``; setting it there has
+    no effect.
+
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    key = _TRANSFER_MODE_ALIASES.get(str(mode).strip().lower())
+    if key is None:
+        raise ValueError(
+            f"Unknown image transfer mode {mode!r}. "
+            f"Use 'Jpg' or 'Raw' (aliases: "
+            f"{sorted(_TRANSFER_MODE_ALIASES)})."
+        )
+    return send_command({"method": "set_setting",
+                         "params": {"preview": {"image_transfer_mode": key}}})
 
 
 #: Accepted ``typec_mode`` values, keyed by the friendly aliases accepted by
@@ -2226,28 +2351,56 @@ def start_create_dark():
 @multiple_ips
 def start_polar_align(restart=True, dec_pos_index=3):
     """
-    Run the polar alignment sequence
+    Run the three-point polar-alignment (3PPA) sequence.
+
+    The scope must be in EQ mode and **parked** (``mount.equ_mode`` true,
+    ``mount.close`` true) before calling this.  The firmware sweeps the
+    DEC arm out of the parked home position, which reports ``dec = -90``
+    and ``alt = -latitude``.  Do *not* call :func:`~seestarpy.ui.open`
+    first: ``scope_move_to_horizon`` already rotates the arm ~90 deg to
+    the horizontal, and 3PPA started from there cannot complete its full
+    ~270 deg travel to the pole.
 
     Parameters
     ----------
-    restart : bool
-        Default: True.
-    dec_pos_index: int
-        Potentially: 1: 45 deg South, 2: 22 deg south, 3: zenith, 4: 22 deg North, 45 deg North
+    restart : bool, optional
+        ``True`` (default) restarts the alignment from scratch, moving
+        the DEC arm to *dec_pos_index* first.  ``False`` continues an
+        alignment already in progress; *dec_pos_index* is then omitted
+        from the payload, matching the phone app.
+    dec_pos_index : int or None, optional
+        DEC pitch position to align at, as offered by the app's pitch
+        picker.  ``3`` (default) is the app's own default.  Only sent
+        when *restart* is ``True``; pass ``None`` to omit it entirely.
 
     Returns
     -------
     dict
 
-
     Notes
     -----
     Accepts the ``ips`` keyword for multi-Seestar operation.
+
+    The phone app sends this command twice: once as
+    ``{"restart": true, "dec_pos_index": 3}`` to reach the pitch
+    position, then again as ``{"restart": false}`` once the user has
+    acknowledged the star-calibration warning.
+
+    Examples
+    --------
+
+        >>> import seestarpy as ssp
+        >>> ssp.close(True)                     # park into EQ mode
+        >>> ssp.raw.start_polar_align()         # restart + dec_pos_index
+        >>> ssp.raw.start_polar_align(False)    # {"restart": false}
+
     """
-    params = {"method": "start_polar_align",
-              "params": {"restart": restart,
-                         "dec_pos_index": dec_pos_index}
-              }
+    inner = {"restart": bool(restart)}
+    # The app only ever sends dec_pos_index alongside restart=True; on a
+    # continue it drops the key rather than sending a stale index.
+    if restart and dec_pos_index is not None:
+        inner["dec_pos_index"] = int(dec_pos_index)
+    params = {"method": "start_polar_align", "params": inner}
     return send_command(params)
 
 

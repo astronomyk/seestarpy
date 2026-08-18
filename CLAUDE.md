@@ -17,7 +17,7 @@ both into a clean Python interface.
 ```
 src/seestarpy/
   __init__.py          Imports all submodules
-  connection.py        TCP socket, send_command(), DEFAULT_IP/PORT, mDNS discovery
+  connection.py        TCP socket, send_command(), DEFAULT_IP/PORT, UDP discovery
   raw.py               59 low-level JSON-RPC wrappers (getters, setters, scope control)
   ui.py                High-level convenience functions (open, close, goto) with multi-IP support
   status.py            ASCII status dashboard (status_bar())
@@ -25,14 +25,16 @@ src/seestarpy/
   stack.py             Batch stacking commands (set/start/stop/clear/status)
   stream.py            Binary image streaming (ports 4800/4804), matplotlib live display
   data.py              SMB file operations (list/download FITS from Seestar storage)
-  cli.py               Click-based CLI entry point (`seestar` command)
   coordintate_utils.py RA/Dec to Alt/Az conversion
   events/              Async event listener system (port 4700 persistent connection)
     event_listener.py  Background thread + asyncio, heartbeat, WebSocket broadcast
     event_definitions.py  Dataclasses for 20+ event types
     event_stream.py    Global LATEST_STATE dict, event routing
     event_watcher.py   Higher-level state transition watcher
-  dashboards/          HTML dashboards for WebSocket event display
+  dashboard/           Multi-Seestar live web dashboard (`python -m seestarpy.dashboard`)
+    monitor.py         ScopeMonitor (per-scope events + image polling), Fleet (discovery)
+    server.py          HTTP server: static page, /api/scopes, /api/events (SSE), /api/image
+    static/            index.html + dashboard.css + dashboard.js
 ```
 
 ## Network architecture
@@ -51,19 +53,30 @@ The Seestar exposes five TCP ports:
 
 `connection.send_command()` opens a short-lived TCP socket, sends
 `{"id":1, "method":"...", "params":{...}}\r\n`, reads a `\r\n`-terminated
-JSON response, and closes.  `DEFAULT_IP` is auto-discovered via mDNS
-(`seestar.local`).  `VERBOSE_LEVEL=1` prints send/receive to stdout.
+JSON response, and closes.  `DEFAULT_IP` is auto-discovered by **UDP
+broadcast** on port 4720 (`connection.discover()`); mDNS (`seestar.local`)
+is only a fallback.  `VERBOSE_LEVEL=1` prints send/receive to stdout.
 
 ### Binary image stream (ports 4800/4804)
 
-Custom framing: 34-byte header (magic `0x03C3`, big-endian) + image payload.
-Two payload formats exist:
+Custom framing: **80-byte header** (magic `0x03C3`, big-endian) + image
+payload.  Only the first 34 bytes carry named fields; the total size is
+announced at offset 4, and the payload starts there — *not* at byte 34.
 
-- **Stacked frames** (img_type=5): ZIP-compressed 16-bit RGB (48bpp).
-  Decompress by finding `PK\x03\x04`, parsing the ZIP local-file header,
-  then `zlib.decompress(data, -15)`.
+- **Stacked frames** (img_type=5): 16-bit RGB (48bpp), ~50 MB.  Sent
+  uncompressed on firmware 7.75+; older firmware ZIP-wraps them (find the
+  ZIP local-file signature, then `zlib.decompress(data, -15)`).  Check
+  payload sizes *before* scanning for that signature.
+- **JPEG frames** (img_type=4): firmware 8.46+ only, ~2.5 MB, already
+  stretched by the firmware.  Reports `width`/`height` as **0** — the
+  dimensions are inside the JPEG, so never use them to tell an image from
+  an ack.  Selected by the `preview.image_transfer_mode` device setting
+  (`"Jpg"` / `"Raw"`, see `raw.set_image_transfer_mode`).
 - **Preview frames** (img_type=1): Raw 16-bit Bayer (uncompressed, single channel).
 - **Ack frames** (img_type=0): Tiny keepalives, skip them.
+
+Use `stream.is_image_frame()` / `stream.is_stacked_frame()` rather than
+testing header dimensions directly.
 
 The same socket carries both binary frames AND JSON-RPC heartbeat responses.
 The reader syncs on the magic number and skips JSON lines starting with `{`.
@@ -82,9 +95,10 @@ The reader syncs on the magic number and skips JSON lines starting with `{`.
 ## Testing
 
 ```bash
-pytest                                    # unit tests only
-pytest -m integration                     # requires live Seestar
-pytest -m sequence                        # multi-step observation sequences
+pytest                        # offline only - NEVER touches a telescope
+pytest --live                 # add the live-hardware tests
+pytest --live --no-movement   # live, but nothing that slews/parks/opens
+pytest --live -m sequence     # multi-step observation sequences
 ```
 
 Tests live in `tests/`.  Integration tests need a Seestar on the network.
@@ -122,8 +136,11 @@ These were reverse-engineered from the Seestar Android app v3.0.2
 
 - Package manager: `uv`
 - Platform: Windows 11, bash shell
-- The owner has 3 Seestar S50s on the local network:
-  `seestar.local` (.246), `seestar-2.local` (.83), `seestar-3.local` (.84)
+- The owner has a mixed fleet of S50s and S30 Pros on the local network,
+  running different firmware versions (7.75 through 8.89 observed).
+  Addresses are DHCP and change, and not every scope is powered on at
+  once - always re-run `connection.discover()` rather than hard-coding an IP.
+- **Never run the full `pytest` suite against live scopes without asking.**
 
 ## Reference files (uncommitted)
 

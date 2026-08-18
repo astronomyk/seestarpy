@@ -119,7 +119,25 @@ A helper to convert a ``(hours, minutes)`` tuple:
 .. note::
     For targets scheduled after midnight, use values above 1440.
     The Seestar's clock is synced to the phone/host local time via
-    ``raw.pi_set_time()``.
+    ``raw.pi_set_time()``.  A plan is only as accurate as that clock — sync
+    it before submitting, or the whole schedule shifts.
+
+.. tip::
+    **Starting a plan right now.**  Because ``start_min`` is absolute, a
+    plan whose first target starts in the *past* does not get skipped — the
+    firmware begins it the moment the plan arrives.  That makes backdating
+    the cleanest way to start a plan immediately:
+
+    .. code-block:: python
+
+        from datetime import datetime
+
+        now = datetime.now()
+        start_now = now.hour * 60 + now.minute - 5      # five minutes ago
+
+    This is also the way to **restart** a plan you stopped: re-upload the
+    same plan with a backdated ``start_min`` rather than waiting for the
+    next slot.
 
 
 Monitoring a running plan
@@ -160,7 +178,52 @@ Stopping a plan
 
 This sends the same ``stop_func`` command that the official app uses.
 After stopping, ``get_running_plan()`` will show the plan with
-``state: "cancel"``.
+``state: "cancel"`` — the plan data stays loaded, it is just no longer
+being executed.
+
+.. warning::
+    **The phone app can kill your plan.**  Triggering auto-focus from the
+    official app aborts a running view plan, and the app will not restart
+    it — only a fresh ``set_view_plan`` will.  If you leave a plan running
+    overnight, resist the urge to "just check the focus" from your phone.
+    The same applies to :func:`seestarpy.ui.focuser` with ``"auto"``.
+
+    If it does happen, re-upload the plan with a backdated ``start_min``
+    (see the tip above) and it resumes on receipt.
+
+
+Settings that affect a plan
+---------------------------
+
+Two device settings change how a plan behaves, and both default to off:
+
+.. code-block:: python
+
+    from seestarpy import raw
+
+    raw.set_setting(plan_target_af=True)     # auto-focus between targets
+    raw.set_setting(viewplan_gohome=True)    # park when the plan finishes
+
+``plan_target_af`` is the safe way to get focus checks during a long
+plan — the firmware schedules them between targets rather than
+interrupting an exposure sequence.  ``viewplan_gohome`` decides whether
+the scope parks itself at the end, which is what you want if nobody is
+awake to do it.
+
+Exposure, gain, dither and filter are **not** part of the plan payload —
+the plan only carries pointings and times.  Set them before submitting:
+
+.. code-block:: python
+
+    import seestarpy as ssp
+
+    ssp.exposure(20)
+    ssp.dither(radius_arcmin=2.5, every_n_subs=5)
+    ssp.raw.set_control_value(gain=80)
+    plan.set_view_plan(tonight)
+
+The ``lp_filter`` field is the one imaging setting the plan does control,
+per target.
 
 
 Full workflow example
@@ -268,6 +331,24 @@ Panels are traversed in **boustrophedon** (snake) order — even rows go
 left-to-right in RA, odd rows go right-to-left — to minimise slew time
 between consecutive panels.  RA spacing is automatically corrected for
 ``cos(dec)`` so panels cover equal angular extents on the sky.
+
+.. important::
+    **On an Alt-Az mount, plan for a circle, not a rectangle.**  The
+    Seestar has no field rotator, so on an Alt-Az mount the sky rotates
+    within the frame over the course of a panel's integration.  Only the
+    **circle inscribed in the rectangular FOV** is covered for the whole
+    exposure; the corners drift in and out and end up with a fraction of
+    the integration time.
+
+    In practice that means picking a panel spacing based on the inscribed
+    circle (~0.75° across for an S50) rather than the 0.75 × 1.33°
+    rectangle, and accepting more panels for the same area.  Offsetting
+    alternate rows by half a step — a hexagonal lattice — covers a given
+    area with fewer circles than a square grid does.
+
+    On an equatorial wedge (:func:`seestarpy.ui.set_eq_mode`) the frame
+    does not rotate and the rectangular tiling in ``create_mosaic_plan`` is
+    exactly right.
 
 
 Polygon plans
@@ -481,4 +562,33 @@ them:
     plan.plot_mosaic_plan(p)      # named plan
 
 This shows panel footprints on a Mollweide projection with RA/Dec grid
-lines.  Requires ``matplotlib`` and ``numpy``.
+lines, zoomed to the area the panels actually cover.  Requires
+``matplotlib`` and ``numpy``.
+
+Footprints default to the S50's 0.75 × 1.33° field.  For a different camera,
+or to see the honest Alt-Az coverage, pass the size yourself:
+
+.. code-block:: python
+
+    # Alt-Az: only the inscribed circle is covered for the full exposure
+    plan.plot_mosaic_plan(mosaic, fov_width=0.75, fov_height=0.75)
+
+If you are unsure of your camera's field, derive it from the plate scale
+and the frame size a live frame reports:
+
+.. code-block:: python
+
+    from seestarpy import status, stream
+
+    scale = status.pixel_scale()                  # arcsec/pixel
+    header, _ = stream.get_live_image()
+    fov_w = header["width"] * scale / 3600.0      # degrees
+    fov_h = header["height"] * scale / 3600.0
+
+Panels are drawn axis-aligned in RA/Dec, i.e. as an equatorial mount would
+see them, so plot before you submit — an overlap that looks generous on
+paper can leave gaps once field rotation is taken into account.
+
+Plotting is also the quickest sanity check that a plan is doing what you
+meant: a wrong ``delta_dec`` or a polygon with its corners in the wrong
+order is obvious in a picture and invisible in a dictionary.
