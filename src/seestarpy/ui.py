@@ -1,3 +1,5 @@
+import threading
+
 from . import raw
 from . import connection as conn
 from .connection import multiple_ips
@@ -551,3 +553,164 @@ def set_eq_mode(equ_mode=True):
 
     """
     return raw.scope_park(equ_mode)
+
+
+#: 3PPA ``state_code`` values, as emitted in the firmware's ``3PPA`` event.
+PA_STATE_CODES = {
+    1: "start",
+    5: "move1",
+    6: "delay1",
+    10: "move2",
+    11: "delay2",
+    14: "calc3",
+    17: "calc4",
+}
+
+
+def _pa_progress(frame):
+    """Render one polar-alignment event as a short progress line, or ``None``.
+
+    Only the events that say something about progress are rendered; the
+    firmware also interleaves ``PiStatus``, ``Exposure`` and friends, which
+    are noise here.
+    """
+    ev = frame.get("Event")
+    state = frame.get("state")
+
+    if ev == "3PPA":
+        code = frame.get("state_code")
+        name = PA_STATE_CODES.get(code, state)
+        line = f"  3PPA      {name} (state_code={code})"
+        err = frame.get("pa_error")
+        if err:
+            line += (f"\n            error: {err['total']:.4f} deg"
+                     f"  az={err['x']:+.4f}  alt={err['y']:+.4f}"
+                     f"  ({err['total_arcsec']:.0f}\")")
+        return line
+
+    if ev == "PlateSolve":
+        if frame.get("page"):               # per-frame chatter, skip
+            return None
+        if state == "working":
+            return "  solving   ..."
+        if state == "complete":
+            ra, dec = frame.get("ra_dec", (None, None))
+            return f"  solved    ra={ra:.4f}h dec={dec:.4f}deg"
+        return f"  solving   {state}"
+
+    if ev == "ScopeGoto":
+        if state == "working":
+            return "  slewing   to the first alignment point"
+        if state == "complete":
+            return f"  slewed    ({frame.get('lapse_ms', 0) / 1000:.1f} s)"
+        return (f"  slewing   {state}: {frame.get('error')} "
+                f"(code {frame.get('code')})")
+
+    if ev == "MoveByAngle" and state in ("start", "complete"):
+        return "  rotating  RA axis" if state == "start" else "  rotated"
+
+    if ev == "EqModePA" and state in ("complete", "fail", "cancel"):
+        if state == "complete":
+            return (f"  RESULT    {frame['total']:.4f} deg  "
+                    f"az={frame['x']:+.4f}  alt={frame['y']:+.4f}")
+        return f"  {state.upper()}"
+
+    return None
+
+
+@multiple_ips
+def polar_align(dec_pos_index=3, restart=True, verbose=True, timeout=300):
+    """
+    Run a three-point polar alignment (3PPA) and block until it finishes.
+
+    The scope must already be in EQ mode.  Starting from the EQ-parked
+    position works (the firmware slews to the first point itself, which
+    takes ~45 s); starting from an already-deployed position is quicker.
+
+    The firmware ties the alignment to the TCP connection that started it
+    and drops an idle socket after ~15.5 s — so an unattended
+    :func:`~seestarpy.raw.start_polar_align` is cancelled roughly 19 s in,
+    leaving the mount stopped mid-slew.  This wrapper holds the connection
+    open for the whole run (see :class:`~seestarpy.connection.keepalive`),
+    which is what lets the alignment actually complete.
+
+    Parameters
+    ----------
+    dec_pos_index : int, optional
+        Which DEC band to align on, as offered by the app's pitch picker.
+        Default ``3``.  Roughly ``dec = 30 * index - 43`` degrees, so
+        ``2`` -> ~17 deg, ``3`` -> ~47 deg, ``4`` -> ~77 deg.  Pick one
+        that is clear of obstructions.
+    restart : bool, optional
+        ``True`` (default) runs the full three-point sequence.  ``False``
+        re-measures at the current position without moving the DEC arm —
+        use it to check the residual after physically adjusting the
+        tripod.
+    verbose : bool, optional
+        Print a progress line per alignment event.  Default ``True``.
+    timeout : float, optional
+        Seconds to wait for the alignment to finish.  Default ``300``.
+
+    Returns
+    -------
+    dict
+        ``{'state': 'complete'|'fail'|'cancel'|'timeout', 'total': float,
+        'x': float, 'y': float, 'lapse_ms': int}``.  ``total`` is the
+        polar-axis error in degrees; ``x`` is the azimuth component and
+        ``y`` the altitude component — both are how far the *mount* is
+        off, so correct the tripod by the same amount in the opposite
+        direction.  Values are ``None`` unless the state is ``complete``.
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+
+    Examples
+    --------
+    ::
+
+        >>> import seestarpy as ssp
+        >>> ssp.set_eq_mode(True)               # park into EQ mode
+        >>> res = ssp.polar_align()
+        >>> res['total']                        # degrees off the pole
+        0.9209
+        >>> ssp.polar_align(restart=False)      # re-check after adjusting
+
+    """
+    done = threading.Event()
+    result = {"state": None, "total": None, "x": None, "y": None,
+              "lapse_ms": None}
+
+    def on_event(frame):
+        if frame.get("Event") not in ("3PPA", "PlateSolve", "ScopeGoto",
+                                      "MoveByAngle", "EqModePA"):
+            return
+        if verbose:
+            line = _pa_progress(frame)
+            if line:
+                print(line, flush=True)
+        if frame.get("Event") == "EqModePA":
+            state = frame.get("state")
+            if state in ("complete", "fail", "cancel"):
+                result.update(
+                    state=state,
+                    total=frame.get("total"),
+                    x=frame.get("x"),
+                    y=frame.get("y"),
+                    lapse_ms=frame.get("lapse_ms"),
+                )
+                done.set()
+
+    if verbose:
+        what = (f"restart, dec_pos_index={dec_pos_index}" if restart
+                else "re-measure at current position")
+        print(f"Polar alignment on {conn.current_ip()} ({what})", flush=True)
+
+    with conn.keepalive(on_event=on_event):
+        raw.start_polar_align(restart=restart, dec_pos_index=dec_pos_index)
+        if not done.wait(timeout):
+            result["state"] = "timeout"
+            if verbose:
+                print(f"  TIMEOUT   after {timeout:.0f} s", flush=True)
+
+    return result

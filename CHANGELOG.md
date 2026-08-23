@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+### Fixed — polar alignment was always cancelled ~19 s in
+
+`raw.start_polar_align` could never complete a three-point alignment. The
+firmware ties a 3PPA run to the TCP connection that issued the command, and
+closes an idle port-4700 socket after **~15.5 s** (measured on fw 8.89).
+`send_command` never pinged the pooled socket, so the firmware dropped it
+mid-alignment, cancelled the run and left the mount stopped wherever it had
+got to. Confirmed against a packet capture of the phone app, which holds one
+socket open with `test_connection` heartbeats for the whole run — and matches
+the app's own UI behaviour, where leaving the 3PPA screen aborts the
+alignment and stops the scope on the spot.
+
+The two symptoms this produced were the same abort seen from different
+starting positions, not two bugs:
+
+- **from EQ park** — the firmware's own slew to the first point takes ~45 s,
+  so the abort landed mid-slew after ~85 deg of the ~137 deg of DEC travel.
+  This looked like a mount limit ("only rotates 90 deg instead of 270"). It
+  is not: a plain `scope_goto` covers the same ground to the zenith fine.
+- **from a deployed position** — the slew is short, so the run got through
+  the first plate-solve and `move1` before dying in `delay1`. This looked
+  like "bugs out after a single movement".
+
+Added:
+
+- **`connection.keepalive`** — a context manager that pings a scope's command
+  connection every `connection.KEEPALIVE_INTERVAL` (5 s) so the firmware
+  won't drop it, for any operation the firmware binds to its connection.
+  Reference-counted, so nested use is safe. Unsolicited events read off the
+  socket are forwarded to an optional `on_event` callback, which makes the
+  keepalive ping double as an event pump — no second socket or listener
+  thread is needed to follow progress.
+- **`ui.polar_align(dec_pos_index=3, restart=True, verbose=True,
+  timeout=300)`** — holds the connection open, blocks until the firmware
+  reports a terminal state, prints per-event progress by default, and returns
+  `{'state', 'total', 'x', 'y', 'lapse_ms'}`. `state` is `complete`, `fail`,
+  `cancel` or `timeout`; `total` is the polar-axis error in degrees, `x` its
+  azimuth and `y` its altitude component.
+
+Verified live on an S30 Pro (fw 8.89) at `dec_pos_index` 2, 3 and 4: three
+independent alignments spanning dec 18 to 78 deg agreed to ~1 arcmin
+(1.0696, 1.0721, 1.0882 deg), and matched the phone app's own measurement
+that night to 0.0002 deg in azimuth.
+
+Also corrected two wrong claims in the `raw.start_polar_align` docstring: the
+mount has no ~270 deg travel limitation, and `restart=False` is a
+*re-measure* at the current position (`3PPA` `calc4`, `state_code` 17) for
+checking the residual after adjusting the tripod — not a "continue to the
+next point". Documented the `state_code` ladder, and that the DEC band is
+`dec = latitude + 30 * (dec_pos_index - 3)`.
+
 ## v0.7.0 — 2026-08-18
 
 > **One screen for the whole fleet.** A new web dashboard replaces the old

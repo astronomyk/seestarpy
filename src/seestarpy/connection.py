@@ -26,6 +26,13 @@ DISCOVERY_INTERVAL = 0.5    # seconds between repeat probes inside that window
 # Set to False to fall back to the old short-lived-socket behaviour.
 PERSIST_CONNECTIONS = True
 
+# The firmware drops an *idle* port-4700 socket after ~15.5 s (measured on
+# fw 8.89).  Long-running operations that the firmware ties to the issuing
+# connection — polar alignment being the notable one — are cancelled when
+# that happens, leaving the mount stopped wherever it had got to.  A
+# keepalive ping well inside that window holds the session open.
+KEEPALIVE_INTERVAL = 5.0
+
 # Serial number -> full discovery record, filled by :func:`discover`.
 DISCOVERED = {}
 
@@ -615,6 +622,81 @@ class _Connection:
         self._sock = None
         self._buf = ""
         self._lock = threading.Lock()
+        # Keepalive state.  Guarded by _ka_lock, which is *never* held while
+        # _lock is held, so a keepalive ping can't deadlock against a send.
+        self._ka_lock = threading.Lock()
+        self._ka_thread = None
+        self._ka_stop = None
+        self._ka_refs = 0
+        self._ka_interval = KEEPALIVE_INTERVAL
+        #: Callbacks invoked with every unsolicited frame read off this
+        #: socket.  Populated by :meth:`add_event_handler`.
+        self._handlers = []
+
+    # -- unsolicited-event fan-out -----------------------------------------
+    def add_event_handler(self, fn):
+        """Register *fn* to receive every unsolicited frame on this socket."""
+        with self._ka_lock:
+            self._handlers.append(fn)
+        return fn
+
+    def remove_event_handler(self, fn):
+        """Un-register a handler added by :meth:`add_event_handler`."""
+        with self._ka_lock:
+            if fn in self._handlers:
+                self._handlers.remove(fn)
+
+    def _dispatch(self, frame):
+        with self._ka_lock:
+            handlers = list(self._handlers)
+        for fn in handlers:
+            try:
+                fn(frame)
+            except Exception:       # a broken handler must not kill the read
+                pass
+
+    # -- keepalive ---------------------------------------------------------
+    def _ka_loop(self, stop):
+        while not stop.wait(self._ka_interval):
+            try:
+                self.send({"method": "test_connection"}, quiet=True)
+            except (OSError, ConnectionError):
+                # send() already dropped and retried the socket; if it still
+                # fails there is nothing useful to do from this thread.
+                pass
+
+    def start_keepalive(self, interval=None):
+        """Begin pinging this connection so the firmware won't drop it.
+
+        Reference-counted: nested calls are cheap and only the outermost
+        :meth:`stop_keepalive` actually stops the thread.
+        """
+        with self._ka_lock:
+            if interval is not None:
+                self._ka_interval = float(interval)
+            self._ka_refs += 1
+            if self._ka_thread is not None:
+                return
+            self._ka_stop = threading.Event()
+            self._ka_thread = threading.Thread(
+                target=self._ka_loop, args=(self._ka_stop,),
+                name=f"seestar-keepalive-{self.ip}", daemon=True,
+            )
+            self._ka_thread.start()
+
+    def stop_keepalive(self, force=False):
+        """Drop one keepalive reference; stop the thread when it hits zero."""
+        with self._ka_lock:
+            if force:
+                self._ka_refs = 0
+            elif self._ka_refs > 0:
+                self._ka_refs -= 1
+            if self._ka_refs > 0 or self._ka_thread is None:
+                return
+            stop, thread = self._ka_stop, self._ka_thread
+            self._ka_thread = self._ka_stop = None
+        stop.set()
+        thread.join(timeout=2.0)
 
     # -- socket lifecycle ---------------------------------------------------
     def _connect(self):
@@ -667,6 +749,11 @@ class _Connection:
                 continue
             if isinstance(frame, dict) and frame.get("id") == cmd_id:
                 return frame
+            # Not our reply: an unsolicited event the device interleaved on
+            # this socket.  Hand it to any registered handler before dropping
+            # it — this is how a keepalive ping doubles as an event pump.
+            if isinstance(frame, dict):
+                self._dispatch(frame)
             if VERBOSE_LEVEL >= 2:
                 ev = frame.get("Event") or frame.get("method") \
                     if isinstance(frame, dict) else None
@@ -724,6 +811,63 @@ def _get_connection(ip):
         return conn
 
 
+class keepalive:
+    """Hold a Seestar's command connection open for a long-running operation.
+
+    The firmware ties some operations to the TCP connection that started
+    them and closes an idle socket after ~15.5 s.  Polar alignment is the
+    clearest case: when the socket drops, the firmware cancels the
+    alignment and leaves the mount stopped mid-slew.  Wrap such an
+    operation in this context manager and the connection is pinged every
+    :data:`KEEPALIVE_INTERVAL` seconds until the block exits.
+
+    While active, unsolicited events read off the socket are passed to
+    *on_event* — the keepalive ping doubles as an event pump, so no second
+    connection or listener thread is needed to follow progress.
+
+    Parameters
+    ----------
+    ip : str or None, optional
+        Which Seestar to hold open.  Defaults to :func:`current_ip`.
+    interval : float or None, optional
+        Seconds between pings.  Defaults to :data:`KEEPALIVE_INTERVAL`.
+        Must stay comfortably under the ~15.5 s firmware idle timeout.
+    on_event : callable or None, optional
+        Called with each unsolicited event frame (a ``dict``).
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import connection, raw
+        >>> with connection.keepalive(on_event=print):
+        ...     raw.start_polar_align()
+        ...     # ... poll until the alignment reports complete ...
+
+    """
+
+    def __init__(self, ip=None, interval=None, on_event=None):
+        self.ip = ip or current_ip()
+        self.interval = interval
+        self.on_event = on_event
+        self._conn = None
+
+    def __enter__(self):
+        self._conn = _get_connection(self.ip)
+        if self.on_event is not None:
+            self._conn.add_event_handler(self.on_event)
+        self._conn.start_keepalive(self.interval)
+        return self._conn
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            self._conn.stop_keepalive()
+        finally:
+            if self.on_event is not None:
+                self._conn.remove_event_handler(self.on_event)
+        return False
+
+
 def close_connections():
     """Close and discard all pooled Seestar connections.
 
@@ -731,9 +875,14 @@ def close_connections():
     reconnects.  Registered to run at interpreter exit.
     """
     with _connections_lock:
-        for conn in _connections.values():
-            conn.close()
+        conns = list(_connections.values())
         _connections.clear()
+    # Stop the keepalive threads before closing the sockets they ping, and
+    # do it outside _connections_lock so a ping mid-flight can finish.
+    for conn in conns:
+        conn.stop_keepalive(force=True)
+    for conn in conns:
+        conn.close()
 
 
 atexit.register(close_connections)

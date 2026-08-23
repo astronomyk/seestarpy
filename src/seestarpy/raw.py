@@ -2353,25 +2353,42 @@ def start_polar_align(restart=True, dec_pos_index=3):
     """
     Run the three-point polar-alignment (3PPA) sequence.
 
-    The scope must be in EQ mode and **parked** (``mount.equ_mode`` true,
-    ``mount.close`` true) before calling this.  The firmware sweeps the
-    DEC arm out of the parked home position, which reports ``dec = -90``
-    and ``alt = -latitude``.  Do *not* call :func:`~seestarpy.ui.open`
-    first: ``scope_move_to_horizon`` already rotates the arm ~90 deg to
-    the horizontal, and 3PPA started from there cannot complete its full
-    ~270 deg travel to the pole.
+    The scope must be in EQ mode (``mount.equ_mode`` true).  It may be
+    EQ-parked (``mount.close`` true, reporting ``dec = -90`` and
+    ``alt = -latitude``) or already deployed; the firmware slews to the
+    first alignment point itself, which takes ~45 s from parked and
+    ~10 s from deployed.  No ``scope_goto`` is needed — and none is sent
+    by the phone app.
+
+    .. warning::
+       The firmware ties the alignment to the TCP connection that issued
+       this command, and closes an idle port-4700 socket after ~15.5 s.
+       Calling this bare therefore gets the alignment cancelled ~19 s in,
+       leaving the mount stopped mid-slew — which looks like a partial
+       ~90 deg rotation when started from parked, or like a hang after
+       one movement when started from deployed.  Both are the same
+       abort.  Use :func:`~seestarpy.ui.polar_align`, which holds the
+       connection open, or wrap this call in
+       :class:`~seestarpy.connection.keepalive` yourself.
 
     Parameters
     ----------
     restart : bool, optional
-        ``True`` (default) restarts the alignment from scratch, moving
-        the DEC arm to *dec_pos_index* first.  ``False`` continues an
-        alignment already in progress; *dec_pos_index* is then omitted
-        from the payload, matching the phone app.
+        ``True`` (default) runs the whole three-point sequence: slew,
+        solve, rotate, solve, rotate, solve, then report the error.
+        ``False`` re-measures at the current position without moving the
+        DEC arm — a single plate-solve producing ``3PPA`` ``calc4``
+        (``state_code`` 17), used to check the residual after physically
+        adjusting the tripod.  *dec_pos_index* is then omitted from the
+        payload, matching the phone app.
     dec_pos_index : int or None, optional
-        DEC pitch position to align at, as offered by the app's pitch
-        picker.  ``3`` (default) is the app's own default.  Only sent
-        when *restart* is ``True``; pass ``None`` to omit it entirely.
+        DEC band to align on, as offered by the app's pitch picker.
+        The arc is centred on ``dec = latitude + 30 * (index - 3)``, so
+        the default ``3`` puts it overhead at ``dec = latitude`` and each
+        step is 30 deg.  Measured on a 47.95 deg site: ``2`` -> 17.95,
+        ``3`` -> 47.95, ``4`` -> 77.95.  Pick a band clear of
+        obstructions.  Only sent when *restart* is ``True``; pass
+        ``None`` to omit it entirely.
 
     Returns
     -------
@@ -2381,18 +2398,23 @@ def start_polar_align(restart=True, dec_pos_index=3):
     -----
     Accepts the ``ips`` keyword for multi-Seestar operation.
 
-    The phone app sends this command twice: once as
-    ``{"restart": true, "dec_pos_index": 3}`` to reach the pitch
-    position, then again as ``{"restart": false}`` once the user has
-    acknowledged the star-calibration warning.
+    Progress arrives as ``EqModePA`` and ``3PPA`` events on port 4700.
+    The ``3PPA`` ``state_code`` ladder is ``1`` start, ``5`` move1,
+    ``6`` delay1, ``10`` move2, ``11`` delay2, ``14`` calc3, ``17``
+    calc4; the ``calc*`` states carry a ``pa_error`` block, and
+    ``EqModePA`` ``complete`` repeats the final ``total``/``x``/``y``.
+    ``x`` is the azimuth error and ``y`` the altitude error of the
+    *mount*, in degrees — correct the tripod by the same amount in the
+    opposite direction.  Each of the two rotations sweeps ~21.5 deg in
+    RA, so the three solves span ~43 deg.
 
     Examples
     --------
 
         >>> import seestarpy as ssp
-        >>> ssp.close(True)                     # park into EQ mode
-        >>> ssp.raw.start_polar_align()         # restart + dec_pos_index
-        >>> ssp.raw.start_polar_align(False)    # {"restart": false}
+        >>> ssp.set_eq_mode(True)               # park into EQ mode
+        >>> ssp.polar_align()                   # preferred: blocks, keepalive
+        >>> ssp.polar_align(restart=False)      # re-check after adjusting
 
     """
     inner = {"restart": bool(restart)}
