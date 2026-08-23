@@ -18,19 +18,16 @@ both into a clean Python interface.
 src/seestarpy/
   __init__.py          Imports all submodules
   connection.py        TCP socket, send_command(), DEFAULT_IP/PORT, UDP discovery
-  raw.py               59 low-level JSON-RPC wrappers (getters, setters, scope control)
+  raw.py               63 low-level JSON-RPC wrappers (getters, setters, scope control)
   ui.py                High-level convenience functions (open, close, goto) with multi-IP support
   status.py            ASCII status dashboard (status_bar())
   plan.py              Observation plan commands (set_view_plan, stop, get status)
   stack.py             Batch stacking commands (set/start/stop/clear/status)
   stream.py            Binary image streaming (ports 4800/4804), matplotlib live display
   data.py              SMB file operations (list/download FITS from Seestar storage)
-  coordintate_utils.py RA/Dec to Alt/Az conversion
   events/              Async event listener system (port 4700 persistent connection)
-    event_listener.py  Background thread + asyncio, heartbeat, WebSocket broadcast
-    event_definitions.py  Dataclasses for 20+ event types
+    event_listener.py  Background thread + asyncio, heartbeat, reconnect
     event_stream.py    Global LATEST_STATE dict, event routing
-    event_watcher.py   Higher-level state transition watcher
   dashboard/           Multi-Seestar live web dashboard (`python -m seestarpy.dashboard`)
     monitor.py         ScopeMonitor (per-scope events + image polling), Fleet (discovery)
     server.py          HTTP server: static page, /api/scopes, /api/events (SSE), /api/image

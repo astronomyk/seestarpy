@@ -31,7 +31,10 @@ import time
 
 from .. import connection
 from .. import stream as _stream
-from ..status import azimuth_to_compass, pixel_scale
+# _num/_pair are aliases for the shared helpers in status, which this
+# module used to keep byte-identical copies of.
+from ..status import (azimuth_to_compass, pixel_scale,
+                     as_number as _num, coord_pair as _pair)
 
 #: Seconds between heartbeat polls on the command connection.
 HEARTBEAT_INTERVAL = 2.0
@@ -206,35 +209,10 @@ def _fit_and_encode(img, long_side, quality):
 # Snapshot helpers
 # ---------------------------------------------------------------------------
 
-def _num(value):
-    """Return *value* if it is a real number, else ``None``.
-
-    Guards against the firmware's habit of answering an unsupported
-    query with a string or an error dict where a number is expected.
-    """
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return value
-
-
 def _round(value, nd):
+    """Round for the card, or ``None`` if there is no number to round."""
     value = _num(value)
     return None if value is None else round(value, nd)
-
-
-def _pair(result, keys):
-    """Pull a coordinate pair out of a firmware reply of either shape.
-
-    ``scope_get_equ_coord`` answers with a dict (``{"ra": .., "dec": ..}``)
-    while ``scope_get_horiz_coord`` answers with a bare ``[alt, az]`` list —
-    and which of the two you get has changed between firmware versions.
-    Returns ``(None, None)`` for anything unrecognised.
-    """
-    if isinstance(result, dict):
-        return _num(result.get(keys[0])), _num(result.get(keys[1]))
-    if isinstance(result, (list, tuple)) and len(result) >= 2:
-        return _num(result[0]), _num(result[1])
-    return None, None
 
 
 # ---------------------------------------------------------------------------

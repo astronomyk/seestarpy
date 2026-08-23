@@ -662,9 +662,6 @@ def create_polygon_plan(
     }
 
 
-#: Alias — the original name before generalisation to arbitrary polygons.
-create_quadrilateral_plan = create_polygon_plan
-
 
 _SESAME_URL = "https://cdsweb.u-strasbg.fr/cgi-bin/nph-sesame/-ox/SNV"
 

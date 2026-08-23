@@ -23,22 +23,3 @@ Event Stream
     :members:
     :undoc-members:
     :show-inheritance:
-
-Event Definitions
------------------
-
-Typed dataclasses for every known Seestar event.  Each class maps 1-to-1
-with the ``"Event"`` key in the JSON messages sent by the device.
-
-.. automodule:: seestarpy.events.event_definitions
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Event Watcher (experimental)
-----------------------------
-
-.. automodule:: seestarpy.events.event_watcher
-    :members:
-    :undoc-members:
-    :show-inheritance:

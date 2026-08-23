@@ -1,19 +1,16 @@
 import asyncio
 import json
 import time
-import websockets
 import threading
 
-from ..connection import DEFAULT_IP, DEFAULT_PORT, VERBOSE_LEVEL
-from .event_stream import handle_event, LATEST_STATE
+from .. import connection
+from .event_stream import handle_event
 
 HEARTBEAT_INTERVAL = 3
 _listener_running = False  # Prevent multiple starts
 _shutdown_event = None
 _listener_thread = None
 _loop = None  # asyncio event loop running in the listener thread
-
-connected_clients = set()
 
 
 async def heartbeat(writer):
@@ -47,7 +44,7 @@ async def heartbeat(writer):
             data = json.dumps(heartbeat_msg) + "\r\n"
             writer.write(data.encode())
             await writer.drain()
-            if VERBOSE_LEVEL >= 2:
+            if connection.VERBOSE_LEVEL >= 2:
                 print("[heartbeat] Sent:", heartbeat_msg)
 
         await asyncio.sleep(HEARTBEAT_INTERVAL)
@@ -65,9 +62,14 @@ async def run():
     while not _shutdown_event.is_set():
         writer = None
         try:
-            print(f"Connecting to {DEFAULT_IP}:{DEFAULT_PORT}...")
-            reader, writer = await asyncio.open_connection(DEFAULT_IP, DEFAULT_PORT)
-            print(f"Connected to {DEFAULT_IP}:{DEFAULT_PORT}")
+            # Resolve the target per attempt, not once at import: this
+            # module used to hold a snapshot of DEFAULT_IP taken when the
+            # package was first imported, so a listener started after
+            # set_default_ip() silently connected to the previous scope.
+            ip, port = connection.current_ip(), connection.DEFAULT_PORT
+            print(f"Connecting to {ip}:{port}...")
+            reader, writer = await asyncio.open_connection(ip, port)
+            print(f"Connected to {ip}:{port}")
 
             # Authenticate if a key is configured (firmware 7.18+).
             from ..auth import authenticate_async, KEY_PATH as _AUTH_KEY
@@ -97,10 +99,10 @@ async def run():
 
                     handle_event(data)
 
-                    if VERBOSE_LEVEL >= 1:
+                    if connection.VERBOSE_LEVEL >= 1:
                         print("[event]", data)
                 except json.JSONDecodeError:
-                    if VERBOSE_LEVEL >= 1:
+                    if connection.VERBOSE_LEVEL >= 1:
                         print("[non-json]", message)
 
         except asyncio.CancelledError:
@@ -128,56 +130,34 @@ async def run():
             await asyncio.sleep(3)
 
 
-async def websocket_server():
-    """
-    Start a WebSocket server that broadcasts :data:`event_stream.LATEST_STATE`.
-
-    Serves on ``ws://0.0.0.0:8765``.  Each connected client receives the
-    full state dictionary once per second.  Used by the HTML dashboards
-    returned by :func:`dashboard_url`.
-    """
-    async def handler(websocket):
-        connected_clients.add(websocket)
-        try:
-            while not _shutdown_event.is_set():
-                await asyncio.sleep(1)
-                await websocket.send(json.dumps(LATEST_STATE))
-        except:
-            pass
-        finally:
-            connected_clients.remove(websocket)
-
-    server = await websockets.serve(handler, "0.0.0.0", 8765)
-    print("[websocket] Serving on ws://0.0.0.0:8765")
-    while not _shutdown_event.is_set():
-        await asyncio.sleep(1)
-    server.close()
-    await server.wait_closed()
-
-
-def start_listener(with_websocket: bool = True):
+def start_listener():
     """
     Start the background event listener in a daemon thread.
 
     Opens a persistent TCP connection to the Seestar and continuously
     reads incoming event messages, keeping
-    :data:`event_stream.LATEST_STATE` up to date.  Optionally starts a
-    WebSocket server so that the bundled HTML dashboards can display
-    live data.
+    :data:`event_stream.LATEST_STATE` up to date.
 
     This function is safe to call multiple times — subsequent calls are
     a no-op if the listener is already running.
 
-    Parameters
-    ----------
-    with_websocket : bool, optional
-        Also start the WebSocket relay server on ``ws://0.0.0.0:8765``.
-        Default is ``True``.
+    The listener follows one scope, resolved from
+    :func:`~seestarpy.connection.current_ip` when it connects.  For several
+    scopes at once use :mod:`seestarpy.dashboard`, which runs an independent
+    event connection per scope.
+
+    .. versionchanged:: 0.7.1
+       The WebSocket relay this used to start on ``ws://0.0.0.0:8765``, and
+       the flag that controlled it, are gone.  Its only consumers were the
+       single-scope ``basic.html`` / ``fancy.html`` pages removed in 0.7.0;
+       :mod:`seestarpy.dashboard` serves its own page over HTTP and opens its
+       own connections.  Read :data:`event_stream.LATEST_STATE` directly to
+       feed a UI of your own.
 
     See Also
     --------
     stop_listener : Stop the background listener.
-    dashboard_url : Get paths to the bundled HTML dashboards.
+    dashboard_url : URL of the seestarpy web dashboard.
 
     Examples
     --------
@@ -201,12 +181,7 @@ def start_listener(with_websocket: bool = True):
     async def main():
         global _loop
         _loop = asyncio.get_running_loop()
-        tasks = [asyncio.create_task(run())]
-        if with_websocket:
-            tasks.append(asyncio.create_task(websocket_server()))
-            print("[seestarpy] For a live web dashboard of every Seestar on "
-                  "the network, run: python -m seestarpy.dashboard")
-        await asyncio.gather(*tasks)
+        await run()
 
     def thread_entry():
         asyncio.run(main())

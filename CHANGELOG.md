@@ -100,6 +100,167 @@ checking the residual after adjusting the tripod — not a "continue to the
 next point". Documented the `state_code` ladder, and that the DEC band is
 `dec = latitude + 30 * (dec_pos_index - 3)`.
 
+### Removed — one dependency, two modules, and the last duplicate paths
+
+Second pass of the audit, acting on the judgement calls the first pass
+deliberately left open.
+
+- **`websockets` is no longer a dependency.** `event_listener` no longer
+  starts a WebSocket relay on `ws://0.0.0.0:8765`, and `start_listener` has
+  lost its `with_websocket` parameter. The relay's only consumers were the
+  single-scope `basic.html` / `fancy.html` pages removed in 0.7.0;
+  `seestarpy.dashboard` serves its own page over HTTP with its own per-scope
+  connections. Read `event_stream.LATEST_STATE` to feed a UI of your own.
+- **`events.event_definitions` deleted** (878 lines, ~40 dataclasses). It had
+  no runtime consumer: the live path stores raw dicts in `LATEST_STATE` and
+  the dashboard reads raw dicts. Recoverable from git history if a typed
+  event layer is ever wanted. `tests/test_event_definitions.py` went with it.
+- **`auth._sign_with_openssl` deleted.** `cryptography` stays a mandatory
+  dependency, so the shell-out fallback was unreachable; `sign_challenge` is
+  now one path that raises a clear `ImportError` on a broken install.
+  `subprocess` and `tempfile` are no longer imported.
+- **`plan.create_quadrilateral_plan` deleted** — a bare alias for
+  `create_polygon_plan`, which is the same function under the name it
+  outgrew.
+- **`raw.get_stacked_img` deleted.** A port-4800 image-stream method that
+  could only ever return `code 103` on the command socket; `stream.get_live_image()`
+  is the working equivalent and already speaks the right protocol.
+
+### Changed
+
+- **`status.py` no longer builds its own JSON-RPC payloads.** `get_exposure`,
+  `get_filter` and `get_target_name` now call `raw.get_setting`,
+  `raw.get_wheel_position` and the new `raw.get_sequence_setting`. The two
+  that hand-rolled payloads were the two that mishandled the reply envelope,
+  which is exactly the thing `raw` already gets right. `send_command` is no
+  longer imported here.
+- **New `raw.get_sequence_setting`** — reads `group_name` and the
+  end-of-sequence flags. The setter existed; the getter did not.
+- **One numeric coercion for the package.** `status.as_number` (value or
+  `None`) and `status.coord_pair` (a coordinate pair from either firmware's
+  reply shape) are now the single implementations;
+  `dashboard.monitor` imports them instead of keeping byte-identical copies,
+  and `status._num` is a thin display wrapper over `as_number`.
+- **One cached firmware accessor.** `status.firmware_version(ip=None,
+  refresh=False)` returns `(version_string, version_int)`, cached per address
+  — the seam that firmware gates (7.75 stacking paths, 8.46 preview block)
+  can share. `status.get_firmware_version` and `stack._firmware_ver_int` both
+  read through it, replacing a second cache in `stack.py`. A failed read is
+  not cached, so a scope that was mid-boot gets retried.
+- **`data.list_folders` documents that it is incomplete.** It reads the
+  firmware's `get_albums`, which under-reports by 0–8 folders (measured across
+  six scopes; worst case 33 albums for 41 real directories). The docstring now
+  says so and shows the SMB listing to use when completeness matters. There is
+  no folder cap — an apparent 100-folder limit was a misdiagnosis.
+  `list_folder_contents` gained the two caveats that bite in practice: the
+  per-device page cursor that must not be walked concurrently, and its
+  kilobyte-rounded sizes. SMB and `pysmb` stay as the reliable path.
+- **`raw.scope_get_ra_dec`'s docstring corrected.** It claimed firmware 8.x
+  rejects the method with `code 103`; measured live on 8.46 and 8.89, both
+  accept it (`code 0`). The real incompatibility is the return *shape* — a
+  three-element `[ra, dec, lst]` list where `scope_get_equ_coord` gives a
+  dict. The same wrong claim is fixed in the status-checks tutorial and in a
+  `status_bar` comment.
+
+### Removed — dead code
+
+An audit of `src/` cross-referenced every top-level symbol against the whole
+repo, then probed the questionable JSON-RPC methods live on firmware 8.46
+(S50) and 8.89 (S30 Pro). Everything below either had no consumer anywhere,
+or sent a wire method that **both** scopes answered with `code 103`
+("method not found"). Nothing here could have worked on any firmware
+seestarpy 0.7 supports.
+
+- **`events.event_watcher`** — deleted. `EventWatcher` had no consumer and
+  three independent fatal defects: it never authenticated, so it could not
+  connect to firmware 7.18+ at all; `_handle_event` did
+  `ev_class(**json.dumps(data))`, and `**` on a `str` raises `TypeError`;
+  and it called an `update()` method that no `event_definitions` dataclass
+  has. Use `start_listener`, or `seestarpy.dashboard` for several scopes.
+- **`coordintate_utils`** — deleted. The whole module was unreachable:
+  `get_mount_alt_az_from_latest_state` had no callers, and it was the only
+  caller of `ra_dec_to_alt_az`. The mount reports Alt/Az directly via
+  `scope_get_horiz_coord`, which `status.get_coords()` already uses.
+- **`raw.scan_iscope`** — deleted. A real method sent on the wrong socket:
+  it belongs to UDP discovery on port 4720, which `connection.discover()`
+  speaks. On the command socket it could only ever return `103`.
+- **`raw.stop_goto_target`, `raw.stop_scheduler`** — deleted; `103` on both
+  scopes and absent from the v3.3.0 `CmdMethod` enum. To cancel a slew use
+  `raw.iscope_stop_view("AutoGoto")`, which is what the official app sends.
+- **`raw.set_stack_setting`** — deleted. Deprecated since v0.1.2 and removed
+  from the firmware at v6.7, below the oldest firmware 0.7.x supports, so it
+  could not change a setting on any supported scope. Use `raw.set_setting`.
+  (`raw.get_stack_setting` is **kept**: unlike its setter it falls back to
+  `get_setting` on `103`, so it still returns useful data.)
+- **`status.get_target_name2`** — deleted. It called `get_img_name_field`,
+  which returns filename-component toggles
+  (`{"bin": true, "date_time": true, …}`) and contains no target name.
+- **`data.HTTP_PORT`** — deleted; never read, and `_build_http_url` relies on
+  the default port 80 instead.
+- **Four commented-out stubs in `raw.py`** (`begin_streaming`,
+  `stop_streaming`, `get_annotated_result`, `get_event_state`) and their
+  `"""To implement:"""` heading — 61 lines. `begin_streaming` /
+  `stop_streaming` are genuine port-4800 methods that `stream.py` already
+  uses correctly. Note `get_annotated_result` was a typo: the real method is
+  `get_annotate_result`, which is live and still unwrapped.
+- **Six `_`-prefixed backward-compat aliases in `crowdsky.chunks`**
+  (`_LIGHT_RE`, `_CROWDSKY_RE`, `_CROWDSKY_RE_LEGACY`,
+  `_parse_light_filename`, `_local_dt_to_chunk_str`, `_compute_chunk_key`).
+  The first three had no consumer at all; the rest were imported only by
+  `tests/test_stack_blocks.py`, now repointed at the public names. The
+  public `CROWDSKY_RE_LEGACY` is still used and stays.
+- **`src/__init__.py`** — deleted. An empty top-level package file that made
+  `import src.seestarpy` resolve, loading every module a second time under a
+  second name. It is never installed (`packages = ["src/seestarpy"]`), and it
+  is how `event_watcher`'s `from src.seestarpy.connection` import stayed
+  hidden. `tests/test_event_definitions.py` now imports `seestarpy.events`.
+
+### Fixed — defects the audit turned up
+
+Four of these were documented as working. All are covered by new regression
+tests in `tests/test_audit_fixes.py`.
+
+- **`ui.filter_wheel("lp")` and `("ircut")` raised `ValueError`** — the two
+  names the docs lead with. The guard tested `pos.lower() in ["open",
+  "narrow"]` while the mapping beside it handled four keys, so half the
+  supported names fell through to the error branch. Guard and mapping are now
+  one dict, and the message lists what is accepted.
+- **`ui.goto("m42")` returned `None` instead of raising** — for any string
+  that was not `'park'` or `'horizon'`, both inner tests failed and the
+  function fell off the end, leaving `else: raise ValueError` unreachable for
+  every `str`. A typo'd target was a silent no-op that read as success.
+- **`status.get_target_name()` always returned `None`** — it read
+  `group_name` off the JSON-RPC envelope instead of out of `result`, where
+  the firmware actually puts it.
+- **`status.status_bar(return_type=...)` ignored its argument** — `"dict"`
+  returned the formatted string, contradicting the docstring. The dict is now
+  real: `status_bar` computes one dictionary of every cell and renders the
+  table from it, so the two return types cannot disagree. Absent fields are
+  `None` rather than the table's `"---"`, numbers are unrounded, and an
+  unknown *return_type* raises instead of silently giving a string.
+- **`connection.keepalive` silently did nothing useful when
+  `PERSIST_CONNECTIONS` was False** — with pooling off the socket is closed
+  after every command, so there is nothing to keep alive and the firmware
+  would cancel a polar alignment ~15 s in, exactly as it did before keepalive
+  existed. It now raises on entry with an explanation, rather than failing
+  15 s into a run.
+- **The mDNS path's `timeout` never applied** — in
+  `find_available_ips(mdns=True)` the `ThreadPoolExecutor` context manager
+  exited (joining every lookup) *before* `as_completed(..., timeout=…)` was
+  reached, so the timeout could not fire and a subnet where
+  `seestar-N.local` does not resolve blocked for the full DNS timeout per
+  name. Collection now happens inside the pool's lifetime and shutdown does
+  not wait, making *timeout* an actual bound.
+- **`events.event_listener` held an import-time snapshot of `DEFAULT_IP`** —
+  `from ..connection import DEFAULT_IP` binds a copy, so a listener started
+  after `set_default_ip()` connected to the *previous* scope, silently. It
+  now resolves `connection.current_ip()` per connection attempt, and reads
+  `VERBOSE_LEVEL` live for the same reason.
+- **`tests/integration/test_13_seq_error_recovery.py`** passed for the wrong
+  reason: it cancelled a slew with `raw.stop_goto_target()`, which the
+  firmware refuses, so the goto simply ran to completion and the assertion
+  held anyway. Now uses `raw.iscope_stop_view("AutoGoto")`.
+
 ## v0.7.0 — 2026-08-18
 
 > **One screen for the whole fleet.** A new web dashboard replaces the old

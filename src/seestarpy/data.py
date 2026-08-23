@@ -20,7 +20,6 @@ from .raw import get_albums, get_img_file_page_number, get_img_file_page_name
 
 SHARE_NAME = "EMMC Images"
 ROOT_DIR = "MyWorks"
-HTTP_PORT = 80
 
 
 def _connect_smb() -> SMBConnection:
@@ -68,11 +67,37 @@ def list_folders() -> Dict[str, int]:
     results, not individual files).  Use :func:`list_folder_contents` to
     get the actual file listing.
 
+    .. warning::
+        **This listing is not complete.**  It comes from the firmware's
+        ``get_albums`` RPC, which under-reports: folders that exist on disk
+        do not always appear as albums.  Measured across six scopes on
+        2026-08-23 against a direct SMB listing of ``MyWorks``, the shortfall
+        was 0 to 8 folders — worst case 33 albums reported for 41 real
+        directories.
+
+        There is **no** folder cap (an apparent 100-folder limit was a
+        misdiagnosis caused by three calls being sent to the same scope).
+        The under-reporting is real, though, so when the answer has to be
+        complete — "does folder X exist", or enumerating everything before a
+        bulk download — list the share over SMB instead::
+
+            from smb.SMBConnection import SMBConnection
+
+            c = SMBConnection('', '', 'raspi', 'seestar',
+                              use_ntlm_v2=False, is_direct_tcp=True)
+            c.connect(ip, 445)
+            dirs = [e.filename for e in c.listPath('EMMC Images', 'MyWorks')
+                    if e.isDirectory]
+
+        SMB also returns a size per entry, which is what you need to verify
+        a bulk download, and it avoids the stateful page cursor that
+        :func:`list_folder_contents` walks.
+
     Returns
     -------
     dict of {str: int}
         Mapping of folder names to the number of album entries they
-        contain.
+        contain.  Incomplete — see the warning above.
 
     Examples
     --------
@@ -97,6 +122,21 @@ def list_folder_contents(folder: str, filetype: str = "*") -> Dict[str, int]:
 
     Uses the paginated JSON-RPC file listing API (port 4700), which is
     significantly faster than the previous SMB-based approach.
+
+    .. warning::
+        The firmware keeps **one** "current directory" cursor per device,
+        which this function sets and then pages through.  Two listing
+        sequences running against the same scope at the same time interleave
+        and return the wrong folder's contents — silently, with no error.
+        Never thread two listing calls to one Seestar, and don't run two
+        scripts that list the same scope concurrently.  Different scopes in
+        parallel are fine, which is what ``ips="all"`` does.
+
+    .. note::
+        Sizes come back from the firmware in kilobytes and are converted, so
+        each value is rounded to the nearest 1024 bytes.  When verifying a
+        download, allow that tolerance (a truncated transfer is short by
+        megabytes, not bytes) or take exact sizes from an SMB listing.
 
     Parameters
     ----------

@@ -48,7 +48,7 @@ def test_start_listener_populates_state(verified_connection, _open_scope):
     """Start the listener, trigger activity, and verify LATEST_STATE is populated."""
     event_stream.LATEST_STATE.clear()
 
-    start_listener(with_websocket=False)
+    start_listener()
     time.sleep(2)
 
     # Trigger a filter wheel change to generate events
@@ -69,7 +69,7 @@ def test_latest_logs_is_populated(verified_connection, _open_scope):
     """After running the listener with activity, LATEST_LOGS should have entries."""
     event_stream.LATEST_LOGS.clear()
 
-    start_listener(with_websocket=False)
+    start_listener()
     time.sleep(2)
 
     _trigger_activity()
@@ -93,6 +93,6 @@ def test_stop_listener_is_idempotent():
 
 def test_start_listener_is_idempotent(verified_connection, _open_scope):
     """Calling start_listener twice should be a no-op on the second call."""
-    start_listener(with_websocket=False)
+    start_listener()
     time.sleep(2)
-    start_listener(with_websocket=False)  # Should be a no-op
+    start_listener()  # Should be a no-op

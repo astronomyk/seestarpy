@@ -1,5 +1,6 @@
 from .connection import multiple_ips, send_command, current_ip
-from .raw import iscope_get_app_state, get_device_state
+from .raw import iscope_get_app_state
+from .status import firmware_version
 
 # Firmware 7.75 (firmware_ver_int 2775) is the cut-over where the batch
 # stacker started requiring full relative sub-frame paths.  Older firmware
@@ -7,20 +8,13 @@ from .raw import iscope_get_app_state, get_device_state
 # paths with state="fail", code=267, error="no image".
 _FULL_PATH_MIN_FW = 2775
 
-# Cache the firmware_ver_int per Seestar IP so a long stacking loop doesn't
-# re-query get_device_state for every block.
-_firmware_ver_cache = {}
-
-
 def _firmware_ver_int(ip):
-    """Return the firmware_ver_int for *ip*, or ``None`` if it can't be read."""
-    if ip not in _firmware_ver_cache:
-        try:
-            resp = get_device_state(keys=["device"])
-            _firmware_ver_cache[ip] = resp["result"]["device"]["firmware_ver_int"]
-        except Exception:
-            _firmware_ver_cache[ip] = None
-    return _firmware_ver_cache[ip]
+    """Return the firmware_ver_int for *ip*, or ``None`` if it can't be read.
+
+    Thin wrapper over :func:`seestarpy.status.firmware_version`, which owns
+    the per-scope cache this used to keep its own copy of.
+    """
+    return firmware_version(ip)[1]
 
 
 @multiple_ips

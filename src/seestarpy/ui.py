@@ -381,12 +381,16 @@ def filter_wheel(pos: int | str | None = None):
     if pos is None:
         return get_filter()
 
+    names = {"open": 1, "ircut": 1, "narrow": 2, "lp": 2}
     if isinstance(pos, int) and pos in [1, 2]:
         pos_i = pos
-    elif isinstance(pos, str) and pos.lower() in ["open", "narrow"]:
-        pos_i = {"open": 1, "ircut": 1, "narrow": 2, "lp": 2}[pos.lower()]
+    elif isinstance(pos, str) and pos.lower() in names:
+        pos_i = names[pos.lower()]
     else:
-        raise ValueError(f"Invalid filter wheel value: {pos}")
+        raise ValueError(
+            f"Invalid filter wheel value: {pos!r}. "
+            f"Use 1 or 2, or one of {sorted(names)}."
+        )
     return raw.set_wheel_position(pos_i)
 
 

@@ -19,7 +19,6 @@ SIMPLE_GETTERS = [
     "get_focuser_position",
     "get_last_solve_result",
     "get_solve_result",
-    "get_stacked_img",
     "get_stack_info",
     "get_sensor_calibration",
     "get_setting",

@@ -175,11 +175,19 @@ Mount position
 
 .. note::
    There is also a ``scope_get_ra_dec``, and it is a trap worth knowing
-   about.  That method belongs to the **image stream** (port 4800), where
-   it doubles as the heartbeat; on the command socket firmware 8.x
-   rejects it with ``code 103``.  seestarpy's wrapper detects that and
-   falls back for you, but ``scope_get_equ_coord`` is the method the
-   official app uses on every firmware, so reach for it directly.
+   about — though not the trap you might expect.  It *is* accepted on the
+   command socket (measured on firmware 8.46 and 8.89), but it answers with
+   a **three-element list** rather than a dict:
+
+   .. code-block:: python
+
+      raw.scope_get_ra_dec()["result"]      # [7.152778, -47.754167, 19.154327]
+      raw.scope_get_equ_coord()["result"]   # {'ra': 7.152778, 'dec': -47.754167}
+
+   The third value looks like local sidereal time.  So the two are not
+   interchangeable, and code that indexes one will misread the other.
+   ``scope_get_equ_coord`` is what the official app uses on every firmware —
+   reach for it directly.
 
 
 Focus, filter and exposure
@@ -266,11 +274,20 @@ buffer of the last 500 raw messages is kept in
 rather than the latest value.
 
 .. note::
-   The listener follows :data:`~seestarpy.connection.DEFAULT_IP` and
-   monitors **one** scope.  For several scopes at once, use
-   :doc:`live_dashboard`, which runs an independent event connection and
-   image stream per scope.
+   The listener monitors **one** scope, resolved when it connects.  For
+   several scopes at once, use :doc:`live_dashboard`, which runs an
+   independent event connection and image stream per scope.
 
-The event payloads are documented as dataclasses in
-:mod:`seestarpy.events.event_definitions`, which is the quickest way to
-find out what fields a given event carries.
+Events arrive as plain dictionaries, exactly as the firmware sent them —
+there is no schema to consult, so the quickest way to learn what a given
+event carries is to watch a few go past:
+
+.. code-block:: python
+
+   from seestarpy.events import event_stream
+
+   for event in list(event_stream.LATEST_LOGS)[-10:]:
+       print(event)
+
+:doc:`../info/errors` lists the error codes that turn up in the ``code``
+field of a failure event.

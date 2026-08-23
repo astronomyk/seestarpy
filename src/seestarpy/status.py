@@ -1,7 +1,7 @@
 from datetime import datetime as dt
 
 from . import raw
-from .connection import send_command, multiple_ips
+from .connection import current_ip, multiple_ips
 
 
 #: Sensor pixel pitch in microns (IMX462, used by the S50 and S30 Pro).
@@ -56,43 +56,79 @@ def pixel_scale(focal_mm=None):
     return DEFAULT_PIXEL_SCALE
 
 
-def _num(val, nd=None):
-    """Round *val* for display, or return ``"---"`` if it isn't numeric.
+def as_number(value):
+    """Return *value* if it is a real number, otherwise ``None``.
 
-    ``status_bar`` populates its cells from live device queries.  When an
-    endpoint returns an error dict (e.g. an unknown RPC method on newer
-    firmware) the corresponding value is a placeholder string rather than a
-    number, and calling ``round()`` on it would raise ``TypeError``.  This
-    helper keeps the dashboard rendering gracefully in that case.
+    The firmware answers an unsupported query with a string or an error dict
+    where a number is expected, so arithmetic on a reply field is never safe
+    without this.  ``bool`` is deliberately excluded: ``True`` is an ``int``
+    in Python, but a flag is not a measurement.
+
+    This is the one numeric coercion in the package —
+    :mod:`seestarpy.dashboard.monitor` imports it rather than keeping its own.
+
+    Examples
+    --------
+    ::
+
+        >>> as_number(42), as_number("---"), as_number(True), as_number(None)
+        (42, None, None, None)
+
     """
-    if isinstance(val, bool) or not isinstance(val, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
+
+
+def coord_pair(result, keys):
+    """Pull a coordinate pair out of an RPC *result* of either shape.
+
+    The firmware return shape is **version dependent**:
+    ``scope_get_equ_coord`` answers with a dict (``{"ra": .., "dec": ..}``)
+    while ``scope_get_horiz_coord`` answers with a bare ``[alt, az]`` list,
+    and which you get has changed between versions.  Non-numeric or missing
+    values become ``None``.
+
+    Parameters
+    ----------
+    result : dict or list
+        The ``result`` field of the reply, already unwrapped.
+    keys : tuple of str
+        Keys to read for the (first, second) element when *result* is a dict,
+        e.g. ``("ra", "dec")`` or ``("alt", "az")``.
+
+    Returns
+    -------
+    tuple
+        ``(first, second)``, each a number or ``None``.
+    """
+    if isinstance(result, dict):
+        return as_number(result.get(keys[0])), as_number(result.get(keys[1]))
+    if isinstance(result, (list, tuple)) and len(result) >= 2:
+        return as_number(result[0]), as_number(result[1])
+    return None, None
+
+
+def _num(val, nd=None):
+    """Round *val* for display, or return ``"---"`` if it isn't a number.
+
+    The display counterpart to :func:`as_number`: ``status_bar`` fills its
+    cells from live queries, and an endpoint that errored yields a string
+    where a number belongs, which ``round()`` would choke on.
+    """
+    val = as_number(val)
+    if val is None:
         return "---"
     return round(val, nd) if nd is not None else round(val)
 
 
 def _pair(resp, keys):
-    """Extract a two-element coordinate ``[a, b]`` from a coordinate RPC.
+    """Unwrap an RPC envelope and delegate to :func:`coord_pair`.
 
-    The firmware return shape is **version dependent**: newer firmware
-    replies with a dict (e.g. ``scope_get_equ_coord`` -> ``{"ra": .., "dec":
-    ..}``), while older firmware replied with a bare list ``[a, b]``.  This
-    tolerates both (and error responses, which lack ``result``), always
-    returning a two-element list so callers can index ``[0]``/``[1]``.
-
-    Parameters
-    ----------
-    resp : dict
-        The raw RPC response.
-    keys : tuple of str
-        The dict keys to read for the (first, second) element, e.g.
-        ``("ra", "dec")`` or ``("alt", "az")``.
+    Tolerates error responses, which have no ``result``.
     """
     result = resp.get("result") if isinstance(resp, dict) else None
-    if isinstance(result, dict):
-        return [result.get(keys[0], "---"), result.get(keys[1], "---")]
-    if isinstance(result, (list, tuple)) and len(result) >= 2:
-        return [result[0], result[1]]
-    return ["---", "---"]
+    return coord_pair(result, keys)
 
 
 @multiple_ips
@@ -108,12 +144,22 @@ def status_bar(return_type="str"):
     ----------
     return_type : str, optional
         Output format.  ``"str"`` (default) returns a printable multi-line
-        string; ``"dict"`` returns the raw values as a dictionary.
+        string; ``"dict"`` returns the same values unformatted, which is
+        what you want for logging a run rather than reading it.
 
     Returns
     -------
     str or dict
-        The formatted status table, or a dictionary of all queried values.
+        The formatted status table, or a dictionary of every value in it.
+        In the dictionary a field the firmware did not report is ``None``
+        rather than the table's ``"---"`` placeholder, and numbers are
+        unrounded.  The table is rendered *from* this dictionary, so the
+        two can never disagree.
+
+    Raises
+    ------
+    ValueError
+        If *return_type* is neither ``"str"`` nor ``"dict"``.
 
     Notes
     -----
@@ -136,6 +182,12 @@ def status_bar(return_type="str"):
         >>> from seestarpy import status
         >>> print(status.status_bar())
 
+    Log a night to CSV instead of reading it::
+
+        >>> row = status.status_bar(return_type="dict")
+        >>> row["stacked_frames"], row["dropped_frames"], row["gain"]
+        (204, 6, 80)
+
     """
 
     dev = raw.get_device_state(["balance_sensor", "mount", "pi_status",
@@ -144,72 +196,144 @@ def status_bar(return_type="str"):
     view = app.get("View", {})
     azalt = _pair(raw.scope_get_horiz_coord(), ("alt", "az"))
     # ``scope_get_equ_coord`` is the command-socket (port 4700) RA/Dec method
-    # used by the official app on all firmware; ``scope_get_ra_dec`` is a
-    # port-4800 heartbeat and is rejected on the command socket by newer
-    # firmware (v8.x), which used to crash this dashboard.  Newer firmware
-    # returns RA/Dec as a dict ({"ra":.., "dec":..}); older firmware returned
-    # a list -- _pair() normalises both.
+    # the official app uses on all firmware.  ``scope_get_ra_dec`` is
+    # primarily the port-4800 heartbeat and answers with a three-element
+    # list, which is what used to crash this dashboard -- not a rejection.
+    # This endpoint returns a dict on newer firmware and a bare list on
+    # older; _pair() normalises both.
     radec = _pair(raw.scope_get_equ_coord(), ("ra", "dec"))
 
-    t11 = f'{view.get("mode", "---"):^14}'
-    t12 = f'{view.get("state", "---"):^14}'
-    t13 = f'{view.get("error", "---"):^14}'
-    # Target names are user-set and can be longer than the cell, which would
-    # push the whole table out of alignment -- truncate rather than overflow.
-    target_name = str(view.get("target_name", "---"))
-    if len(target_name) > 14:
-        target_name = target_name[:13] + "…"
-    t14 = f'{target_name:^14}'
-
-    target_ra_dec = view.get("target_ra_dec", ["---", "---"])
-    t21a = f'{_num(target_ra_dec[0], 3):<7}'
-    t21b = f'{_num(target_ra_dec[1], 2):<6}'
-    t22a = f'{_num(radec[0], 3):<7}'
-    t22b = f'{_num(radec[1], 2):<6}'
-    al = f'{_num(azalt[0]):<4}'
-    az = f'{_num(azalt[1]):<4}'
-    co = f'{(azimuth_to_compass(azalt[1]) if isinstance(azalt[1], (int, float)) and not isinstance(azalt[1], bool) else "---"):<4}'
-    t24 = f'{_num(dev.get("balance_sensor", {}).get("data", {}).get("angle", "---"), 3):^14}'
-
-    t31 = f'{str(view.get("lp_filter")):^14}'
-    t32 = f'{view.get("Stack", {}).get("Exposure", {}).get("exp_ms", 0)/1000:^14}'
-    t33a = f'{view.get("Stack", {}).get("stacked_frame", "---"):<6}'
-    t33b = f'{view.get("Stack", {}).get("dropped_frame", "---"):<6}'
-    t34 = f'{str(dev.get("mount", {}).get("tracking")):^14}'
-
-    t41 = f'{app.get("DarkLibrary", {}).get("percent", "---"):^14}'
-    t42 = f'{app.get("FocuserMove", {}).get("position", "---"):^14}'
-    t43 = f'{app.get("PlateSolve", view.get("PlateSolve", {}).get("PlateSolve",{})).get("state", "---"):^14}'
-    t44 = f'{app.get("PlateSolve", view.get("PlateSolve", {}).get("PlateSolve",{})).get("error", "---"):^14}'
-
-    # ^8 to match the other cells in this column -- at ^7 the BATTERY row
-    # rendered one character short and the table came out ragged.
-    t51 = f'{str(dev.get("pi_status", {}).get("battery_capacity"))+"%":^8}'
-    t52 = f'{dev.get("storage", {}).get("storage_volume", [{}])[0].get("free_mb", "---"):^8}'
-    t53 = f'{str(dev.get("mount", {}).get("equ_mode")):^8}'
-    t54 = f'{dt.now().strftime("%H:%M:%S"):^8}'
-
-    # Fifth row.  DITHER is shown because an undithered run and a dithered
-    # one are otherwise indistinguishable at a glance, and the firmware
-    # ships with dithering ON by default.
+    mount = dev.get("mount", {})
     setting = dev.get("setting", {})
+    device = dev.get("device", {})
+    stack = view.get("Stack", {})
+    # ``PlateSolve`` moved between the app-state root and the View block
+    # across firmware versions; accept either.
+    solve = app.get("PlateSolve",
+                    view.get("PlateSolve", {}).get("PlateSolve", {}))
+    target_ra_dec = view.get("target_ra_dec") or [None, None]
+    scale = pixel_scale(device.get("focal_len"))
     dith = setting.get("stack_dither") or {}
-    if dith.get("enable"):
-        scale = pixel_scale(dev.get("device", {}).get("focal_len"))
-        dither_txt = f"{dith.get('pix', 0) * scale / 60.0:.1f}' /{dith.get('interval', '?')} sub"
-    else:
-        dither_txt = "off" if dith else "---"
-    t61 = f'{view.get("stage", "---"):^14}'
-    t62 = f'{_num(pixel_scale(dev.get("device", {}).get("focal_len")), 2):^14}'
-    t63 = f'{dither_txt:^14}'
+
     # The live gain lives on the View block; ``isp_gain`` is a sentinel
     # (-9990.0) unless manual exposure is in use, so only trust it if sane.
     gain = view.get("gain")
     if gain is None:
         isp = setting.get("isp_gain")
-        gain = isp if isinstance(isp, (int, float)) and isp >= 0 else "---"
-    t64 = f'{gain:^14}'
-    t65 = f'{str(dev.get("device", {}).get("firmware_ver_string", "---")):^8}'
+        gain = isp if isinstance(isp, (int, float)) and isp >= 0 else None
+
+    exp_ms = stack.get("Exposure", {}).get("exp_ms")
+
+    # Every cell of the table, as the value the firmware actually gave --
+    # ``None`` where it gave nothing.  The table below is rendered from
+    # these, so the two return types can never disagree.
+    values = {
+        "mode": view.get("mode"),
+        "state": view.get("state"),
+        "error": view.get("error"),
+        "target_name": view.get("target_name"),
+        "stage": view.get("stage"),
+
+        "target_ra": target_ra_dec[0],
+        "target_dec": target_ra_dec[1],
+        "ra": radec[0] if isinstance(radec[0], (int, float)) else None,
+        "dec": radec[1] if isinstance(radec[1], (int, float)) else None,
+        "alt": azalt[0] if isinstance(azalt[0], (int, float)) else None,
+        "az": azalt[1] if isinstance(azalt[1], (int, float)) else None,
+        "balance_angle": dev.get("balance_sensor", {}).get("data", {}).get("angle"),
+        "pixel_scale": scale,
+
+        "lp_filter": view.get("lp_filter"),
+        "exp_ms": exp_ms,
+        "stacked_frames": stack.get("stacked_frame"),
+        "dropped_frames": stack.get("dropped_frame"),
+        "tracking": mount.get("tracking"),
+        "dither_enabled": dith.get("enable"),
+        "dither_pix": dith.get("pix"),
+        "dither_interval": dith.get("interval"),
+        "gain": gain,
+
+        "dark_frame_percent": app.get("DarkLibrary", {}).get("percent"),
+        "focus_position": app.get("FocuserMove", {}).get("position"),
+        "plate_solve_state": solve.get("state"),
+        "plate_solve_error": solve.get("error"),
+
+        "battery_percent": dev.get("pi_status", {}).get("battery_capacity"),
+        "free_mb": dev.get("storage", {}).get("storage_volume", [{}])[0].get("free_mb"),
+        "equ_mode": mount.get("equ_mode"),
+        "firmware": device.get("firmware_ver_string"),
+        "timestamp": dt.now().isoformat(timespec="seconds"),
+    }
+
+    # Derived, display-only: arcminutes of dither throw, and the compass point.
+    values["dither_arcmin"] = (
+        round(dith["pix"] * scale / 60.0, 2)
+        if dith.get("enable") and isinstance(dith.get("pix"), (int, float))
+        else None
+    )
+    values["compass"] = (azimuth_to_compass(values["az"])
+                         if values["az"] is not None else None)
+
+    if return_type == "dict":
+        return values
+    if return_type != "str":
+        raise ValueError(
+            f"return_type must be 'str' or 'dict', not {return_type!r}"
+        )
+
+    def _cell(key, nd=None):
+        """The value for *key*, rounded for display, or ``---``."""
+        return _num(values[key], nd) if values[key] is not None else "---"
+
+    t11 = f'{values["mode"] or "---":^14}'
+    t12 = f'{values["state"] or "---":^14}'
+    t13 = f'{values["error"] or "---":^14}'
+    # Target names are user-set and can be longer than the cell, which would
+    # push the whole table out of alignment -- truncate rather than overflow.
+    target_name = str(values["target_name"] or "---")
+    if len(target_name) > 14:
+        target_name = target_name[:13] + "…"
+    t14 = f'{target_name:^14}'
+
+    t21a = f'{_cell("target_ra", 3):<7}'
+    t21b = f'{_cell("target_dec", 2):<6}'
+    t22a = f'{_cell("ra", 3):<7}'
+    t22b = f'{_cell("dec", 2):<6}'
+    al = f'{_cell("alt"):<4}'
+    az = f'{_cell("az"):<4}'
+    co = f'{(values["compass"] or "---"):<4}'
+    t24 = f'{_cell("balance_angle", 3):^14}'
+
+    t31 = f'{str(values["lp_filter"]):^14}'
+    t32 = f'{(exp_ms or 0)/1000:^14}'
+    t33a = f'{values["stacked_frames"] if values["stacked_frames"] is not None else "---":<6}'
+    t33b = f'{values["dropped_frames"] if values["dropped_frames"] is not None else "---":<6}'
+    t34 = f'{str(values["tracking"]):^14}'
+
+    t41 = f'{values["dark_frame_percent"] if values["dark_frame_percent"] is not None else "---":^14}'
+    t42 = f'{values["focus_position"] if values["focus_position"] is not None else "---":^14}'
+    t43 = f'{values["plate_solve_state"] or "---":^14}'
+    t44 = f'{values["plate_solve_error"] or "---":^14}'
+
+    # ^8 to match the other cells in this column -- at ^7 the BATTERY row
+    # rendered one character short and the table came out ragged.
+    t51 = f'{str(values["battery_percent"])+"%":^8}'
+    t52 = f'{values["free_mb"] if values["free_mb"] is not None else "---":^8}'
+    t53 = f'{str(values["equ_mode"]):^8}'
+    t54 = f'{dt.now().strftime("%H:%M:%S"):^8}'
+
+    # Fifth row.  DITHER is shown because an undithered run and a dithered
+    # one are otherwise indistinguishable at a glance, and the firmware
+    # ships with dithering ON by default.
+    if values["dither_arcmin"] is not None:
+        dither_txt = f"{values['dither_arcmin']:.1f}' /{dith.get('interval', '?')} sub"
+    else:
+        dither_txt = "off" if dith else "---"
+    t61 = f'{values["stage"] or "---":^14}'
+    t62 = f'{_cell("pixel_scale", 2):^14}'
+    t63 = f'{dither_txt:^14}'
+    t64 = f'{values["gain"] if values["gain"] is not None else "---":^14}'
+    t65 = f'{str(values["firmware"] or "---"):^8}'
 
     return f"""
 |================|================|================|================|==========|
@@ -243,6 +367,10 @@ def get_firmware_version():
     str
         Firmware version, e.g. ``"7.18"``.
 
+    See Also
+    --------
+    firmware_version : both forms at once, cached per scope.
+
     Notes
     -----
     Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
@@ -255,10 +383,63 @@ def get_firmware_version():
         '7.18'
 
     """
-    return (raw.get_device_state(["device"])
-            .get("result", {})
-            .get("device", {})
-            .get("firmware_ver_string"))
+    return firmware_version()[0]
+
+
+#: ``{ip: (version_string, version_int)}``, filled by :func:`firmware_version`.
+_firmware_cache = {}
+
+
+def firmware_version(ip=None, refresh=False):
+    """Return ``(version_string, version_int)`` for one Seestar, cached.
+
+    Firmware gates behaviour in more and more places — the batch stacker's
+    sub-frame path format at 7.75, the ``preview`` transport block at 8.46 —
+    so this is the seam those checks share.  Both forms are returned because
+    both are wanted: the string to show a human, the int to compare.
+
+    Cached per address, since firmware cannot change while the scope is up,
+    and a stacking loop should not re-query it for every block.
+
+    Parameters
+    ----------
+    ip : str or None, optional
+        Which Seestar.  Defaults to
+        :func:`~seestarpy.connection.current_ip`, so this respects an
+        enclosing ``ips=`` broadcast.
+    refresh : bool, optional
+        Re-query even if the address is already cached — after a firmware
+        update, say.  Default ``False``.
+
+    Returns
+    -------
+    tuple
+        ``(str, int)``, e.g. ``("8.46", 2846)``.  Either element is ``None``
+        if the device could not be read.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import status
+        >>> status.firmware_version()
+        ('8.46', 2846)
+        >>> ver_string, ver_int = status.firmware_version()
+        >>> ver_int >= 2846        # does this scope have the preview block?
+        True
+
+    """
+    ip = ip or current_ip()
+    if refresh or ip not in _firmware_cache:
+        try:
+            device = raw.get_device_state(["device"])["result"]["device"]
+            _firmware_cache[ip] = (device.get("firmware_ver_string"),
+                                   as_number(device.get("firmware_ver_int")))
+        except Exception:
+            # Don't cache a failure: a scope that was mid-boot should be
+            # retried, not written off for the rest of the session.
+            return (None, None)
+    return _firmware_cache[ip]
 
 
 @multiple_ips
@@ -491,9 +672,7 @@ def get_exposure(which="stack_l"):
         500
 
     """
-    params = {"method": "get_setting", "params": {"keys": ["exp_ms"]}}
-    payload = send_command(params)
-    return payload["result"]["exp_ms"][which]
+    return raw.get_setting()["result"]["exp_ms"][which]
 
 
 @multiple_ips
@@ -525,8 +704,7 @@ def get_filter():
         {'jsonrpc': '2.0', ..., 'result': 1, 'code': 0, 'id': 1}
 
     """
-    params = {"method": "get_wheel_position"}
-    return send_command(params)
+    return raw.get_wheel_position()
 
 
 @multiple_ips
@@ -555,36 +733,10 @@ def get_target_name():
         'M 81'
 
     """
-    params = {"method": "get_sequence_setting"}
-    return send_command(params).get("group_name")
-
-
-@multiple_ips
-def get_target_name2():
-    """
-    Get the target name from the image-name field.
-
-    This is an alternative to :func:`get_target_name` that reads the
-    name embedded in the image filename template rather than the
-    sequence setting.
-
-    Returns
-    -------
-    dict
-
-    Notes
-    -----
-    Accepts the ``ips`` keyword for querying multiple Seestars simultaneously.
-
-    Examples
-    --------
-
-        >>> from seestarpy import status
-        >>> status.get_target_name2()
-
-    """
-    params = {"method": "get_img_name_field"}
-    return send_command(params)
+    # ``group_name`` lives inside the JSON-RPC ``result``, not on the
+    # envelope -- reading it off the top level made this return None always.
+    resp = raw.get_sequence_setting()
+    return (resp.get("result") or {}).get("group_name")
 
 
 def azimuth_to_compass(degrees):

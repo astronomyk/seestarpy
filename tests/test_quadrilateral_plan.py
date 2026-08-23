@@ -10,7 +10,6 @@ from seestarpy.plan import (
     _point_in_polygon,
     _spherical_centroid,
     create_polygon_plan,
-    create_quadrilateral_plan,
 )
 
 
@@ -76,7 +75,7 @@ class TestPointInPolygon:
 
 
 # ---------------------------------------------------------------------------
-# create_quadrilateral_plan — basic functionality
+# create_polygon_plan — basic functionality
 # ---------------------------------------------------------------------------
 
 class TestQuadPlanRectangle:
@@ -312,15 +311,6 @@ class TestQuadPlanValidation:
                 [(12, 86), (12.1, 86), (12.1, 87), (12, 87)],
                 1.0, 1.0, 60, 1320,
             )
-
-
-# ---------------------------------------------------------------------------
-# Alias
-# ---------------------------------------------------------------------------
-
-class TestAlias:
-    def test_create_quadrilateral_plan_is_alias(self):
-        assert create_quadrilateral_plan is create_polygon_plan
 
 
 # ---------------------------------------------------------------------------

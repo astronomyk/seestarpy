@@ -21,39 +21,6 @@ def _deprecated(since, message=""):
 
 from .connection import send_command, multiple_ips, current_ip
 
-"""
-To implement:
-"""
-
-# def begin_streaming():
-#     """
-#     TODO: Is this to begin streaming the video feed
-#
-#     Notes
-#     -----
-#     v4.27 ::
-#         'error': 'method not found',
-#         'code': 103,
-#
-#     """
-#     params = {'method': 'begin_streaming'}
-#     return send_command(params)
-
-
-# def stop_streaming():
-#     """
-#     TODO: Is this to begin streaming the video feed
-#
-#     Notes
-#     -----
-#     v4.27 ::
-#         'error': 'method not found',
-#         'code': 103,
-#
-#     """
-#     params = {'method': 'stop_streaming'}
-#     return send_command(params)
-
 
 @multiple_ips
 def get_albums():
@@ -188,20 +155,6 @@ def get_img_file_page_name(page=0):
               "params": {"page": page}}
     return send_command(params)
 
-
-# def get_annotated_result():
-#     """
-#     TODO: Is this to begin streaming the video feed
-#
-#     Notes
-#     -----
-#     v4.27 ::
-#         'error': 'method not found',
-#         'code': 103,
-#
-#     """
-#     params = {"method": "get_annotated_result"}
-#     return send_command(params)
 
 
 @multiple_ips
@@ -494,20 +447,6 @@ def get_disk_volume():
     return send_command(params)
 
 
-# def get_event_state():
-#     """
-#     ERROR
-#
-#     'error': 'method not found',
-#     'code': 103,
-#
-#     Returns
-#     -------
-#
-#     """
-#     params = {"method": "get_event_state"}
-#     return send_command(params)
-
 
 @multiple_ips
 def get_focuser_position():
@@ -596,36 +535,6 @@ def get_solve_result():
     Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "get_solve_result"}
-    return send_command(params)
-
-
-@multiple_ips
-@_deprecated("v0.5.1", message="'get_stacked_img' is a binary image-stream "
-             "method (port 4800), not a command-socket method; use "
-             "seestarpy.stream.get_live_image() instead.")
-def get_stacked_img():
-    """
-    Get the current stacked image data.
-
-    .. deprecated::
-        ``get_stacked_img`` is **not** a command-socket (port 4700) RPC
-        method.  It is only valid on the binary image-stream socket
-        (port 4800, sent with a hardcoded ``"id": 23``), where
-        :mod:`seestarpy.stream` uses it internally.  Sent over the command
-        socket it is rejected by the firmware (``code 103``), so this
-        wrapper never worked as intended.  Use
-        :func:`seestarpy.stream.get_live_image` to fetch the latest stacked
-        image instead.
-
-    Returns
-    -------
-    dict
-
-    Notes
-    -----
-    Accepts the ``ips`` keyword for multi-Seestar operation.
-    """
-    params = {"method": "get_stacked_img"}
     return send_command(params)
 
 
@@ -1312,23 +1221,6 @@ def pi_output_set2(is_dew_on=False, dew_heater_power=0):
 
 
 @multiple_ips
-def scan_iscope():
-    """
-    Scan for connected Seestar devices.
-
-    Returns
-    -------
-    dict
-
-    Notes
-    -----
-    Accepts the ``ips`` keyword for multi-Seestar operation.
-    """
-    params = {"method": "scan_iscope"}
-    return send_command(params)
-
-
-@multiple_ips
 def play_sound(sound_id):
     """
     Plays a sound from the internal soundboard.
@@ -1865,35 +1757,37 @@ def get_link_type(ips=None):
 
 
 @multiple_ips
-@_deprecated("v0.1.2", message="Seestar Firmware v6.7 uses 'set_setting'")
-def set_stack_setting(save_ok_frames=True, save_rejected_frames=False):
+def get_sequence_setting():
     """
-    Save individual frames to emmc.
+    Read the sequence (observation group) settings.
 
-    .. deprecated::
-        Seestar Firmware v6.7 uses :func:`set_setting` instead.
-
-    Parameters
-    ----------
-    save_ok_frames : bool, optional
-        Save accepted individual frames to emmc. Default is ``True``.
-    save_rejected_frames : bool, optional
-        Save rejected individual frames to emmc. Default is ``False``.
+    The ``group_name`` in the reply is the target name the current
+    observation sequence is filing frames under — see
+    :func:`seestarpy.status.get_target_name` for just that field.
 
     Returns
     -------
     dict
+        ``result`` carries ``group_name``, the ``delay_first`` /
+        ``delay_between_frame`` pacing, and the end-of-sequence flags
+        (``park_mount``, ``shutdown_pi``, ``close_cooler``).
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_sequence_setting()["result"]
+        {'delay_first': 0, 'delay_between_frame': 0, 'group_by_slot': True,
+         'merid_flip': False, 'group_name': 'M 81', 'park_mount': False,
+         'shutdown_pi': False, 'close_cooler': False, 'left_size_m': 0.0,
+         'left_time_sec': 0}
 
     Notes
     -----
     Accepts the ``ips`` keyword for multi-Seestar operation.
     """
-    params = {"method": "set_stack_setting",
-              "params": {"save_discrete_ok_frame": save_ok_frames,
-                         "save_discrete_frame": save_rejected_frames
-                         }
-              }
-    return send_command(params)
+    return send_command({"method": "get_sequence_setting"})
 
 
 @multiple_ips
@@ -2050,19 +1944,36 @@ def scope_get_ra_dec():
 
     .. note:: Requires firmware v6.70 or later.
 
-    .. note::
-        ``scope_get_ra_dec`` is the binary image-stream (port 4800)
-        heartbeat method.  On the command socket (port 4700) the RA/Dec
-        getter used by the official app on all firmware is
-        :func:`scope_get_equ_coord`, and newer firmware (v8.x) rejects
-        ``scope_get_ra_dec`` on the command socket with ``code 103``.  This
-        wrapper is therefore firmware-tolerant: it falls back to
-        ``scope_get_equ_coord`` when the firmware reports "method not
-        found".  Prefer :func:`scope_get_equ_coord` directly.
+    .. warning::
+        **Prefer** :func:`scope_get_equ_coord`.  It is the RA/Dec getter the
+        official app uses on the command socket on every firmware, and it
+        answers with a ``dict``.  This method is primarily the *image-stream*
+        (port 4800) heartbeat, and on the command socket it returns a
+        **three-element list**, so the two are not drop-in replacements for
+        one another:
+
+        .. code-block:: python
+
+            raw.scope_get_ra_dec()["result"]      # [7.152778, -47.754167, 19.154327]
+            raw.scope_get_equ_coord()["result"]   # {'ra': 7.152778, 'dec': -47.754167}
+
+        The third element appears to be local sidereal time.
+
+        The wrapper falls back to ``scope_get_equ_coord`` if the firmware
+        answers ``code 103`` ("method not found"), which means the return
+        *shape* depends on which path ran — another reason to call
+        :func:`scope_get_equ_coord` directly.  Note this fallback has not
+        been observed to trigger: measured live on firmware **8.46 and
+        8.89**, ``scope_get_ra_dec`` is accepted on the command socket
+        (``code 0``).  An earlier version of this docstring stated that v8.x
+        rejects it; that was wrong — the incompatibility is the changed
+        return shape, not availability.
 
     Returns
     -------
     dict
+        ``result`` is a list ``[ra_hours, dec_deg, lst_hours]``, or the dict
+        from :func:`scope_get_equ_coord` if the fallback fired.
 
     Notes
     -----
@@ -2495,23 +2406,6 @@ def stop_create_dark():
 
 
 @multiple_ips
-def stop_goto_target():
-    """
-    Stop the current goto-target slew.
-
-    Returns
-    -------
-    dict
-
-    Notes
-    -----
-    Accepts the ``ips`` keyword for multi-Seestar operation.
-    """
-    params = {"method": "stop_goto_target"}
-    return send_command(params)
-
-
-@multiple_ips
 def stop_polar_align():
     """
     Stop the polar-alignment sequence.
@@ -2542,23 +2436,6 @@ def stop_solve():
     Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     params = {"method": "stop_solve"}
-    return send_command(params)
-
-
-@multiple_ips
-def stop_scheduler():
-    """
-    Stop the observation scheduler.
-
-    Returns
-    -------
-    dict
-
-    Notes
-    -----
-    Accepts the ``ips`` keyword for multi-Seestar operation.
-    """
-    params = {"method": "stop_scheduler"}
     return send_command(params)
 
 

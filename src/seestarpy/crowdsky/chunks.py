@@ -60,11 +60,6 @@ CROWDSKY_RE_LEGACY = re.compile(
     r"^CrowdSky_(\d+)_(.+)_(\d+\.\d+s)_([A-Za-z]+)_(\d{8}-\d{6})\.fit$"
 )
 
-# Backward-compat aliases
-_LIGHT_RE = LIGHT_RE
-_CROWDSKY_RE = CROWDSKY_RE
-_CROWDSKY_RE_LEGACY = CROWDSKY_RE_LEGACY
-
 
 def parse_light_filename(filename):
     """Parse a raw light frame filename into its components.
@@ -98,10 +93,6 @@ def parse_light_filename(filename):
         "filter": m.group(3),
         "datetime": datetime.strptime(m.group(4), "%Y%m%d-%H%M%S"),
     }
-
-
-# Backward-compat alias
-_parse_light_filename = parse_light_filename
 
 
 def _floor_to_block(dt, block_minutes):
@@ -164,10 +155,6 @@ def local_dt_to_chunk_str(dt_local):
     return f"{date_str}.{chunk_index:02d}"
 
 
-# Backward-compat alias
-_local_dt_to_chunk_str = local_dt_to_chunk_str
-
-
 def compute_chunk_key(block_start, ra_deg, dec_deg):
     """Build a CrowdSky chunk key from a local block start and sky position.
 
@@ -179,10 +166,6 @@ def compute_chunk_key(block_start, ra_deg, dec_deg):
     else:
         hp_str = "HP000000"
     return f"{chunk_str}_{hp_str}"
-
-
-# Backward-compat alias
-_compute_chunk_key = compute_chunk_key
 
 
 def _rename_output(target, block, status):

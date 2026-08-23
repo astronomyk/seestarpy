@@ -7,10 +7,10 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from seestarpy.crowdsky.chunks import (
-    _compute_chunk_key,
+    compute_chunk_key,
     _floor_to_block,
-    _local_dt_to_chunk_str,
-    _parse_light_filename,
+    local_dt_to_chunk_str,
+    parse_light_filename,
     find_unstacked_blocks,
     list_targets,
     stack_all,
@@ -21,12 +21,12 @@ _VIENNA = ZoneInfo("Europe/Vienna")
 
 
 # ---------------------------------------------------------------------------
-# _parse_light_filename
+# parse_light_filename
 # ---------------------------------------------------------------------------
 
 class TestParseLightFilename:
     def test_standard_filename(self):
-        result = _parse_light_filename(
+        result = parse_light_filename(
             "Light_M 81_20.0s_LP_20260227-225203.fit"
         )
         assert result == {
@@ -37,31 +37,31 @@ class TestParseLightFilename:
         }
 
     def test_ircut_filter(self):
-        result = _parse_light_filename(
+        result = parse_light_filename(
             "Light_M 81_10.0s_IRCUT_20250607-221746.fit"
         )
         assert result["filter"] == "IRCUT"
         assert result["exposure"] == "10.0s"
 
     def test_complex_target_name(self):
-        result = _parse_light_filename(
+        result = parse_light_filename(
             "Light_NGC 2244 Satellite Cluster_10.0s_LP_20260227-225203.fit"
         )
         assert result["target"] == "NGC 2244 Satellite Cluster"
 
     def test_target_with_underscore(self):
-        result = _parse_light_filename(
+        result = parse_light_filename(
             "Light_Some_Target_20.0s_LP_20260227-225203.fit"
         )
         assert result["target"] == "Some_Target"
 
     def test_non_matching_returns_none(self):
-        assert _parse_light_filename("random_file.jpg") is None
-        assert _parse_light_filename("DSO_Stacked_38_M 81_20.0s_20260227_225203.fit") is None
-        assert _parse_light_filename("Light_M 81_20.0s_LP_20260227-225203.jpg") is None
+        assert parse_light_filename("random_file.jpg") is None
+        assert parse_light_filename("DSO_Stacked_38_M 81_20.0s_20260227_225203.fit") is None
+        assert parse_light_filename("Light_M 81_20.0s_LP_20260227-225203.jpg") is None
 
     def test_thumbnail_not_matched(self):
-        assert _parse_light_filename(
+        assert parse_light_filename(
             "Light_M 81_20.0s_LP_20260227-225203_thn.jpg"
         ) is None
 
@@ -293,7 +293,7 @@ class TestFindUnstackedBlocks:
 
 
 # ---------------------------------------------------------------------------
-# _local_dt_to_chunk_str / _compute_chunk_key
+# local_dt_to_chunk_str / compute_chunk_key
 # ---------------------------------------------------------------------------
 
 class TestChunkKey:
@@ -301,19 +301,19 @@ class TestChunkKey:
     def test_local_dt_to_chunk_str(self, mock_tz):
         """22:45 Vienna (UTC+1) = 21:45 UTC → chunk 87."""
         dt = datetime(2026, 2, 27, 22, 45, 0)
-        assert _local_dt_to_chunk_str(dt) == "20260227.87"
+        assert local_dt_to_chunk_str(dt) == "20260227.87"
 
     @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     def test_midnight_boundary(self, mock_tz):
         """00:30 Vienna (UTC+1) = 23:30 UTC previous day → chunk 94."""
         dt = datetime(2026, 2, 28, 0, 30, 0)
         # 23:30 UTC = (23*3600 + 30*60) // 900 = 84600 // 900 = 94
-        assert _local_dt_to_chunk_str(dt) == "20260227.94"
+        assert local_dt_to_chunk_str(dt) == "20260227.94"
 
     @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     def test_compute_chunk_key_with_coords(self, mock_tz):
         dt = datetime(2026, 2, 27, 22, 45, 0)
-        key = _compute_chunk_key(dt, 83.82, -5.39)
+        key = compute_chunk_key(dt, 83.82, -5.39)
         # Format: "YYYYMMDD.CC_HPnnnnnn"
         assert key.startswith("20260227.87_HP")
         hp_part = key.split("_HP")[1]
@@ -323,7 +323,7 @@ class TestChunkKey:
     @patch("seestarpy.crowdsky.chunks.get_localzone", return_value=_VIENNA)
     def test_compute_chunk_key_no_coords(self, mock_tz):
         dt = datetime(2026, 2, 27, 22, 45, 0)
-        key = _compute_chunk_key(dt, None, None)
+        key = compute_chunk_key(dt, None, None)
         assert key == "20260227.87_HP000000"
 
 

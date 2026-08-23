@@ -183,7 +183,7 @@ def event_listener_session():
     Waits up to 10 s for heartbeats to populate ``LATEST_STATE``, then
     yields.  Stops the listener on teardown.
     """
-    start_listener(with_websocket=False)
+    start_listener()
 
     # Wait for heartbeats to populate state
     deadline = time.time() + 10

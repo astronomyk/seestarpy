@@ -429,8 +429,10 @@ The panels use the same boustrophedon traversal and ``cos(dec)``-aware
 spacing as :func:`~seestarpy.plan.create_mosaic_plan`.
 
 .. note::
-    ``create_quadrilateral_plan`` is available as an alias for
-    ``create_polygon_plan``.
+    ``create_quadrilateral_plan``, the name this function had before it was
+    generalised beyond four corners, was removed in 0.7.1.  Call
+    :func:`~seestarpy.plan.create_polygon_plan` instead — it is the same
+    function.
 
 
 Named plans

@@ -24,6 +24,12 @@ DISCOVERY_INTERVAL = 0.5    # seconds between repeat probes inside that window
 # Reuse one authenticated TCP connection per Seestar instead of opening a
 # fresh socket (and re-running the RSA auth handshake) on every command.
 # Set to False to fall back to the old short-lived-socket behaviour.
+#
+# Note this is incompatible with :class:`keepalive`, and therefore with any
+# operation the firmware ties to its connection (polar alignment): with no
+# socket surviving between commands there is nothing to keep alive, so
+# ``keepalive`` refuses to start rather than let the firmware cancel the
+# operation 15 s in.
 PERSIST_CONNECTIONS = True
 
 # The firmware drops an *idle* port-4700 socket after ~15.5 s (measured on
@@ -509,17 +515,26 @@ def find_available_ips(n_ip=None, timeout=2, mdns=False):
         except socket.gaierror:
             return None
 
-    with ThreadPoolExecutor(max_workers=16) as executor:
-        futures = {executor.submit(try_lookup, h): h for h in hostnames}
-
+    # Deliberately not a ``with`` block.  Its ``__exit__`` joins every
+    # future, so an ``as_completed`` timeout after it could never fire and a
+    # subnet where these hostnames don't resolve blocked for the full DNS
+    # timeout per name, whatever the caller asked for.  Collecting inside a
+    # try/finally and shutting down with ``wait=False`` makes *timeout* an
+    # actual bound: a lookup still stuck in ``gethostbyname`` is abandoned
+    # and its hostname treated as absent.
+    executor = ThreadPoolExecutor(max_workers=16)
     try:
-        for future in as_completed(futures, timeout=timeout):
-            result = future.result()
-            if result:
-                name, ip = result
-                found[name] = ip
-    except FuturesTimeoutError:
-        pass
+        futures = {executor.submit(try_lookup, h): h for h in hostnames}
+        try:
+            for future in as_completed(futures, timeout=timeout):
+                result = future.result()
+                if result:
+                    name, ip = result
+                    found[name] = ip
+        except FuturesTimeoutError:
+            pass
+    finally:
+        executor.shutdown(wait=False)
 
     # Ask each found Seestar for its model + serial number (in parallel).
     device_ids = {}
@@ -853,6 +868,18 @@ class keepalive:
         self._conn = None
 
     def __enter__(self):
+        # With pooling off, ``send`` closes the socket after every command,
+        # so there is no connection left to keep alive -- the firmware would
+        # cancel the operation exactly as it did before keepalive existed.
+        # Fail here rather than 15 s into an alignment that silently aborts.
+        if not PERSIST_CONNECTIONS:
+            raise RuntimeError(
+                "keepalive needs a persistent connection, but "
+                "connection.PERSIST_CONNECTIONS is False, which closes the "
+                "socket after every command.  Set it back to True for any "
+                "operation the firmware binds to its connection "
+                "(polar alignment, for one)."
+            )
         self._conn = _get_connection(self.ip)
         if self.on_event is not None:
             self._conn.add_event_handler(self.on_event)

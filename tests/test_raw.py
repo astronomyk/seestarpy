@@ -6,8 +6,6 @@ that a colleague reported failing on firmware v8.46.
   returning the native response on older firmware.
 - ``scope_get_ra_dec``: on the command socket newer firmware rejects it;
   the wrapper falls back to ``scope_get_equ_coord`` on ``code 103``.
-- ``get_stacked_img``: a port-4800 binary-stream method, deprecated on the
-  command-socket wrapper with a redirect to seestarpy.stream.
 """
 
 import warnings
@@ -68,8 +66,3 @@ class TestScopeGetRaDec:
         assert out["result"] == [12.3, 45.6]
 
 
-class TestGetStackedImg:
-    @patch("seestarpy.raw.send_command", return_value={"code": 103})
-    def test_emits_deprecation_pointing_to_stream(self, mock_send):
-        with pytest.warns(DeprecationWarning, match="stream"):
-            raw.get_stacked_img()

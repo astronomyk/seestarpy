@@ -82,7 +82,10 @@ class TestStopGotoMidSlew:
         raw.scope_goto(ra=0.1, dec=0.1)
         time.sleep(2)
 
-        raw.stop_goto_target()
+        # stop_goto_target was dropped in 0.7.1: the firmware answers it with
+        # code 103 on every supported version, so the cancel never happened
+        # and this test only passed because the goto completed on its own.
+        raw.iscope_stop_view("AutoGoto")
         result = wait_for_event(
             "ScopeGoto", {"complete", "fail"}, timeout=15,
         )

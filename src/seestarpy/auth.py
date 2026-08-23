@@ -18,9 +18,8 @@ Key discovery order:
 If no key is found, authentication is silently skipped (backward-compatible
 with older firmware that does not require it).
 
-Signing uses the ``cryptography`` library when available
-(``pip install seestarpy[auth]``), falling back to the ``openssl``
-command-line tool.
+Signing uses the ``cryptography`` library, a standard seestarpy
+dependency.
 
 Example::
 
@@ -38,8 +37,6 @@ Example::
 import base64
 import json
 import os
-import subprocess
-import tempfile
 from pathlib import Path
 
 
@@ -107,40 +104,8 @@ def _sign_with_cryptography(key_path, challenge):
     return base64.b64encode(signature).decode("ascii")
 
 
-def _sign_with_openssl(key_path, challenge):
-    """Sign *challenge* by shelling out to ``openssl``."""
-    data_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".dat")
-    sig_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".sig")
-    try:
-        data_tmp.write(challenge.encode("utf-8"))
-        data_tmp.close()
-        sig_tmp.close()
-
-        result = subprocess.run(
-            ["openssl", "dgst", "-sha1", "-sign", key_path,
-             "-out", sig_tmp.name, data_tmp.name],
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"openssl signing failed (rc={result.returncode}): "
-                f"{result.stderr.decode(errors='replace')}"
-            )
-
-        with open(sig_tmp.name, "rb") as f:
-            sig_bytes = f.read()
-
-        return base64.b64encode(sig_bytes).decode("ascii")
-    finally:
-        os.unlink(data_tmp.name)
-        os.unlink(sig_tmp.name)
-
-
 def sign_challenge(key_path, challenge):
     """Sign a challenge string with RSA-SHA1 and return a base64 signature.
-
-    Tries the ``cryptography`` library first, then falls back to the
-    ``openssl`` command-line tool.
 
     Parameters
     ----------
@@ -153,19 +118,20 @@ def sign_challenge(key_path, challenge):
     -------
     str
         Base64-encoded RSA-SHA1 signature.
+
+    Raises
+    ------
+    ImportError
+        If ``cryptography`` is not installed.  It is a standard seestarpy
+        dependency, so this means a broken install rather than a missing
+        optional extra.
     """
     try:
         return _sign_with_cryptography(key_path, challenge)
     except ImportError:
-        pass
-
-    try:
-        return _sign_with_openssl(key_path, challenge)
-    except FileNotFoundError:
         raise ImportError(
-            "RSA signing requires either the 'cryptography' package "
-            "(a standard seestarpy dependency — try 'pip install -U "
-            "seestarpy') or the 'openssl' CLI on PATH."
+            "RSA signing requires the 'cryptography' package, a standard "
+            "seestarpy dependency.  Try 'pip install -U seestarpy'."
         )
 
 
