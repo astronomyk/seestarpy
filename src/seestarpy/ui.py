@@ -66,7 +66,7 @@ def close(eq_mode=None):
 
 
 @multiple_ips
-def goto(ra_dec=()):
+def goto(ra_dec=(), verbose=True, timeout=180):
     """
     Move the scope arm to a given position.
 
@@ -80,15 +80,26 @@ def goto(ra_dec=()):
           [-90, 90].
         - ``'park'`` : park the scope.
         - ``'horizon'`` : move to the horizontal position.
+    verbose : bool, optional
+        Print a progress line per event. Default ``True``.
+    timeout : float, optional
+        Seconds to wait for the move to finish. Default ``180``.
 
     Returns
     -------
     dict
+        ``{'state', 'lapse_ms', 'cur_ra_dec', 'dist_deg', 'error', 'code'}``.
+        ``state`` is ``'complete'``, ``'fail'``, ``'cancel'`` or
+        ``'timeout'``; ``dist_deg`` is how far off the target the mount
+        finished, when the firmware reports it.
 
     Notes
     -----
     Accepts the ``ips`` keyword for sending the command to multiple
     Seestars simultaneously.
+
+    This **blocks** until the mount reports the move finished, rather than
+    returning as soon as the command is accepted.
 
     Examples
     --------
@@ -98,18 +109,39 @@ def goto(ra_dec=()):
         >>> ssp.goto((5.63, -69.4))         # Tarantula Nebula
         >>> ssp.goto("park")
         >>> ssp.goto("horizon")
+        >>> ssp.goto((13.4, 54.8), verbose=False)
 
     """
     if isinstance(ra_dec, (tuple, list)) and len(ra_dec) == 2:
-        return raw.scope_goto(*ra_dec)
-    elif isinstance(ra_dec, str):
-        if ra_dec.lower() == "park":
-            return raw.scope_park()
-        elif ra_dec.lower() == "horizon":
-            return raw.scope_move_to_horizon()
+        ra, dec = ra_dec
+        start = lambda: raw.scope_goto(ra, dec)
+        terminal = "ScopeGoto"
+        header = f"Goto ra={ra} dec={dec} on {conn.current_ip()}"
+    elif isinstance(ra_dec, str) and ra_dec.lower() == "park":
+        start, terminal = raw.scope_park, "ScopeHome"
+        header = f"Park on {conn.current_ip()}"
+    elif isinstance(ra_dec, str) and ra_dec.lower() == "horizon":
+        start, terminal = raw.scope_move_to_horizon, "ScopeMoveToHorizon"
+        header = f"Open to horizon on {conn.current_ip()}"
     else:
+        # An unrecognised string must raise, not return None and look like a
+        # successful no-op.
         raise ValueError(
-            f"ra_dec must be one of: [(ra, dec), 'park', 'horizon']: {ra_dec}")
+            f"ra_dec must be one of: [(ra, dec), 'park', 'horizon']: "
+            f"{ra_dec!r}")
+
+    return _await_operation(
+        start=start,
+        terminal=terminal,
+        watch={terminal, "ScopeTrack", "Alert"},
+        extract=lambda f: {"lapse_ms": f.get("lapse_ms"),
+                           "cur_ra_dec": f.get("cur_ra_dec"),
+                           "dist_deg": f.get("dist_deg"),
+                           "error": f.get("error"), "code": f.get("code")},
+        verbose=verbose,
+        timeout=timeout,
+        header=header,
+    )
 
 
 @multiple_ips
@@ -400,7 +432,8 @@ def focuser(pos: int | str | None = None):
 
 
 @multiple_ips
-def goto_target(target_name, ra=None, dec=None, lp_filter=False):
+def goto_target(target_name, ra=None, dec=None, lp_filter=False,
+                verbose=True, timeout=300):
     """
     Slew to a target by name and coordinates, then start viewing.
 
@@ -463,7 +496,22 @@ def goto_target(target_name, ra=None, dec=None, lp_filter=False):
         raise ValueError(
             "Provide both ra and dec, or omit both to resolve from target_name."
         )
-    return raw.iscope_start_view(ra, dec, target_name, lp_filter)
+
+    result = _await_operation(
+        start=lambda: raw.iscope_start_view(ra, dec, target_name, lp_filter),
+        terminal="AutoGoto",
+        watch={"AutoGoto", "AutoGotoStep", "ScopeGoto", "PlateSolve",
+               "ScopeTrack", "Alert"},
+        extract=lambda f: {"lapse_ms": f.get("lapse_ms"),
+                           "count": f.get("count"),
+                           "error": f.get("error"), "code": f.get("code")},
+        verbose=verbose,
+        timeout=timeout,
+        header=f"Goto {target_name} (ra={ra:.5f}, dec={dec:.5f}) on "
+               f"{conn.current_ip()}",
+    )
+    result.update(target_name=target_name, ra=ra, dec=dec)
+    return result
 
 
 @multiple_ips
@@ -567,15 +615,193 @@ PA_STATE_CODES = {
 }
 
 
-def _pa_progress(frame):
-    """Render one polar-alignment event as a short progress line, or ``None``.
+#: Events that carry no progress information worth printing.
+_QUIET_EVENTS = frozenset({
+    "PiStatus", "Exposure", "ContinuousExposure", "Setting", "SelectCamera",
+    "BalanceSensor", "GSensorMove", "Temp", "DiskSpace", "AIProcess",
+    "get_device_state", "iscope_get_app_state", "scope_get_equ_coord",
+    "scope_get_horiz_coord", "test_connection",
+})
 
-    Only the events that say something about progress are rendered; the
-    firmware also interleaves ``PiStatus``, ``Exposure`` and friends, which
-    are noise here.
+#: Terminal states a firmware operation can end in.
+_TERMINAL_STATES = frozenset({"complete", "fail", "cancel"})
+
+
+def _event_name(frame):
+    """The event name, tolerating the ``Event``/``event`` key spelling."""
+    return frame.get("Event") or frame.get("event")
+
+
+def _is_outer(frame):
+    """True if *frame* is an operation's own terminal event, not a sub-step.
+
+    The firmware reports a finished operation twice: once as an inner
+    per-page/per-step frame (carrying ``page``, or nothing but an error),
+    and once as the operation's own frame carrying ``lapse_ms`` and/or
+    ``route``.  Only the latter means the whole operation is over.  Checked
+    against every terminal event in ``tests/event_output_20250722.dat``.
     """
-    ev = frame.get("Event")
+    return "page" not in frame and ("route" in frame or "lapse_ms" in frame)
+
+
+def _await_operation(start, terminal, watch, extract, verbose, timeout,
+                     header=None):
+    """Start a connection-bound operation and block until it finishes.
+
+    The firmware ties operations like polar alignment, autofocus and goto to
+    the TCP connection that issued them, and drops an idle socket after
+    ~15.5 s — so the command is issued inside a
+    :class:`~seestarpy.connection.keepalive`, which both holds the session
+    open and pumps the events back to us.
+
+    Parameters
+    ----------
+    start : callable
+        Issues the RPC that begins the operation.
+    terminal : str
+        Event name whose terminal state ends the wait.
+    watch : set of str
+        Event names to render as progress.
+    extract : callable
+        Maps the terminal frame to the result fields for this operation.
+    verbose, timeout : see the public wrappers.
+    header : str or None
+        Printed once before starting, when *verbose*.
+
+    Returns
+    -------
+    dict
+        ``extract``'s fields plus ``state`` (a terminal state, or
+        ``'timeout'``).
+    """
+    done = threading.Event()
+    # Seed every field this operation reports, so a caller can read them
+    # unconditionally even when the run times out or fails.
+    result = dict(extract({}), state=None)
+    pending = {}
+    last = [None, 0]        # last printed line, and how often it repeated
+
+    def emit(line):
+        """Print *line*, collapsing consecutive repeats into a xN counter.
+
+        A retrying AutoGoto re-emits ``ScopeGoto working`` several times per
+        attempt, which otherwise buries the useful lines in ``slewing ...``.
+        """
+        if line == last[0]:
+            last[1] += 1
+            print(f"{line}  (x{last[1] + 1})", flush=True)
+            return
+        last[0], last[1] = line, 0
+        print(line, flush=True)
+
+    def on_event(frame):
+        ev = _event_name(frame)
+        if ev in _QUIET_EVENTS or ev not in watch:
+            return
+        if verbose:
+            line = _pa_progress(frame)
+            if line:
+                emit(line)
+        if ev != terminal or frame.get("state") not in _TERMINAL_STATES:
+            return
+        payload = dict(extract(frame), state=frame.get("state"))
+        if _is_outer(frame):
+            result.update(payload)
+            done.set()
+        else:
+            # An inner frame: remember it, but keep waiting for the
+            # operation's own terminal event, which is authoritative.
+            pending.update(payload)
+
+    if verbose and header:
+        print(header, flush=True)
+
+    with conn.keepalive(on_event=on_event):
+        start()
+        if not done.wait(timeout):
+            if pending:
+                result.update(pending)
+            else:
+                result["state"] = "timeout"
+                if verbose:
+                    print(f"  TIMEOUT   after {timeout:.0f} s", flush=True)
+
+    return result
+
+
+def _pa_progress(frame):
+    """Render one operation event as a short progress line, or ``None``.
+
+    Shared by every blocking wrapper in this module (polar alignment,
+    autofocus, goto).  Only the events that say something about progress
+    are rendered; the firmware also interleaves ``PiStatus``, ``Exposure``
+    and friends, which are noise here, and reports each finished operation
+    twice (see :func:`_is_outer`) — the inner frame is dropped so a run
+    doesn't print its result line twice.
+    """
+    ev = _event_name(frame)
     state = frame.get("state")
+
+    if ev == "AutoFocus":
+        if state == "start":
+            return "  focus     sweeping focuser positions"
+        if state == "working":
+            pts = (frame.get("result") or {}).get("points") or []
+            if pts:
+                pos, fwhm = pts[-1]
+                return f"  focus     pos={pos:<6} fwhm={fwhm:.3f}  ({len(pts)} pts)"
+            return None
+        if state == "complete":
+            if not _is_outer(frame):
+                return None
+            return f"  FOCUSED   ({frame.get('lapse_ms', 0) / 1000:.1f} s)"
+        if state in ("fail", "cancel"):
+            if not _is_outer(frame):
+                return None
+            return (f"  {state.upper()}      {frame.get('error')} "
+                    f"(code {frame.get('code')})")
+        return None
+
+    if ev == "FocuserMove" and state == "complete":
+        return None                     # every focus step; too chatty
+
+    if ev in ("AutoGoto", "AutoGotoStep"):
+        if not _is_outer(frame):
+            # Inner frames carry the useful per-attempt detail on failure.
+            if state == "fail":
+                return (f"  attempt   failed: {frame.get('error')} "
+                        f"(code {frame.get('code')})")
+            return None
+        if state == "start":
+            return "  goto      starting"
+        if state == "working":
+            return None
+        if state == "complete":
+            return (f"  ARRIVED   after {frame.get('count')} solve(s), "
+                    f"{frame.get('lapse_ms', 0) / 1000:.1f} s")
+        return (f"  {str(state).upper()}      {frame.get('error')} "
+                f"(code {frame.get('code')})")
+
+    if ev in ("ScopeHome", "ScopeMoveToHorizon"):
+        if state == "working":
+            return ("  parking   ..." if ev == "ScopeHome"
+                    else "  opening   to the horizontal position")
+        if state == "complete":
+            extra = ""
+            if ev == "ScopeHome":
+                extra = f"  equ_mode={frame.get('equ_mode')}"
+            return f"  DONE      ({frame.get('lapse_ms', 0) / 1000:.1f} s){extra}"
+        return f"  {str(state).upper()}      {frame.get('error')}"
+
+    if ev == "Alert":
+        return f"  ALERT     {frame.get('error')} (code {frame.get('code')})"
+
+    if ev == "ScopeTrack" and frame.get("error"):
+        # 207 "fail to operate" is emitted routinely while parked/slewing.
+        if frame.get("code") == 207:
+            return None
+        return (f"  tracking  {frame.get('error')} "
+                f"(code {frame.get('code')})")
 
     if ev == "3PPA":
         code = frame.get("state_code")
@@ -596,13 +822,22 @@ def _pa_progress(frame):
         if state == "complete":
             ra, dec = frame.get("ra_dec", (None, None))
             return f"  solved    ra={ra:.4f}h dec={dec:.4f}deg"
+        if state in ("fail", "cancel"):
+            return (f"  solve     {state}: {frame.get('error')} "
+                    f"(code {frame.get('code')})")
         return f"  solving   {state}"
 
     if ev == "ScopeGoto":
         if state == "working":
-            return "  slewing   to the first alignment point"
+            return "  slewing   ..."
         if state == "complete":
-            return f"  slewed    ({frame.get('lapse_ms', 0) / 1000:.1f} s)"
+            line = f"  slewed    ({frame.get('lapse_ms', 0) / 1000:.1f} s)"
+            ra_dec, dist = frame.get("cur_ra_dec"), frame.get("dist_deg")
+            if ra_dec:
+                line += f" ra={ra_dec[0]:.4f}h dec={ra_dec[1]:.4f}deg"
+            if dist is not None:
+                line += f" off by {dist * 60:.1f}'"
+            return line
         return (f"  slewing   {state}: {frame.get('error')} "
                 f"(code {frame.get('code')})")
 
@@ -677,40 +912,91 @@ def polar_align(dec_pos_index=3, restart=True, verbose=True, timeout=300):
         >>> ssp.polar_align(restart=False)      # re-check after adjusting
 
     """
-    done = threading.Event()
-    result = {"state": None, "total": None, "x": None, "y": None,
-              "lapse_ms": None}
+    what = (f"restart, dec_pos_index={dec_pos_index}" if restart
+            else "re-measure at current position")
+    return _await_operation(
+        start=lambda: raw.start_polar_align(restart=restart,
+                                            dec_pos_index=dec_pos_index),
+        terminal="EqModePA",
+        watch={"3PPA", "PlateSolve", "ScopeGoto", "MoveByAngle", "EqModePA"},
+        extract=lambda f: {"total": f.get("total"), "x": f.get("x"),
+                           "y": f.get("y"), "lapse_ms": f.get("lapse_ms")},
+        verbose=verbose,
+        timeout=timeout,
+        header=f"Polar alignment on {conn.current_ip()} ({what})",
+    )
 
-    def on_event(frame):
-        if frame.get("Event") not in ("3PPA", "PlateSolve", "ScopeGoto",
-                                      "MoveByAngle", "EqModePA"):
-            return
-        if verbose:
-            line = _pa_progress(frame)
-            if line:
-                print(line, flush=True)
-        if frame.get("Event") == "EqModePA":
-            state = frame.get("state")
-            if state in ("complete", "fail", "cancel"):
-                result.update(
-                    state=state,
-                    total=frame.get("total"),
-                    x=frame.get("x"),
-                    y=frame.get("y"),
-                    lapse_ms=frame.get("lapse_ms"),
-                )
-                done.set()
 
-    if verbose:
-        what = (f"restart, dec_pos_index={dec_pos_index}" if restart
-                else "re-measure at current position")
-        print(f"Polar alignment on {conn.current_ip()} ({what})", flush=True)
+@multiple_ips
+def autofocus(verbose=True, timeout=180):
+    """
+    Run the auto-focus routine and block until it finishes.
 
-    with conn.keepalive(on_event=on_event):
-        raw.start_polar_align(restart=restart, dec_pos_index=dec_pos_index)
-        if not done.wait(timeout):
-            result["state"] = "timeout"
-            if verbose:
-                print(f"  TIMEOUT   after {timeout:.0f} s", flush=True)
+    The firmware sweeps the focuser through a range of positions, measures
+    star FWHM at each, fits the resulting V-curve and moves to its minimum.
+    A typical sweep takes 25--45 s.
+
+    A **view must already be running** — the routine focuses on whatever the
+    camera is currently exposing, so with the camera idle it has no stars to
+    measure and fails with ``'no star is detected'`` (code 279).  Call
+    :func:`goto_target` (or :func:`~seestarpy.raw.iscope_start_view`) first.
+
+    Like :func:`polar_align`, the firmware ties this operation to the TCP
+    connection that started it, so the command is issued inside a
+    :class:`~seestarpy.connection.keepalive` and this call blocks until the
+    firmware reports a terminal state.
+
+    Parameters
+    ----------
+    verbose : bool, optional
+        Print a progress line per focus step, showing the focuser position
+        and the measured FWHM. Default ``True``.
+    timeout : float, optional
+        Seconds to wait for the sweep to finish. Default ``180``.
+
+    Returns
+    -------
+    dict
+        ``{'state', 'position', 'lapse_ms', 'error', 'code'}``.  ``state`` is
+        ``'complete'``, ``'fail'``, ``'cancel'`` or ``'timeout'``;
+        ``position`` is the focuser position the routine settled on, read
+        back after it finishes (``None`` if it could not be read).
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+
+    Examples
+    --------
+    ::
+
+        >>> import seestarpy as ssp
+        >>> ssp.goto_target("NGC 3310")
+        >>> res = ssp.autofocus()
+        >>> res['position']
+        1633
+
+    """
+    result = _await_operation(
+        start=raw.start_auto_focuse,
+        terminal="AutoFocus",
+        watch={"AutoFocus", "FocuserMove"},
+        extract=lambda f: {"lapse_ms": f.get("lapse_ms"),
+                           "error": f.get("error"), "code": f.get("code")},
+        verbose=verbose,
+        timeout=timeout,
+        header=f"Autofocus on {conn.current_ip()}",
+    )
+
+    # The AutoFocus event doesn't report where it settled, so read it back.
+    try:
+        pos = raw.get_focuser_position().get("result")
+        if isinstance(pos, dict):
+            pos = pos.get("step", pos.get("position"))
+    except Exception:
+        pos = None
+    result["position"] = pos
+    if verbose and pos is not None:
+        print(f"  position  {pos}", flush=True)
 
     return result

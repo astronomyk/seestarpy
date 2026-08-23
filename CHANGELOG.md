@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+### New — blocking wrappers with live progress for the long operations
+
+`polar_align`'s pattern is now shared by every firmware operation that takes
+tens of seconds: issue the command inside a `connection.keepalive`, print a
+progress line per event, and block until the firmware reports a terminal
+state. The common machinery lives in `ui._await_operation`, which
+`polar_align` was refactored onto.
+
+- **`ui.autofocus(verbose=True, timeout=180)`** — new. Runs the focuser
+  V-curve sweep, printing each position and its measured FWHM, and returns
+  `{'state', 'position', 'lapse_ms', 'error', 'code'}`. `position` is read
+  back after the sweep, since the `AutoFocus` event never reports where it
+  settled. **A view must already be running**: the routine focuses on
+  whatever the camera is exposing, so with the camera idle it fails with
+  `'no star is detected'` (code 279).
+- **`ui.goto` and `ui.goto_target`** now **block** until the mount reports
+  the move finished, instead of returning as soon as the command is
+  accepted, and print progress. Both gained `verbose` and `timeout`
+  arguments. `goto` waits on the terminal event for the branch it took —
+  `ScopeGoto`, `ScopeHome` or `ScopeMoveToHorizon` — so a park is not ended
+  early by an unrelated slew. `goto_target` waits on `AutoGoto` and returns
+  the resolved `target_name`/`ra`/`dec` alongside the outcome.
+
+This is a **behaviour change** for existing `goto`/`goto_target` callers who
+relied on them returning immediately. Pass `timeout=0` for the old
+fire-and-forget semantics.
+
+Two details the firmware forces on any such wrapper, both derived from the
+152-event capture in `tests/event_output_20250722.dat`:
+
+- A finished operation is reported **twice** — once as an inner frame
+  (carrying `page`, or nothing but an error) and once as the operation's own
+  frame carrying `lapse_ms` and/or `route`. Only the latter means the whole
+  operation is over, so `ui._is_outer` distinguishes them; the inner frame is
+  kept only as a fallback if no outer one ever arrives. Without this a
+  retrying `AutoGoto` looks finished on its first failed attempt.
+- A retrying `AutoGoto` re-emits `ScopeGoto working` several times per
+  attempt, so consecutive identical progress lines are collapsed with an
+  `(xN)` counter rather than burying the useful output.
+
+Verified live on an S30 Pro (fw 8.89): `goto_target("NGC 3310")` resolved,
+slewed and plate-solved in 30.4 s; `goto` completed verbose and quiet; the
+`timeout` path returned cleanly at 300 s when cloud ended the session
+mid-slew; and `autofocus` correctly reported code 279 on a field too low to
+show stars. The autofocus *success* path is covered by unit tests only —
+clouds closed in before it could be exercised on a rich field.
+
 ### Fixed — polar alignment was always cancelled ~19 s in
 
 `raw.start_polar_align` could never complete a three-point alignment. The
