@@ -22,3 +22,8 @@ automation/
 decompiled_api_commands*.txt
 API_CHANGES_*.md
 *.stackdump
+
+# Credentials — never commit
+.env
+.env.*
+!.env.example
