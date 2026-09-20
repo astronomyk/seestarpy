@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.1 — 2026-09-20
 
 ### New — blocking wrappers with live progress for the long operations
 
