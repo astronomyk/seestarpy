@@ -181,6 +181,44 @@ Lifecycle and tuning
      connection.PERSIST_CONNECTIONS = False   # opt back out of pooling
 
 
+Holding a connection open: ``keepalive``
+-----------------------------------------
+
+The firmware ties some operations to the **TCP connection that started
+them**, and it closes an idle command socket after roughly **15.5 s**
+(measured on firmware 8.89).  For a one-shot command that is harmless: the
+pool simply reconnects on the next call.  For a long-running operation it is
+fatal.  Three-point polar alignment is the clearest case: when the socket
+that issued ``start_polar_align`` goes quiet and is dropped, the firmware
+cancels the alignment and leaves the mount stopped wherever it had got to.
+The phone app avoids this by holding one socket open and sending
+``test_connection`` heartbeats for the whole run.
+
+:class:`~seestarpy.connection.keepalive` does the same.  It is a context
+manager that pings the pooled connection for one Seestar every
+:data:`~seestarpy.connection.KEEPALIVE_INTERVAL` seconds (default 5 s)
+until the block exits:
+
+.. code-block:: python
+
+   from seestarpy import connection, raw
+
+   with connection.keepalive(on_event=print):
+       raw.start_polar_align()
+       # ... wait for the alignment to report a terminal state ...
+
+While it is active, unsolicited event frames read off the socket are handed
+to ``on_event``, so the heartbeat doubles as an event pump --- no second
+connection or listener thread is needed to follow progress.
+
+The high-level wrappers that need this --- :func:`~seestarpy.ui.polar_align`,
+:func:`~seestarpy.ui.autofocus`, :func:`~seestarpy.ui.goto` and
+:func:`~seestarpy.ui.goto_target` --- issue their command inside a
+``keepalive`` and block until the firmware reports a terminal state.  Reach
+for ``keepalive`` yourself only when driving such an operation through
+:mod:`~seestarpy.raw` directly.
+
+
 What changed, and the implications
 ----------------------------------
 

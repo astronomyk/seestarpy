@@ -50,9 +50,11 @@ have obtained, and the ``cryptography`` signing library is now a
 standard dependency installed alongside seestarpy.
 
 .. note::
-   If ``cryptography`` somehow fails to import, seestarpy falls back
-   to shelling out to the ``openssl`` command-line tool, so signing
-   still works on systems where that tool is on PATH.
+   ``cryptography`` is a hard requirement.  Earlier releases fell back to
+   shelling out to the ``openssl`` command-line tool when it was missing;
+   that fallback was removed in 0.7.1, and a missing ``cryptography``
+   now raises ``ImportError`` from :func:`~seestarpy.auth.sign_challenge`
+   with a hint to reinstall.
 
 Extracting the key from an APK
 ------------------------------

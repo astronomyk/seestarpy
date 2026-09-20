@@ -48,11 +48,17 @@ The Seestar exposes five TCP ports:
 
 ### JSON-RPC (port 4700)
 
-`connection.send_command()` opens a short-lived TCP socket, sends
-`{"id":1, "method":"...", "params":{...}}\r\n`, reads a `\r\n`-terminated
-JSON response, and closes.  `DEFAULT_IP` is auto-discovered by **UDP
-broadcast** on port 4720 (`connection.discover()`); mDNS (`seestar.local`)
-is only a fallback.  `VERBOSE_LEVEL=1` prints send/receive to stdout.
+`connection.send_command()` sends `{"id":1, "method":"...", "params":{...}}\r\n`
+over a **persistent, pooled** TCP socket (one per Seestar IP, authenticated
+once on open, auto-reconnect and one retry on failure) and reads the
+`\r\n`-terminated JSON reply, skipping interleaved event frames.  The
+firmware drops an idle socket after ~15.5 s; long operations (polar align,
+autofocus, goto) wrap their command in `connection.keepalive` so it stays
+open.  The target IP is resolved per thread by `connection.current_ip()`,
+so `DEFAULT_IP` is never mutated for routing.  `DEFAULT_IP` is auto-discovered
+by **UDP broadcast** on port 4720 (`connection.discover()`); mDNS
+(`seestar.local`) is only a fallback.  `VERBOSE_LEVEL=1` prints send/receive
+to stdout.
 
 ### Binary image stream (ports 4800/4804)
 

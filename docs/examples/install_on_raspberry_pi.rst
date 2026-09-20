@@ -1,6 +1,16 @@
 Installing on a Raspberry Pi Zero W
 ===================================
 
+.. warning::
+   **ARMv6 is not a supported or tested target.**  seestarpy requires the
+   ``cryptography`` package unconditionally --- there is no pure-Python or
+   ``openssl`` fallback --- and its dependencies are not adjusted to suit
+   boards that cannot build it.  The recipe below worked on a Pi Zero W in
+   mid-2026 via prebuilt piwheels and is kept as a community pointer; it
+   is not exercised by the test suite and may break without notice.  A
+   Raspberry Pi 3/4/5 (ARMv7/ARMv8) needs none of this and installs like
+   any other Linux host.
+
 .. note::
    **Prerequisites:**
 

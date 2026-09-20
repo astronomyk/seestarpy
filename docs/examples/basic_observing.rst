@@ -23,16 +23,28 @@ Assuming you have already connected (see :doc:`basic_connection`):
 (SIMBAD/NED/VizieR), slews to the target, and runs a plate-solve loop.
 ``start_stack`` then begins stacking sub-exposures.
 
-Each of these returns the firmware's JSON reply, and each accepts
-``ips=`` to drive several Seestars at once.
+Each accepts ``ips=`` to drive several Seestars at once.
 
 .. note::
-   The commands are **asynchronous**: ``goto_target`` returns as soon as
-   the firmware accepts the slew, not when the scope has arrived.  A
-   goto-plus-plate-solve typically takes 30–60 s.  Poll
-   :func:`~seestarpy.status.get_mount_state` or
-   :func:`~seestarpy.raw.get_view_state` if your script needs to wait —
-   see :doc:`basic_status_checks`.
+   ``goto_target`` and ``goto`` **block** until the firmware reports the
+   move finished, printing a progress line per event along the way.  A
+   goto-plus-plate-solve typically takes 30–60 s.  Both return a dict
+   whose ``state`` is ``'complete'``, ``'fail'``, ``'cancel'`` or
+   ``'timeout'``; ``goto_target`` also carries the resolved
+   ``target_name`` / ``ra`` / ``dec``.
+
+   .. code-block:: python
+
+      res = ssp.goto_target("M42")
+      if res["state"] != "complete":
+          raise RuntimeError(f"goto failed: {res}")
+
+   Pass ``verbose=False`` to silence the progress lines, and
+   ``timeout=0`` to get the old fire-and-forget behaviour, where the call
+   returns as soon as the firmware accepts the command.  In that case
+   poll :func:`~seestarpy.status.get_mount_state` or
+   :func:`~seestarpy.raw.get_view_state` yourself — see
+   :doc:`basic_status_checks`.
 
 
 Using explicit coordinates
@@ -108,12 +120,22 @@ Focus
 .. code-block:: python
 
    ssp.focuser()                    # read current position, e.g. 1580
-   ssp.focuser("auto")              # run the firmware auto-focus routine
    ssp.focuser(pos=1605)            # move to an explicit position
 
+   res = ssp.autofocus()            # run the firmware V-curve sweep and wait
+   res["position"]                  # where it settled, e.g. 1633
+
 The travel range is roughly [1200, 2600] with the factory default near
-1580.  Auto-focus needs stars in the field, so run it after the goto has
-finished, not before.
+1580.
+
+:func:`~seestarpy.ui.autofocus` sweeps the focuser, measures star FWHM at
+each step, fits the V-curve and moves to its minimum, printing each
+position and FWHM as it goes.  A sweep takes 25–45 s and the call blocks
+until it is done.  **A view must already be running**: the routine
+focuses on whatever the camera is exposing, so call it after
+``goto_target`` has returned, not before — with the camera idle it fails
+with ``'no star is detected'`` (code 279).  ``ssp.focuser("auto")`` still
+fires the same routine without waiting for it.
 
 .. warning::
    Auto-focus **aborts a running observation plan**, and the firmware will
@@ -217,12 +239,28 @@ If you use an equatorial wedge:
 
 EQ mode requires the scope to be parked, which is why ``set_eq_mode``
 parks it — you have to ``open()`` again afterwards.  For polar alignment
-on a wedge:
+on a wedge, run the three-point routine and wait for its result:
 
 .. code-block:: python
 
-   ssp.raw.start_polar_align()
-   ssp.raw.stop_polar_align()
+   res = ssp.polar_align()          # blocks, ~1–2 min from EQ-parked
+   res["total"]                     # polar-axis error in degrees
+   res["x"], res["y"]               # azimuth / altitude components
+
+   ssp.polar_align(restart=False)   # re-measure after adjusting the tripod
+
+``x`` and ``y`` are how far the *mount* is off, so correct the tripod by
+the same amount in the opposite direction.  Pick a ``dec_pos_index``
+(default ``3``, roughly +47°) that is clear of obstructions.
+
+.. note::
+   Use the wrapper rather than :func:`~seestarpy.raw.start_polar_align`
+   directly.  The firmware ties the alignment to the TCP connection that
+   started it and drops an idle socket after ~15 s, so a bare
+   ``start_polar_align`` is cancelled about 19 s in with the mount
+   stopped mid-slew.  :func:`~seestarpy.ui.polar_align` holds the
+   connection open for the whole run (see
+   :class:`~seestarpy.connection.keepalive`).
 
 See :doc:`changing_seestar_settings` for the rest of the device settings.
 
@@ -247,11 +285,11 @@ parks itself:
    ssp.exposure(20)                              # 20 s subs
    ssp.dither(radius_arcmin=2.5, every_n_subs=5)
 
-   # 3. Open, slew, focus, stack
+   # 3. Open, slew, focus, stack — goto_target and autofocus both
+   #    block until the firmware reports they are done
    ssp.open()
    ssp.goto_target("M 81")
-   time.sleep(60)                                # let the goto + solve finish
-   ssp.focuser("auto")
+   ssp.autofocus()
    ssp.start_stack()
 
    # 4. Watch it work
@@ -263,7 +301,7 @@ parks itself:
    ssp.stop_view()
    ssp.close()
 
-Replace the ``sleep`` calls with real state polling (see
+Replace the progress ``sleep`` loop with real state polling (see
 :doc:`basic_status_checks`) once you trust the sequence, and consider
 handing the whole night to the scope with an observation plan
 (:doc:`observation_plans`) so it keeps going if your laptop sleeps.
