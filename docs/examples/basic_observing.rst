@@ -184,6 +184,42 @@ A few rules of thumb:
    decorrelation for free from field rotation.
 
 
+Dew heater
+----------
+
+The heater warms the corrector plate so dew cannot settle on it.  On a
+humid night an unheated Seestar fogs over within an hour or two, and it
+does so quietly: frames keep arriving, they just get softer and dimmer
+until someone notices.
+
+.. code-block:: python
+
+   ssp.dew_heater()                  # False
+   ssp.dew_heater(True)              # on, at the power the phone app uses
+   ssp.dew_heater(True, power=60)    # on, but gentler
+   ssp.dew_heater(False)             # off
+
+``power`` runs from 0 to 100 in the firmware's own units --- it is not
+documented as a percentage, and 90 is simply the value the official app
+sends.  Switching the heater on with ``power=0`` raises rather than
+leaving it on and cold, which is the trap the underlying
+:func:`~seestarpy.raw.pi_output_set2` sets by defaulting the level to
+zero.
+
+.. note::
+   Only the on/off state can be read back.  The firmware reports
+   ``heater_enable`` in its settings but never the power level, so
+   ``ssp.dew_heater()`` returns a plain ``True`` or ``False`` and cannot
+   tell you how hard the heater is working.
+
+   A write sends both ``set_setting(heater_enable=...)`` and
+   ``pi_output_set2``.  Which of the two the firmware treats as canonical
+   is undocumented, so the wrapper writes both to keep them consistent.
+
+The heater draws from the same battery as everything else, so on a dry
+night it is worth leaving off.
+
+
 Stopping and parking
 --------------------
 

@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+### New — `ui.dew_heater()`
+
+A get/set wrapper for the dew heater, in the same shape as `dither()` and
+`exposure()`: call it bare to read the state, with an argument to change it.
+
+```python
+ssp.dew_heater()                  # False
+ssp.dew_heater(True)              # on, at power 90
+ssp.dew_heater(True, power=60)    # on, gentler
+ssp.dew_heater(False)             # off
+```
+
+Controlling the heater previously meant picking between two `raw` calls that
+do different halves of the job. `set_setting(heater_enable=...)` writes the
+persistent setting the phone app displays; `pi_output_set2` drives the
+hardware output and carries the power level. Which one the firmware treats as
+canonical is not documented, so the wrapper writes **both** and keeps them
+consistent.
+
+- **Power defaults to 90 when switching on**, the value the official app's
+  `SetHeaterCmd` hard-codes, and to 0 when switching off. The unit is not
+  documented as a percentage; 90 is simply what the app sends.
+- **`power=0` while switching on raises `ValueError`.** `pi_output_set2`
+  defaults `dew_heater_power` to 0, so a bare `pi_output_set2(is_dew_on=True)`
+  switches the heater on and leaves it cold. The wrapper refuses that and
+  points at `dew_heater(False)`.
+- **A read returns a plain `bool`.** The firmware reports `heater_enable` in
+  `get_setting` but never the power level, so the current level cannot be read
+  back at all.
+
+Covered by 17 offline tests in `tests/test_dew_heater.py`. **Not yet verified
+against hardware** — in particular, whether writing both commands is necessary
+or whether one of them alone is enough.
+
 ## v0.7.1 — 2026-09-20
 
 ### New — blocking wrappers with live progress for the long operations

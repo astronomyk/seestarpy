@@ -347,6 +347,98 @@ def dither(enabled: bool | None = None,
     return raw.set_setting(stack_dither=new)
 
 
+#: Dew-heater power the official app sends when it switches the heater on.
+#: The firmware does not document the unit; 90 is simply the value the app's
+#: ``SetHeaterCmd`` hard-codes.
+APP_DEW_HEATER_POWER = 90
+
+
+@multiple_ips
+def dew_heater(enabled: bool | None = None, power: int | None = None):
+    """
+    Get or set the dew heater.
+
+    The heater warms the corrector plate so dew cannot settle on it.  On a
+    humid night an unheated Seestar fogs over within an hour or two, and
+    the stack degrades quietly while it does --- frames keep arriving, they
+    just get softer and dimmer.
+
+    Parameters
+    ----------
+    enabled : bool or None, optional
+        - ``None`` (and no *power*) : return whether the heater is on.
+        - ``bool`` : switch the heater on or off.
+    power : int or None, optional
+        Heater power in the firmware's own units, in [0, 100].  Defaults
+        to :data:`APP_DEW_HEATER_POWER` (90) when switching on, which is
+        what the official app sends, and to ``0`` when switching off.
+
+    Returns
+    -------
+    bool or dict
+        The current on/off state when called with no arguments, otherwise
+        the firmware's reply to :func:`~seestarpy.raw.pi_output_set2`.
+
+    Raises
+    ------
+    ValueError
+        If *power* is outside [0, 100], or if the heater is being switched
+        on with ``power=0``, which would leave it on but cold.
+
+    Notes
+    -----
+    A write sends **two** commands: :func:`~seestarpy.raw.set_setting`
+    with ``heater_enable``, the persistent setting the phone app shows,
+    and :func:`~seestarpy.raw.pi_output_set2`, the hardware output the app
+    actually drives.  Which one the firmware treats as canonical is not
+    documented, so both are written to keep them consistent.
+
+    Only the on/off state can be read back.  The firmware reports
+    ``heater_enable`` in :func:`~seestarpy.raw.get_setting` but never the
+    power level, so a read cannot tell you how hard the heater is working.
+
+    Passing *power* without *enabled* switches the heater **on**, on the
+    assumption that you are setting a level because you want one.
+
+    Accepts the ``ips`` keyword for sending the command to multiple
+    Seestars simultaneously.
+
+    Examples
+    --------
+    ::
+
+        >>> import seestarpy as ssp
+        >>> ssp.dew_heater()
+        False
+        >>> ssp.dew_heater(True)             # on, at the app's power level
+        >>> ssp.dew_heater(True, power=60)   # on, but gentler
+        >>> ssp.dew_heater(False)            # off
+        >>> ssp.dew_heater(True, ips="all")  # ...on every Seestar
+
+    """
+    if enabled is None and power is None:
+        setting = raw.get_setting().get("result", {}) or {}
+        return bool(setting.get("heater_enable"))
+
+    # Setting a power level implies wanting the heater on.
+    state = bool(enabled) if enabled is not None else True
+
+    if power is None:
+        power = APP_DEW_HEATER_POWER if state else 0
+    else:
+        power = int(power)
+        if not 0 <= power <= 100:
+            raise ValueError(f"power must be in [0, 100]: {power}")
+        if state and power == 0:
+            raise ValueError(
+                "power=0 would switch the heater on but leave it cold; "
+                "call dew_heater(False) to switch it off"
+            )
+
+    raw.set_setting(heater_enable=state)
+    return raw.pi_output_set2(is_dew_on=state, dew_heater_power=power)
+
+
 @multiple_ips
 def filter_wheel(pos: int | str | None = None):
     """

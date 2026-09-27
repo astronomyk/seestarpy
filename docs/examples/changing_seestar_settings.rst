@@ -26,7 +26,7 @@ dictionary.  Read it whole:
 
     raw.set_setting(temp_unit="F")
     raw.set_setting(auto_power_off=False)
-    raw.set_setting(heater_enable=True)          # dew heater on
+    raw.set_setting(expert_mode=True)            # unlock 2 s and 5 s subs
 
 Two things to know before you start poking at it.
 
@@ -45,6 +45,12 @@ This is exactly what the convenience wrappers do for you, which is why
 ``ssp.dither(every_n_subs=6)`` and ``ssp.exposure(20)`` are the safer way
 to touch those two blocks (see :doc:`basic_observing`).
 
+**Some keys have a second half.**  ``heater_enable`` is the persistent
+setting, but the heater's *power level* lives behind a separate method,
+:func:`~seestarpy.raw.pi_output_set2`.  Writing the setting alone leaves
+the two out of step, so use ``ssp.dew_heater()``, which writes both --- see
+:doc:`basic_observing`.
+
 **Settings are persistent and shared.**  They are stored on the scope, not
 scoped to your connection, so a change you make here is what the phone app
 will see next time it connects — and it stays that way until something
@@ -59,7 +65,7 @@ The full list of known keys, with types and defaults, is in the
 ``auto_af``             auto-focus after every goto (default ``False``)
 ``plan_target_af``      auto-focus between plan targets (default ``False``)
 ``stack_after_goto``    start stacking as soon as a goto completes
-``heater_enable``       dew heater
+``heater_enable``       dew heater — use ``ssp.dew_heater()``
 ``auto_power_off``      power down after ~15 min idle (default ``True``)
 ``expert_mode``         unlocks the 2 s and 5 s sub lengths
 ``stack_lenhance``      dark subtraction (moves the filter, so call alone)
