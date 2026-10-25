@@ -162,6 +162,169 @@ def stop_view_plan():
     return send_command(params)
 
 
+def clear_view_plan():
+    """
+    Remove the stored observation plan from the Seestar.
+
+    Unlike :func:`stop_view_plan`, this also clears the plan from
+    ``iscope_get_app_state()["ViewPlan"]``.
+
+    .. note:: From the decompiled Seestar app v3.4.1 (``clear_view_plan``,
+       no parameters).
+
+    Returns
+    -------
+    dict
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> plan.stop_view_plan()
+        >>> plan.clear_view_plan()
+
+    """
+    return send_command({'method': 'clear_view_plan'})
+
+
+def restart_view_plan(plan_target_af=False, viewplan_gohome=True):
+    """
+    Restart the plan already stored on the Seestar.
+
+    The app v3.4.1 does this by sending ``set_view_plan`` with only the two
+    plan-level options and no target list.
+
+    Parameters
+    ----------
+    plan_target_af : bool
+        Auto-focus before each target.  Default ``False``.
+    viewplan_gohome : bool
+        Park the scope when the plan ends.  Default ``True``.
+
+    Returns
+    -------
+    dict
+
+    """
+    return send_command({'method': 'set_view_plan',
+                         'params': {'plan_target_af': bool(plan_target_af),
+                                    'viewplan_gohome': bool(viewplan_gohome)}})
+
+
+#: Values of a plan target's ``camera_mode`` (``PlanCameraMode`` in the app).
+CAMERA_MODES = ("tele", "wide", "dual")
+
+#: Values of ``camera.stack.capt_type`` for a plan target.
+CAPT_TYPES = ("stack", "photometry")
+
+
+def configure_plan(plan, exposure_ms=None, capt_type=None, tracking=None,
+                   camera_mode=None, wide_exposure_ms=None,
+                   wide_auto_exposure=None, wide_capt_type=None,
+                   plan_target_af=None, viewplan_gohome=None):
+    """
+    Add the per-target settings of firmware 9.x / app v3.4.1 to a plan.
+
+    Works on any plan dict (e.g. from :func:`create_named_plan`,
+    :func:`create_mosaic_plan` or :func:`create_polygon_plan`).  Every
+    argument left at ``None`` is not touched, so older firmware gets the
+    same payload as before.  The plan is modified in place and returned.
+
+    Parameters
+    ----------
+    plan : dict
+        Plan dictionary with a ``list`` of targets.
+    exposure_ms : int, optional
+        Sub-exposure of the main (telephoto) camera in milliseconds, per
+        target: ``camera.exp_ms.stack_l``.  Without it each target uses
+        the global ``exp_ms`` setting.
+    capt_type : str, optional
+        ``"photometry"`` to measure stars and keep light curves for every
+        target (see :mod:`seestarpy.photometry`), ``"stack"`` for normal
+        stacking: ``camera.stack.capt_type``.
+    tracking : bool, optional
+        Keep the mount tracking: ``mount.tracking``.
+    camera_mode : str, optional
+        ``"tele"``, ``"wide"`` or ``"dual"`` (both cameras; needs
+        ``can_dual_capture``, see :func:`seestarpy.raw.get_capabilities`).
+    wide_exposure_ms : int, optional
+        Wide-camera sub-exposure in ms: ``second_camera.exp_ms.stack_l``.
+    wide_auto_exposure : bool, optional
+        Let the wide camera choose its exposure:
+        ``second_camera.exp_ms.stack_l_auto``.
+    wide_capt_type : str, optional
+        ``second_camera.stack.capt_type``.
+    plan_target_af : bool, optional
+        Auto-focus before each target (plan level).
+    viewplan_gohome : bool, optional
+        Park when the plan ends (plan level).
+
+    Returns
+    -------
+    dict
+        The same *plan*.
+
+    Raises
+    ------
+    ValueError
+        For an unknown *camera_mode* or *capt_type*, or a non-positive
+        exposure.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> p = plan.create_named_plan(
+        ...     "V452 Vul", [("V452 Vul", "22:00")], end_time="02:00")
+        >>> plan.configure_plan(p, exposure_ms=20000, capt_type="photometry")
+        >>> plan.set_view_plan(p)
+
+    .. note:: Keys from the decompiled Seestar app v3.4.1
+       (``SetViewPlanTargetParams``, ``TargetSettingPayload``).  Older
+       firmware ignores keys it does not know.
+    """
+    if camera_mode is not None and camera_mode not in CAMERA_MODES:
+        raise ValueError(f"camera_mode must be one of {CAMERA_MODES}, "
+                         f"got {camera_mode!r}")
+    for name, val in (("capt_type", capt_type),
+                      ("wide_capt_type", wide_capt_type)):
+        if val is not None and val not in CAPT_TYPES:
+            raise ValueError(f"{name} must be one of {CAPT_TYPES}, got {val!r}")
+    for name, val in (("exposure_ms", exposure_ms),
+                      ("wide_exposure_ms", wide_exposure_ms)):
+        if val is not None and int(val) <= 0:
+            raise ValueError(f"{name} must be positive, got {val!r}")
+
+    if plan_target_af is not None:
+        plan["plan_target_af"] = bool(plan_target_af)
+    if viewplan_gohome is not None:
+        plan["viewplan_gohome"] = bool(viewplan_gohome)
+
+    for target in plan.get("list", []):
+        if exposure_ms is not None:
+            target.setdefault("camera", {}).setdefault("exp_ms", {})[
+                "stack_l"] = int(exposure_ms)
+        if capt_type is not None:
+            target.setdefault("camera", {}).setdefault("stack", {})[
+                "capt_type"] = capt_type
+        if tracking is not None:
+            target.setdefault("mount", {})["tracking"] = bool(tracking)
+        if camera_mode is not None:
+            target["camera_mode"] = camera_mode
+        if wide_exposure_ms is not None:
+            target.setdefault("second_camera", {}).setdefault("exp_ms", {})[
+                "stack_l"] = int(wide_exposure_ms)
+        if wide_auto_exposure is not None:
+            target.setdefault("second_camera", {}).setdefault("exp_ms", {})[
+                "stack_l_auto"] = bool(wide_auto_exposure)
+        if wide_capt_type is not None:
+            target.setdefault("second_camera", {}).setdefault("stack", {})[
+                "capt_type"] = wide_capt_type
+    return plan
+
+
 def _generate_target_ids(n):
     """Return *n* unique random 9-digit integers for use as target IDs."""
     ids = set()

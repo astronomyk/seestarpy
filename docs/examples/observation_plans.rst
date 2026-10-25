@@ -594,3 +594,45 @@ paper can leave gaps once field rotation is taken into account.
 Plotting is also the quickest sanity check that a plan is doing what you
 meant: a wrong ``delta_dec`` or a polygon with its corners in the wrong
 order is obvious in a picture and invisible in a dictionary.
+
+Per-target settings (firmware 9.x)
+----------------------------------
+
+App v3.4.1 sends extra settings with every plan target.
+:func:`~seestarpy.plan.configure_plan` adds them to any plan built above:
+
+.. code-block:: python
+
+    plan.configure_plan(
+        p,
+        exposure_ms=20000,         # camera.exp_ms.stack_l for each target
+        capt_type="photometry",    # camera.stack.capt_type: "stack" or "photometry"
+        tracking=True,             # mount.tracking
+        camera_mode="tele",        # "tele", "wide" or "dual"
+        plan_target_af=True,       # auto-focus before each target
+        viewplan_gohome=True,      # park when the plan ends
+    )
+    plan.set_view_plan(p)
+
+``camera_mode="dual"`` and the ``wide_*`` arguments (``second_camera``) need
+a scope that reports ``can_dual_capture``:
+
+.. code-block:: python
+
+    from seestarpy import raw
+    raw.get_capabilities()["can_dual_capture"]
+
+Arguments left at ``None`` are not sent, so older firmware gets the same
+payload as before.
+
+Stopping, clearing and restarting:
+
+.. code-block:: python
+
+    plan.stop_view_plan()      # stop the running plan
+    plan.clear_view_plan()     # also remove it from the scope
+    plan.restart_view_plan()   # restart the stored plan
+
+.. warning:: ``start_min`` is minutes since *local midnight*.  A start time
+   that is already past makes the plan begin as soon as it arrives.  For a
+   plan that starts after midnight, use values above 1440 (01:30 = 1530).

@@ -1343,8 +1343,9 @@ def set_setting(**kwargs):
         Allow exposure times of 2 s and 5 s via ``exp_ms``. Default ``False``.
     exp_ms : dict
         Exposure times in milliseconds.
-        Keys: ``'stack_l'`` (stacking, accepts 10/20/30/60 s; also 2/5 s
-        with ``expert_mode=True``), ``'continuous'`` (live view).
+        Keys: ``'stack_l'`` (stacking, accepts 10/20/30/60 s, and 90/120 s
+        in app v3.4.1; also 2/5 s with ``expert_mode=True``),
+        ``'continuous'`` (live view), ``'more_exposure'`` (firmware 9.x).
     auto_power_off : bool
         Auto power-off after ~15 min of inactivity. Default ``True``.
     stack_dither : dict
@@ -1384,7 +1385,8 @@ def set_setting(**kwargs):
         ``'cont_capt'`` (``True`` to save every frame without stacking),
         ``'drizzle2x'`` (create 4k image by debayering and drizzling),
         ``'airplane_line_removal'``, ``'wide_denoise'``,
-        ``'capt_type'``, ``'save_discrete_frame'``,
+        ``'capt_type'`` (``'stack'``, ``'photometry'`` — see
+        :mod:`seestarpy.photometry`), ``'save_discrete_frame'``,
         ``'save_discrete_ok_frame'``, ``'capt_num'``,
         ``'light_duration_min'``, ``'brightness'``, ``'contrast'``,
         ``'saturation'``, ``'dbe_enable'``.
@@ -1415,6 +1417,22 @@ def set_setting(**kwargs):
     remote_joined : bool
         Whether the Seestar is connected via a remote connection.
         Default ``False``.
+    enable_dark_library : bool
+        **Firmware 9.x.** Subtract temperature-matched darks from the dark
+        library (see :func:`set_dark_library`, :func:`get_dark_files`).
+    alpaca_enable : bool
+        **Firmware 9.x.** Run the built-in ASCOM Alpaca server.
+    sky_replay : bool
+        **Firmware 9.x.** Default ``False``.
+    light_brightness : int
+        **Firmware 9.x.** Brightness of the status light.
+    comet_max_frame_num : int
+        **Firmware 9.x.** Frame limit for comet stacking.
+    annotation : dict
+        **Firmware 9.x.** ``'milkyway_lines'``, ``'milkyway_background'``.
+    motion_monitor : dict
+        **Firmware 9.x.** ``'mode'``, ``'return_to_origin'``,
+        ``'sensitivity'``, ``'waiting_time'``, ``'duration_min'``.
 
     Examples
     --------
@@ -2477,3 +2495,251 @@ def random_command(method, params=None):
     Accepts the ``ips`` keyword for multi-Seestar operation.
     """
     return send_command({"method": method, "params": params})
+
+# ---------------------------------------------------------------------------
+# Firmware 9.x / app v3.4.1 additions.
+#
+# Method names and parameter keys come from the decompiled Seestar app
+# v3.4.1 (Gson ``@SerializedName`` annotations) and were confirmed against
+# firmware 9.75 where a read-only probe was possible.
+# ---------------------------------------------------------------------------
+
+@multiple_ips
+def get_dark_files(name=None):
+    """
+    List the dark-frame library stored on the Seestar.
+
+    Parameters
+    ----------
+    name : str, optional
+        Sub-folder of the library to list.  ``None`` (default) lists the
+        top level, which groups the darks by exposure time.
+
+    Returns
+    -------
+    dict
+        ``result`` holds ``path`` (``"darklibrary"``), ``list_type`` and
+        ``list``: groups of ``files``, each with ``name``, ``count``,
+        ``exposure_sec`` and, where the firmware records them,
+        ``temperature``, ``date`` and ``expired``.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_dark_files()["result"]["list"][0]["files"]
+        [{'name': '10s', 'thn': '', 'count': 1, 'type': 0, 'exposure_sec': 10.0},
+         {'name': '20s', 'thn': '', 'count': 2, 'type': 0, 'exposure_sec': 20.0}]
+
+    Notes
+    -----
+    New in firmware 9.x.  Accepts the ``ips`` keyword for multi-Seestar
+    operation.
+    """
+    params = {"method": "get_dark_files"}
+    if name is not None:
+        params["params"] = {"name": name}
+    return send_command(params)
+
+
+@multiple_ips
+def set_dark_library(enable=True):
+    """
+    Turn temperature-matched dark subtraction from the dark library on/off.
+
+    This sets the ``enable_dark_library`` setting.  When enabled the
+    firmware picks the library dark closest in temperature to the current
+    sensor temperature instead of the single master dark.
+
+    Parameters
+    ----------
+    enable : bool
+        Default ``True``.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    New in firmware 9.x.  Accepts the ``ips`` keyword for multi-Seestar
+    operation.
+    """
+    return send_command({"method": "set_setting",
+                         "params": {"enable_dark_library": bool(enable)}})
+
+
+@multiple_ips
+def start_create_calib_frame(frame_type=None, wide_cam=None,
+                             customer_library=True):
+    """
+    Start building calibration frames for the dark library.
+
+    Progress is reported in ``iscope_get_app_state()["CreateCalibFrame"]``
+    (``state``, ``lapse_ms``, ``code``, ``error``, ``type``).  Stop it with
+    :func:`stop_create_dark`.
+
+    Parameters
+    ----------
+    frame_type : str, optional
+        Calibration frame type.  Omitted by default, which is what the
+        official app sends for the dark library.  The accepted values are
+        not yet known.
+    wide_cam : bool, optional
+        Build the frames for the wide-angle camera (S30 Pro).  Omitted by
+        default.
+    customer_library : bool
+        Store the frames in the user dark library
+        (``/home/pi/.ZWO/CustomerDarkLibrary``).  Default ``True``, as in
+        the app.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    Closes the dust cap / moves the filter wheel to the dark position, but
+    does not move the mount.  Accepts the ``ips`` keyword for
+    multi-Seestar operation.
+    """
+    p = {"customer_library": bool(customer_library)}
+    if wide_cam is not None:
+        p["wide_cam"] = bool(wide_cam)
+    if frame_type is not None:
+        p["type"] = frame_type
+    return send_command({"method": "start_create_calib_frame", "params": p})
+
+
+@multiple_ips
+def delete_image(names):
+    """
+    Delete one or more images from the Seestar's storage.
+
+    Parameters
+    ----------
+    names : str or list of str
+        File path(s) relative to the storage root, e.g.
+        ``"MyWorks/M 27/Stacked_1982_M 27_2.0s_IRCUT_20260731-015959.fit"``.
+
+    Returns
+    -------
+    dict
+
+    Notes
+    -----
+    This cannot be undone.  Accepts the ``ips`` keyword for multi-Seestar
+    operation.
+    """
+    if isinstance(names, str):
+        names = [names]
+    return send_command({"method": "delete_image",
+                         "params": {"name": list(names)}})
+
+
+@multiple_ips
+def fits_to_jpg(name):
+    """
+    Convert a FITS file on the Seestar to a JPEG, on the Seestar.
+
+    Parameters
+    ----------
+    name : str
+        FITS file path relative to the storage root.
+
+    Returns
+    -------
+    dict
+        ``result["jpg_name"]`` is the path of the new JPEG.
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    return send_command({"method": "fits_to_jpg", "params": {"name": name}})
+
+
+@multiple_ips
+def get_annotate_result(img_id=None, file_path=None):
+    """
+    Return the annotation (catalogue objects / measured stars) for an image.
+
+    Parameters
+    ----------
+    img_id : int, optional
+        ID of a live-view image (as in the image-stream header).
+    file_path : str, optional
+        Path of a stored image.  New in firmware 9.x.
+
+    Returns
+    -------
+    dict
+        ``result`` holds ``image_id``, ``image_size``, ``wide_cam`` and
+        ``annotations``.  On firmware 9.x photometry entries also carry
+        ``is_variable``, ``is_reference``, ``is_overexposure``, ``snr`` and
+        ``star_type``.  Code 207 means no annotated image is available.
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    p = {}
+    if img_id is not None:
+        p["img_id"] = int(img_id)
+    if file_path is not None:
+        p["file_path"] = file_path
+    params = {"method": "get_annotate_result"}
+    if p:
+        params["params"] = p
+    return send_command(params)
+
+
+#: ``get_device_state()["device"]`` keys that advertise optional features.
+#: Firmware that predates a flag simply omits it.
+CAPABILITY_FLAGS = (
+    "can_star_mode_sel_cam", "can_wide_cam_roi", "can_wide_cam_af",
+    "can_dark_correction", "can_motion_monitor", "can_dual_capture",
+    "can_4k_quality", "can_wide_mosaic_8k", "can_comet_post_stack",
+    "can_roi_smart_follow", "can_adjust_brightness",
+)
+
+
+@multiple_ips
+def get_capabilities():
+    """
+    Return the feature flags the Seestar advertises.
+
+    Use these instead of firmware version numbers to decide whether a
+    feature is available (e.g. ``can_dual_capture`` for the wide-camera
+    ``second_camera`` plan settings).
+
+    Returns
+    -------
+    dict
+        ``{flag: bool}`` for every ``can_*`` key in
+        ``get_device_state()["device"]``, plus ``product_model`` and
+        ``firmware_ver_string``.  Empty if the device block is missing.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import raw
+        >>> raw.get_capabilities()
+        {'product_model': 'Seestar S50', 'firmware_ver_string': '9.75',
+         'can_dark_correction': True, 'can_dual_capture': False, ...}
+
+    Notes
+    -----
+    Accepts the ``ips`` keyword for multi-Seestar operation.
+    """
+    resp = send_command({"method": "get_device_state",
+                         "params": {"keys": ["device"]}})
+    device = {}
+    if isinstance(resp, dict):
+        device = (resp.get("result") or {}).get("device") or {}
+    caps = {k: device[k] for k in ("product_model", "firmware_ver_string")
+            if k in device}
+    caps.update({k: v for k, v in device.items() if k.startswith("can_")})
+    return caps

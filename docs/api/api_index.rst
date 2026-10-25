@@ -8,6 +8,7 @@ Python API index
    connection
    raw
    plan
+   photometry
    stack
    crowdsky
    stream
