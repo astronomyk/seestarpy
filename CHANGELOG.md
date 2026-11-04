@@ -1,6 +1,68 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 — 2026-11-04
+
+Features from the decompiled Seestar app v3.4.1 (firmware 9.x), plus plan
+sharing through ZWO's cloud service.
+
+### New — plan sharing with links and QR codes
+
+The app's *Share plan* feature, available from Python. No ZWO account needed.
+
+```python
+share = plan.share_plan(p)          # {'share_id': ..., 'share_link': 'https://app.zwoastro.com/Seestar/plan?id=...'}
+plan.share_plan_qrcode(p, path="plan_qr.png")   # the app's branded QR PNG
+p2 = plan.get_shared_plan(share["share_link"])  # import, ready for set_view_plan
+```
+
+- Talks to `api.seestar.com` (`/v1/share/plan`, `/v1/share/plan/qrcode`,
+  `/v1/share/plan/{id}`). Confirmed on 2026-11-04: plans shared from
+  seestarpy import into the phone app both from the link and by scanning the
+  QR code.
+- **Shares are public to anyone with the link and cannot be deleted.** Every
+  call creates a new share; the QR endpoint returns only the image.
+- Targets the app would silently drop on import (no ID, name or duration,
+  impossible coordinates) raise `ValueError` before upload.
+- `plan.parse_share_id()` accepts `https://app.zwoastro.com/...`,
+  `seestar://zwo.biz/...` links or a bare ID.
+- New docs page: *Sharing plans with QR codes and links*.
+
+### New — `seestarpy.photometry`: photometry and light curves (firmware 9.x)
+
+- `set_photometry_mode()` / `get_photometry_mode()` switch stacking into
+  photometry mode (`stack.capt_type = "photometry"`).
+- `check_photometry()` / `get_check_state()` prepare the field.
+  **`check_photometry` starts a star view, which blocks `set_view_plan`
+  (code 268) until `raw.iscope_stop_view()`.**
+- `query_reference_stars()` / `upload_refstar_info()` /
+  `provide_reference_stars()` supply APASS reference stars from VizieR when
+  the scope has no internet of its own.
+- `get_photometry_stars(image_id)`, `record_star()` / `stop_recording()`,
+  `recorded_stars()`, `light_curve()` (sorted by MJD), `save_light_curve()`
+  (CSV) and `get_photometry_result()`.
+- `get_photometry_wcs()` + `wcs_header()` give an astropy-ready TAN WCS.
+- Checked against firmware 9.75 on an S50 in the shed; **a real-sky
+  photometry run has not been done yet.**
+
+### New — per-target plan settings (firmware 9.x)
+
+- `plan.configure_plan()` adds per-target exposure, `capt_type`
+  (`"stack"` / `"photometry"`), tracking, `camera_mode`
+  (`"tele"` / `"wide"` / `"dual"`), wide-camera settings, and the plan-level
+  `plan_target_af` / `viewplan_gohome`. Arguments left at `None` are not
+  sent, so older firmware gets the same payload as before.
+- `plan.clear_view_plan()` and `plan.restart_view_plan()`.
+
+### New — `raw` wrappers for firmware 9.x
+
+- Dark library: `get_dark_files()`, `set_dark_library()`,
+  `start_create_calib_frame()` (the `frame_type` values are not known yet).
+- Files without SMB: `delete_image()`, `fits_to_jpg()`.
+- `get_annotate_result(img_id=..., file_path=...)`.
+- `get_capabilities()` returns the model, firmware and the `can_*` flags.
+- `set_setting` docs list the new keys (`enable_dark_library`,
+  `alpaca_enable`, `sky_replay`, `motion_monitor`, ...); `docs/info/errors.rst`
+  gained a table of command reply codes (103, 104, 105, 207, 209, 267, 268).
 
 ### New — `ui.dew_heater()`
 
@@ -35,6 +97,12 @@ consistent.
 Covered by 17 offline tests in `tests/test_dew_heater.py`. **Not yet verified
 against hardware** — in particular, whether writing both commands is necessary
 or whether one of them alone is enough.
+
+### Known issue
+
+`plan.create_named_plan` with a single target starting after midnight gives a
+`start_min` below 1440, which the firmware treats as already past, so the plan
+starts as soon as it is uploaded. Set `start_min` above 1440 by hand for now.
 
 ## v0.7.1 — 2026-09-20
 
