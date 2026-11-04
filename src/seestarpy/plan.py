@@ -1,9 +1,14 @@
+import base64
+import json
 import math
 import random
+import time
 import warnings
 import xml.etree.ElementTree as _ET
 from datetime import datetime
+from urllib.parse import parse_qs as _parse_qs
 from urllib.parse import quote as _url_quote
+from urllib.parse import urlparse as _urlparse
 
 import requests as _requests
 
@@ -323,6 +328,311 @@ def configure_plan(plan, exposure_ms=None, capt_type=None, tracking=None,
             target.setdefault("second_camera", {}).setdefault("stack", {})[
                 "capt_type"] = wide_capt_type
     return plan
+
+
+# --- Plan sharing (ZWO cloud, app v3.4.1) ---------------------------------
+
+#: ZWO's Seestar cloud API, which hosts the plan-sharing service.
+SHARE_API_URL = "https://api.seestar.com"
+
+#: Hosts whose ``/Seestar/plan?id=...`` links the app accepts as plan shares.
+SHARE_LINK_HOSTS = ("app.zwoastro.com", "test-app.zwoastro.com", "zwo.biz")
+
+# The app's ZInterceptor sends these; the endpoints need no login.
+_SHARE_HEADERS = {
+    "X-Lang": "en",
+    "x-service-platform": "seestar",
+    "x-params": json.dumps({"platform": "seestarpy"}),
+}
+
+# Keys the app writes for every shared target (TargetItem), with defaults.
+_SHARE_TARGET_DEFAULTS = {
+    "alias_name": "",
+    "lp_filter": False,
+    "mosaic": None,
+    "camera": None,
+    "second_camera": None,
+    "mount": None,
+    "camera_mode": "tele",
+    "ai_generated": False,
+}
+
+
+def _share_targets(plan):
+    """Return the plan's targets in the app's share format, sorted by start.
+
+    Raises ValueError for targets the app would silently drop on import.
+    """
+    targets = []
+    for t in plan.get("list", []):
+        name = t.get("target_name", "")
+        try:
+            ra, dec = t["target_ra_dec"]
+            ok = (int(t["target_id"]) > 0 and str(name).strip()
+                  and int(t["start_min"]) >= 0
+                  and int(t["duration_min"]) > 0
+                  and 0 <= ra <= 24 and -90 <= dec <= 90)
+        except (KeyError, TypeError, ValueError):
+            ok = False
+        if not ok:
+            raise ValueError(
+                f"Target {name!r} cannot be shared: it needs target_id > 0, "
+                f"a target_name, start_min >= 0, duration_min > 0, "
+                f"RA in [0, 24] h and Dec in [-90, 90] deg")
+        item = dict(_SHARE_TARGET_DEFAULTS)
+        item.update(t)
+        targets.append(item)
+    if not targets:
+        raise ValueError("plan has no targets to share")
+    return sorted(targets, key=lambda t: t["start_min"])
+
+
+def _share_body(plan):
+    """Build the ``AstroPlanShareCreateBody`` the app POSTs for *plan*.
+
+    The plan travels as a JSON string (``PlanItem``) whose own ``payload``
+    is the target list, again JSON-encoded.
+    """
+    targets = _share_targets(plan)
+    name = plan.get("plan_name", "")
+    total = sum(int(t["duration_min"]) for t in targets)
+    now_ms = int(time.time() * 1000)
+    item = {
+        "id": "",
+        "payload": json.dumps(targets),
+        "name": name,
+        "createTime": now_ms,
+        "operationTime": now_ms,
+        "operation": "update",
+        "recommendDurationMinute": total,
+        "extra": json.dumps({"wideIncrementId": 0}),
+    }
+    return {
+        "payload": json.dumps(item),
+        "metadata": {"planName": name,
+                     "targetCount": len(targets),
+                     "shootingDurationMinutes": total},
+    }
+
+
+def _share_request(method, path, timeout, **kwargs):
+    """Call the share API and return the ``data`` of its ``{code, msg,
+    data}`` envelope."""
+    try:
+        resp = _requests.request(method, SHARE_API_URL + path,
+                                 headers=_SHARE_HEADERS, timeout=timeout,
+                                 **kwargs)
+        reply = resp.json()
+    except _requests.RequestException as exc:
+        raise ConnectionError(
+            f"Could not reach the ZWO share service: {exc}") from exc
+    except ValueError as exc:
+        raise ConnectionError(
+            f"ZWO share service sent a non-JSON reply "
+            f"(HTTP {resp.status_code})") from exc
+    if reply.get("code") != 200:
+        raise RuntimeError(f"ZWO share service error {reply.get('code')}: "
+                           f"{reply.get('msg')}")
+    return reply.get("data") or {}
+
+
+def share_plan(plan, timeout=30):
+    """
+    Upload a plan to ZWO's plan-sharing service and get its share link.
+
+    Anyone with the link (or its QR code) can import the plan into the
+    Seestar app (v3.4.1+) via *Plan > Import*.  No ZWO account is needed.
+
+    Parameters
+    ----------
+    plan : dict
+        A plan dictionary as accepted by :func:`set_view_plan` (e.g. from
+        :func:`create_named_plan`).  Per-target settings added with
+        :func:`configure_plan` are shared too.
+    timeout : float, optional
+        HTTP timeout in seconds.
+
+    Returns
+    -------
+    dict
+        ``{"share_id": "sh0xivw4",
+        "share_link": "https://app.zwoastro.com/Seestar/plan?id=sh0xivw4"}``
+
+    Raises
+    ------
+    ValueError
+        If a target lacks what the app needs to import it (positive
+        ``target_id`` and ``duration_min``, a name, ``start_min >= 0``,
+        valid coordinates).
+    ConnectionError
+        If the service is unreachable.
+    RuntimeError
+        If the service rejects the plan.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> p = plan.create_named_plan(
+        ...     "Evening Session", [("M42", "21:00")], end_time="22:00")
+        >>> plan.share_plan(p)["share_link"]
+        'https://app.zwoastro.com/Seestar/plan?id=sh0xivw4'
+
+    .. warning:: A shared plan is public to anyone holding the link and
+       there is no API to delete it.  ``start_min`` is shared as-is, so
+       the recipient gets your local start times.
+
+    .. note:: ``POST /v1/share/plan`` on ``api.seestar.com``, reverse
+       engineered from the Seestar app v3.4.1 (``AstroPlanShareViewModel``)
+       and confirmed live on 2026-11-04.
+    """
+    data = _share_request("POST", "/v1/share/plan", timeout,
+                          json=_share_body(plan))
+    return {"share_id": data.get("shareId"),
+            "share_link": data.get("shareLink")}
+
+
+def share_plan_qrcode(plan, path=None, timeout=30):
+    """
+    Upload a plan to ZWO's plan-sharing service and get its QR code.
+
+    This is the QR code the app shows under *Share > QR code*: a PNG
+    (1052 x 1052 px, Seestar logo in the centre) that encodes the share
+    link, so scanning it in the Seestar app imports the plan.
+
+    Parameters
+    ----------
+    plan : dict
+        A plan dictionary, as for :func:`share_plan`.
+    path : str or path-like, optional
+        Also write the PNG to this file.
+    timeout : float, optional
+        HTTP timeout in seconds.
+
+    Returns
+    -------
+    bytes
+        The PNG image.
+
+    Raises
+    ------
+    ValueError, ConnectionError, RuntimeError
+        As for :func:`share_plan`.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> png = plan.share_plan_qrcode(p, path="evening_session_qr.png")
+
+    .. note:: Each call creates a **new** share, separate from any made
+       by :func:`share_plan`; the service returns only the image, not the
+       share ID.  If you need the ID and a QR code for the same share,
+       call :func:`share_plan` and render ``share_link`` with any QR
+       library.
+
+    .. note:: ``POST /v1/share/plan/qrcode``, from the Seestar app v3.4.1
+       (``BottomPlanPopView.showShareQrCode``), confirmed live on
+       2026-11-04.
+    """
+    data = _share_request("POST", "/v1/share/plan/qrcode", timeout,
+                          json=_share_body(plan))
+    qrcode = data.get("qrcode") or ""
+    # The app tolerates a "data:image/png;base64," prefix, so do we.
+    png = base64.b64decode(qrcode.split(",", 1)[-1])
+    if path is not None:
+        with open(path, "wb") as f:
+            f.write(png)
+    return png
+
+
+def parse_share_id(link):
+    """
+    Return the share ID from a plan-share link, or the ID itself.
+
+    Accepts ``https://app.zwoastro.com/Seestar/plan?id=<id>``, the app's
+    own ``seestar://zwo.biz/Seestar/plan?id=<id>``, or a bare ID.
+
+    Raises
+    ------
+    ValueError
+        If *link* is a URL but not a plan-share link.
+    """
+    link = link.strip()
+    if "://" not in link:
+        if not link or "/" in link:
+            raise ValueError(f"Not a share ID or link: {link!r}")
+        return link
+    url = _urlparse(link)
+    share_id = _parse_qs(url.query).get("id", [""])[0].strip()
+    if (url.hostname not in SHARE_LINK_HOSTS
+            or url.path != "/Seestar/plan" or not share_id):
+        raise ValueError(f"Not a Seestar plan-share link: {link!r}")
+    return share_id
+
+
+def get_shared_plan(link, timeout=30):
+    """
+    Download a shared plan by its link or share ID.
+
+    Parameters
+    ----------
+    link : str
+        A share link (as returned by :func:`share_plan` or encoded in a
+        plan QR code) or a bare share ID.
+    timeout : float, optional
+        HTTP timeout in seconds.
+
+    Returns
+    -------
+    dict
+        A plan dictionary ready for :func:`set_view_plan`.  Target keys
+        that the sharer left empty (``camera``, ``mosaic``, ...) are
+        dropped.
+
+    Raises
+    ------
+    ValueError
+        If *link* is not a share link, or the shared plan is malformed.
+    ConnectionError
+        If the service is unreachable.
+    RuntimeError
+        If the service does not know the share ID.
+
+    Examples
+    --------
+    ::
+
+        >>> from seestarpy import plan
+        >>> p = plan.get_shared_plan(
+        ...     "https://app.zwoastro.com/Seestar/plan?id=sh0xivw4")
+        >>> [t["target_name"] for t in p["list"]]
+        ['M 42']
+
+    .. warning:: ``start_min`` comes from the sharer's clock.  Check it
+       against your local time before :func:`set_view_plan`: a start that
+       is already past makes the plan begin immediately.
+
+    .. note:: ``GET /v1/share/plan/{shareId}``, confirmed live on
+       2026-11-04.
+    """
+    share_id = parse_share_id(link)
+    data = _share_request("GET", f"/v1/share/plan/{_url_quote(share_id)}",
+                          timeout)
+    try:
+        item = json.loads(data["payload"])
+        targets = json.loads(item.get("payload") or "[]")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"Malformed shared plan {share_id!r}") from exc
+    name = item.get("name") or (data.get("metadata") or {}).get("planName", "")
+    return {
+        "plan_name": name,
+        "update_time_seestar": datetime.now().strftime("%Y.%m.%d"),
+        "list": [{k: v for k, v in t.items() if v is not None}
+                 for t in targets],
+    }
 
 
 def _generate_target_ids(n):

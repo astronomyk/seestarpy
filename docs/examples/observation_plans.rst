@@ -636,3 +636,43 @@ Stopping, clearing and restarting:
 .. warning:: ``start_min`` is minutes since *local midnight*.  A start time
    that is already past makes the plan begin as soon as it arrives.  For a
    plan that starts after midnight, use values above 1440 (01:30 = 1530).
+
+Sharing plans (QR codes and links)
+----------------------------------
+
+The Seestar app (v3.4.1+) can share a plan as a link or a QR code through
+ZWO's cloud service; whoever opens the link or scans the code in the app
+can import the plan.  seestarpy talks to the same service, so a plan built
+in Python can be handed to any Seestar user, and a plan someone shares with
+you can be run from Python.  No ZWO account is needed.
+
+.. code-block:: python
+
+    from seestarpy import plan
+
+    p = plan.create_named_plan(
+        "Evening Session", [("M42", "21:00"), ("M31", "22:30")],
+        end_time="23:30")
+
+    # A share ID and link ...
+    share = plan.share_plan(p)
+    print(share["share_id"])      # 'sh0xivw4'
+    print(share["share_link"])    # 'https://app.zwoastro.com/Seestar/plan?id=sh0xivw4'
+
+    # ... or the app's branded QR code as a PNG
+    plan.share_plan_qrcode(p, path="evening_session_qr.png")
+
+    # Import a shared plan (link, QR-code URL, or bare ID) and run it
+    p2 = plan.get_shared_plan("https://app.zwoastro.com/Seestar/plan?id=sh0xivw4")
+    plan.set_view_plan(p2)
+
+Every call to :func:`~seestarpy.plan.share_plan` or
+:func:`~seestarpy.plan.share_plan_qrcode` creates a new share; the QR
+endpoint returns only the image, which encodes a link of the form
+``https://app.zwoastro.com/Seestar/plan?id=<share_id>``.  To get a share
+ID and a QR code for the *same* share, call ``share_plan`` and render its
+``share_link`` with any QR library.
+
+.. warning:: Shared plans are readable by anyone with the link and cannot
+   be deleted.  ``start_min`` is shared unchanged, so check the start times
+   of an imported plan against your local clock before running it.
