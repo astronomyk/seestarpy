@@ -174,6 +174,7 @@ Contents
    examples/changing_seestar_settings
    examples/changing_gain
    examples/observation_plans
+   examples/plan_sharing
    examples/photometry_light_curves
    examples/data_management
    examples/live_streaming
