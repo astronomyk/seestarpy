@@ -6,6 +6,12 @@
 Welcome to SeeStar-Py's Documentation!
 ======================================
 
+.. note::
+
+   If you've found the package useful - how about
+   `buying me a coffee <https://buymeacoffee.com/kdleschinsf>`_, to keep the
+   creative juices flowing ;)
+
 .. danger::
 
    **Firmware 7.18+ requires authentication.**
