@@ -21,11 +21,10 @@ Welcome to SeeStar-Py's Documentation!
 
 .. important::
 
-   **Version compatibility.**  The **minor** version tracks the oldest
-   Seestar **major** firmware version supported.  seestarpy **0.7.x**
-   supports firmware **7.x** — tested on 7.18 and 7.75 — and everything
-   newer, including 8.46 and 8.89.  When firmware 7 support is dropped,
-   seestarpy becomes 0.8.
+   **Version compatibility.**  seestarpy supports Seestar firmware
+   **7.18 and newer** — tested on 7.18, 7.75, 8.46, 8.89 and 9.75.  Features
+   added in later firmware (for example photometry and per-target plan
+   settings, firmware 9.x) only work on scopes running that firmware.
 
    The onboard batch-stacking workflow (:mod:`~seestarpy.stack`,
    :mod:`~seestarpy.crowdsky`) sends sub-frame paths in the form firmware
