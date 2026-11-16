@@ -1,6 +1,6 @@
-"""Extract PEM private keys from native libraries inside an APK.
+"""Extract PEM private keys from native libraries inside an APK or an XAPK.
 
-A general-purpose utility: given an APK file, scan its bundled native
+A general-purpose utility: given an APK or XAPK file, scan its bundled native
 libraries (``lib/*/libopenssllib.so``) with a ``strings(1)``-style pass
 and report any ``-----BEGIN PRIVATE KEY-----`` blocks found.
 
@@ -12,7 +12,7 @@ By default writes the first extracted key to ``~/.seestarpy/seestar.pem``,
 which is where :mod:`seestarpy.auth` auto-discovers it. Pass ``--stdout``
 to print keys instead, or ``-o PATH`` to override the output location.
 
-This module ships no key. Users supply their own APK.
+This module ships no key. Users supply their own APK or XAPK.
 """
 
 import argparse
@@ -21,7 +21,7 @@ import re
 import sys
 import zipfile
 from pathlib import Path
-
+from tempfile import TemporaryDirectory
 
 SO_PATHS = (
     "lib/arm64-v8a/libopenssllib.so",
@@ -59,6 +59,42 @@ def find_pem_keys(dump: str) -> list[str]:
     """Return every ``BEGIN PRIVATE KEY`` / ``END PRIVATE KEY`` block in dump."""
     return PEM_RE.findall(dump)
 
+def extract_pem_from_xapk(xapk_path, progress=None) -> list[str]:
+    """Extract all PEM private keys from all APKs packed into an XAPK.
+
+    Parameters
+    ----------
+    xapk_path : str or Path
+        Path to an ``.xapk`` file.
+    progress : callable, optional
+        One-arg callback invoked with human-readable status strings.
+        Defaults to a no-op.
+
+    Returns
+    -------
+    list of str
+        Deduplicated, sorted list of PEM blocks. Empty if no
+        ``libopenssllib.so`` is present or no key is embedded.
+    """
+    xapk_path = Path(xapk_path)
+    if not xapk_path.is_file():
+        raise FileNotFoundError(f"XAPK not found: {xapk_path}")
+
+    log = progress or (lambda _msg: None)
+    keys: set[str] = set()
+
+    with zipfile.ZipFile(xapk_path) as zf:
+        names = set([
+            x for x in zf.namelist() if (Path(x).suffix == ".apk")
+        ])
+        if names:
+            for apk_path in names:
+                with TemporaryDirectory() as tdir:
+                    zf.extract(apk_path, path=tdir)
+                    candidate=str(Path(tdir) / apk_path)
+                    keys.update(extract_pem_from_apk(candidate, progress))
+    return sorted(keys)
+    
 
 def extract_pem_from_apk(apk_path, progress=None) -> list[str]:
     """Extract all PEM private keys from the native libs of an APK.
@@ -89,12 +125,13 @@ def extract_pem_from_apk(apk_path, progress=None) -> list[str]:
         found = [p for p in SO_PATHS if p in names]
         if not found:
             log(
-                f"No libopenssllib.so found. Looked in: {', '.join(SO_PATHS)}"
+                f"No libopenssllib.so found in {apk_path.name}."
+                f" Looked in: {', '.join(SO_PATHS)}"
             )
             return []
 
         for so_path in found:
-            log(f"Scanning {so_path}...")
+            log(f"Scanning {so_path} from {apk_path.name}...")
             data = zf.read(so_path)
             dump = extract_strings(data)
             found_keys = find_pem_keys(dump)
@@ -125,7 +162,7 @@ def main(argv=None) -> int:
             "auto-discover it."
         ),
     )
-    parser.add_argument("apk", help="Path to the .apk file")
+    parser.add_argument("apk", help="Path to the .apk/.xapk file")
     parser.add_argument(
         "-o",
         "--output",
@@ -145,12 +182,15 @@ def main(argv=None) -> int:
     progress = (lambda _m: None) if args.quiet else (lambda m: print(m, file=sys.stderr))
 
     try:
-        keys = extract_pem_from_apk(args.apk, progress=progress)
+        if args.apk.endswith(".xapk"):
+            keys = extract_pem_from_xapk(args.apk, progress=progress)
+        else:
+            keys = extract_pem_from_apk(args.apk, progress=progress)
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except zipfile.BadZipFile:
-        print(f"error: not a valid APK/ZIP: {args.apk}", file=sys.stderr)
+        print(f"error: not a valid XAMP/APK/ZIP: {args.apk}", file=sys.stderr)
         return 2
 
     if not keys:
