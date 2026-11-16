@@ -59,6 +59,7 @@ def find_pem_keys(dump: str) -> list[str]:
     """Return every ``BEGIN PRIVATE KEY`` / ``END PRIVATE KEY`` block in dump."""
     return PEM_RE.findall(dump)
 
+
 def extract_pem_from_xapk(xapk_path, progress=None) -> list[str]:
     """Extract all PEM private keys from all APKs packed into an XAPK.
 
@@ -84,17 +85,18 @@ def extract_pem_from_xapk(xapk_path, progress=None) -> list[str]:
     keys: set[str] = set()
 
     with zipfile.ZipFile(xapk_path) as zf:
-        names = set([
-            x for x in zf.namelist() if (Path(x).suffix == ".apk")
-        ])
-        if names:
-            for apk_path in names:
-                with TemporaryDirectory() as tdir:
-                    zf.extract(apk_path, path=tdir)
-                    candidate=str(Path(tdir) / apk_path)
-                    keys.update(extract_pem_from_apk(candidate, progress))
+        apk_names = sorted(
+            n for n in zf.namelist() if Path(n).suffix == ".apk"
+        )
+        log(f"Found {len(apk_names)} APK(s) in {xapk_path.name}")
+        for apk_name in apk_names:
+            with TemporaryDirectory() as tdir:
+                zf.extract(apk_name, path=tdir)
+                keys.update(
+                    extract_pem_from_apk(Path(tdir) / apk_name, progress)
+                )
     return sorted(keys)
-    
+
 
 def extract_pem_from_apk(apk_path, progress=None) -> list[str]:
     """Extract all PEM private keys from the native libs of an APK.
@@ -190,7 +192,7 @@ def main(argv=None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except zipfile.BadZipFile:
-        print(f"error: not a valid XAMP/APK/ZIP: {args.apk}", file=sys.stderr)
+        print(f"error: not a valid XAPK/APK/ZIP: {args.apk}", file=sys.stderr)
         return 2
 
     if not keys:

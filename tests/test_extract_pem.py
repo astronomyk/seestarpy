@@ -11,8 +11,10 @@ import pytest
 
 from seestarpy.extract_pem import (
     extract_pem_from_apk,
+    extract_pem_from_xapk,
     extract_strings,
     find_pem_keys,
+    main,
 )
 
 
@@ -206,3 +208,137 @@ def test_extract_pem_from_apk_logs_scan_progress(tmp_path):
 
     assert any("Scanning" in line for line in log)
     assert any("Found" in line for line in log)
+
+
+# ---------------------------------------------------------------------------
+# helpers for XAPK (zip-of-apks)
+# ---------------------------------------------------------------------------
+
+def _apk_bytes(files: dict[str, bytes]) -> bytes:
+    """Return the bytes of an APK (zip) containing *files*."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for arcname, data in files.items():
+            zf.writestr(arcname, data)
+    return buf.getvalue()
+
+
+def _make_xapk(tmp_path, name: str, apks: dict[str, dict[str, bytes]]):
+    """Write an XAPK (zip whose members are APKs) and return its path.
+
+    *apks* maps the inner apk arcname (e.g. "config.arm64_v8a.apk") to that
+    apk's own {arcname: bytes}. A dummy manifest.json is always included.
+    """
+    members = {apk: _apk_bytes(files) for apk, files in apks.items()}
+    members["manifest.json"] = b"{}"
+    return _make_apk(tmp_path, name, members)
+
+
+# ---------------------------------------------------------------------------
+# extract_pem_from_xapk
+# ---------------------------------------------------------------------------
+
+def test_extract_pem_from_xapk_nonexistent_file_raises():
+    with pytest.raises(FileNotFoundError):
+        extract_pem_from_xapk("/nonexistent/path/to/app.xapk")
+
+
+def test_extract_pem_from_xapk_key_in_abi_split_is_found(tmp_path):
+    # The real v3.4.1 layout: base apk has no native lib; the key lives in
+    # the arm64-v8a config split.
+    so_data = b"\x00\x01\x02" + FAKE_KEY.encode() + b"\x00"
+    xapk = _make_xapk(
+        tmp_path,
+        "seestar.xapk",
+        {
+            "base.apk": {"AndroidManifest.xml": b"x"},
+            "config.arm64_v8a.apk": {
+                "lib/arm64-v8a/libopenssllib.so": so_data
+            },
+        },
+    )
+
+    log: list[str] = []
+    keys = extract_pem_from_xapk(xapk, progress=log.append)
+
+    assert len(keys) == 1
+    assert "BEGIN PRIVATE KEY" in keys[0]
+
+
+def test_extract_pem_from_xapk_no_inner_apk_returns_empty(tmp_path):
+    xapk = _make_apk(tmp_path, "empty.xapk", {"manifest.json": b"{}"})
+    assert extract_pem_from_xapk(xapk) == []
+
+
+def test_extract_pem_from_xapk_inner_apk_without_so_returns_empty(tmp_path):
+    xapk = _make_xapk(
+        tmp_path,
+        "no_so.xapk",
+        {"base.apk": {"assets/other.txt": b"nothing"}},
+    )
+    assert extract_pem_from_xapk(xapk) == []
+
+
+def test_extract_pem_from_xapk_deduplicates_same_key_across_splits(tmp_path):
+    so_data = b"\x00" + FAKE_KEY.encode()
+    xapk = _make_xapk(
+        tmp_path,
+        "dedup.xapk",
+        {
+            "config.arm64_v8a.apk": {
+                "lib/arm64-v8a/libopenssllib.so": so_data
+            },
+            "config.armeabi_v7a.apk": {
+                "lib/armeabi-v7a/libopenssllib.so": so_data
+            },
+        },
+    )
+    assert len(extract_pem_from_xapk(xapk)) == 1
+
+
+def test_extract_pem_from_xapk_distinct_keys_returns_both(tmp_path):
+    xapk = _make_xapk(
+        tmp_path,
+        "two_keys.xapk",
+        {
+            "config.arm64_v8a.apk": {
+                "lib/arm64-v8a/libopenssllib.so": b"\x00" + FAKE_KEY.encode()
+            },
+            "config.armeabi_v7a.apk": {
+                "lib/armeabi-v7a/libopenssllib.so": b"\x00"
+                + FAKE_KEY_2.encode()
+            },
+        },
+    )
+    assert len(extract_pem_from_xapk(xapk)) == 2
+
+
+def test_extract_pem_from_xapk_inner_apk_in_subdirectory(tmp_path):
+    # Guards the extract-to-tempdir / rebuild-path logic for a nested member.
+    so_data = b"\x00" + FAKE_KEY.encode()
+    xapk = _make_xapk(
+        tmp_path,
+        "subdir.xapk",
+        {"apks/config.arm64_v8a.apk": {
+            "lib/arm64-v8a/libopenssllib.so": so_data
+        }},
+    )
+    assert len(extract_pem_from_xapk(xapk)) == 1
+
+
+# ---------------------------------------------------------------------------
+# main() routes .xapk to the xapk extractor
+# ---------------------------------------------------------------------------
+
+def test_main_routes_xapk_to_xapk_extractor(tmp_path, capsys):
+    so_data = b"\x00" + FAKE_KEY.encode()
+    xapk = _make_xapk(
+        tmp_path,
+        "cli.xapk",
+        {"config.arm64_v8a.apk": {
+            "lib/arm64-v8a/libopenssllib.so": so_data
+        }},
+    )
+    rc = main([str(xapk), "--stdout", "--quiet"])
+    assert rc == 0
+    assert "BEGIN PRIVATE KEY" in capsys.readouterr().out
