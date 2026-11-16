@@ -1,6 +1,6 @@
-"""Extract PEM private keys from native libraries inside an APK.
+"""Extract PEM private keys from native libraries inside an APK or an XAPK.
 
-A general-purpose utility: given an APK file, scan its bundled native
+A general-purpose utility: given an APK or XAPK file, scan its bundled native
 libraries (``lib/*/libopenssllib.so``) with a ``strings(1)``-style pass
 and report any ``-----BEGIN PRIVATE KEY-----`` blocks found.
 
@@ -12,16 +12,16 @@ By default writes the first extracted key to ``~/.seestarpy/seestar.pem``,
 which is where :mod:`seestarpy.auth` auto-discovers it. Pass ``--stdout``
 to print keys instead, or ``-o PATH`` to override the output location.
 
-This module ships no key. Users supply their own APK.
+This module ships no key. Users supply their own APK or XAPK.
 """
 
 import argparse
+import io
 import os
 import re
 import sys
 import zipfile
 from pathlib import Path
-
 
 SO_PATHS = (
     "lib/arm64-v8a/libopenssllib.so",
@@ -60,6 +60,43 @@ def find_pem_keys(dump: str) -> list[str]:
     return PEM_RE.findall(dump)
 
 
+def extract_pem_from_xapk(xapk_path, progress=None) -> list[str]:
+    """Extract all PEM private keys from all APKs packed into an XAPK.
+
+    Parameters
+    ----------
+    xapk_path : str or Path
+        Path to an ``.xapk`` file.
+    progress : callable, optional
+        One-arg callback invoked with human-readable status strings.
+        Defaults to a no-op.
+
+    Returns
+    -------
+    list of str
+        Deduplicated, sorted list of PEM blocks. Empty if no
+        ``libopenssllib.so`` is present or no key is embedded.
+    """
+    xapk_path = Path(xapk_path)
+    if not xapk_path.is_file():
+        raise FileNotFoundError(f"XAPK not found: {xapk_path}")
+
+    log = progress or (lambda _msg: None)
+    keys: set[str] = set()
+
+    with zipfile.ZipFile(xapk_path) as zf:
+        apk_names = sorted(
+            n for n in zf.namelist() if Path(n).suffix == ".apk"
+        )
+        log(f"Found {len(apk_names)} APK(s) in {xapk_path.name}")
+        for apk_name in apk_names:
+            with zipfile.ZipFile(io.BytesIO(zf.read(apk_name))) as inner:
+                keys.update(
+                    _extract_pem_from_zip(inner, apk_name, progress)
+                )
+    return sorted(keys)
+
+
 def extract_pem_from_apk(apk_path, progress=None) -> list[str]:
     """Extract all PEM private keys from the native libs of an APK.
 
@@ -81,25 +118,35 @@ def extract_pem_from_apk(apk_path, progress=None) -> list[str]:
     if not apk_path.is_file():
         raise FileNotFoundError(f"APK not found: {apk_path}")
 
+    with zipfile.ZipFile(apk_path) as zf:
+        return _extract_pem_from_zip(zf, apk_path.name, progress)
+
+
+def _extract_pem_from_zip(zf, label, progress=None) -> list[str]:
+    """Scan an open APK ``ZipFile`` for keys in its ``libopenssllib.so``.
+
+    Shared by :func:`extract_pem_from_apk` (file on disk) and
+    :func:`extract_pem_from_xapk` (APK read into memory). ``label`` names
+    the archive in progress messages.
+    """
     log = progress or (lambda _msg: None)
 
-    keys: set[str] = set()
-    with zipfile.ZipFile(apk_path) as zf:
-        names = set(zf.namelist())
-        found = [p for p in SO_PATHS if p in names]
-        if not found:
-            log(
-                f"No libopenssllib.so found. Looked in: {', '.join(SO_PATHS)}"
-            )
-            return []
+    names = set(zf.namelist())
+    found = [p for p in SO_PATHS if p in names]
+    if not found:
+        log(
+            f"No libopenssllib.so found in {label}."
+            f" Looked in: {', '.join(SO_PATHS)}"
+        )
+        return []
 
-        for so_path in found:
-            log(f"Scanning {so_path}...")
-            data = zf.read(so_path)
-            dump = extract_strings(data)
-            found_keys = find_pem_keys(dump)
-            log(f"  Found {len(found_keys)} key(s) in {Path(so_path).name}")
-            keys.update(found_keys)
+    keys: set[str] = set()
+    for so_path in found:
+        log(f"Scanning {so_path} from {label}...")
+        dump = extract_strings(zf.read(so_path))
+        found_keys = find_pem_keys(dump)
+        log(f"  Found {len(found_keys)} key(s) in {Path(so_path).name}")
+        keys.update(found_keys)
 
     return sorted(keys)
 
@@ -125,7 +172,7 @@ def main(argv=None) -> int:
             "auto-discover it."
         ),
     )
-    parser.add_argument("apk", help="Path to the .apk file")
+    parser.add_argument("apk", help="Path to the .apk/.xapk file")
     parser.add_argument(
         "-o",
         "--output",
@@ -145,12 +192,15 @@ def main(argv=None) -> int:
     progress = (lambda _m: None) if args.quiet else (lambda m: print(m, file=sys.stderr))
 
     try:
-        keys = extract_pem_from_apk(args.apk, progress=progress)
+        if args.apk.endswith(".xapk"):
+            keys = extract_pem_from_xapk(args.apk, progress=progress)
+        else:
+            keys = extract_pem_from_apk(args.apk, progress=progress)
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except zipfile.BadZipFile:
-        print(f"error: not a valid APK/ZIP: {args.apk}", file=sys.stderr)
+        print(f"error: not a valid XAPK/APK/ZIP: {args.apk}", file=sys.stderr)
         return 2
 
     if not keys:
