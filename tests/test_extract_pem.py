@@ -342,3 +342,18 @@ def test_main_routes_xapk_to_xapk_extractor(tmp_path, capsys):
     rc = main([str(xapk), "--stdout", "--quiet"])
     assert rc == 0
     assert "BEGIN PRIVATE KEY" in capsys.readouterr().out
+
+
+def test_extract_pem_from_xapk_progress_names_outer_and_inner(tmp_path):
+    so_data = b"\x00" + FAKE_KEY.encode()
+    xapk = _make_xapk(
+        tmp_path,
+        "named.xapk",
+        {"config.arm64_v8a.apk": {
+            "lib/arm64-v8a/libopenssllib.so": so_data
+        }},
+    )
+    log: list[str] = []
+    extract_pem_from_xapk(xapk, progress=log.append)
+    assert any("named.xapk" in line for line in log)
+    assert any("config.arm64_v8a.apk" in line for line in log)

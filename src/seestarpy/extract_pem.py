@@ -16,12 +16,12 @@ This module ships no key. Users supply their own APK or XAPK.
 """
 
 import argparse
+import io
 import os
 import re
 import sys
 import zipfile
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 SO_PATHS = (
     "lib/arm64-v8a/libopenssllib.so",
@@ -90,10 +90,9 @@ def extract_pem_from_xapk(xapk_path, progress=None) -> list[str]:
         )
         log(f"Found {len(apk_names)} APK(s) in {xapk_path.name}")
         for apk_name in apk_names:
-            with TemporaryDirectory() as tdir:
-                zf.extract(apk_name, path=tdir)
+            with zipfile.ZipFile(io.BytesIO(zf.read(apk_name))) as inner:
                 keys.update(
-                    extract_pem_from_apk(Path(tdir) / apk_name, progress)
+                    _extract_pem_from_zip(inner, apk_name, progress)
                 )
     return sorted(keys)
 
@@ -119,26 +118,35 @@ def extract_pem_from_apk(apk_path, progress=None) -> list[str]:
     if not apk_path.is_file():
         raise FileNotFoundError(f"APK not found: {apk_path}")
 
+    with zipfile.ZipFile(apk_path) as zf:
+        return _extract_pem_from_zip(zf, apk_path.name, progress)
+
+
+def _extract_pem_from_zip(zf, label, progress=None) -> list[str]:
+    """Scan an open APK ``ZipFile`` for keys in its ``libopenssllib.so``.
+
+    Shared by :func:`extract_pem_from_apk` (file on disk) and
+    :func:`extract_pem_from_xapk` (APK read into memory). ``label`` names
+    the archive in progress messages.
+    """
     log = progress or (lambda _msg: None)
 
-    keys: set[str] = set()
-    with zipfile.ZipFile(apk_path) as zf:
-        names = set(zf.namelist())
-        found = [p for p in SO_PATHS if p in names]
-        if not found:
-            log(
-                f"No libopenssllib.so found in {apk_path.name}."
-                f" Looked in: {', '.join(SO_PATHS)}"
-            )
-            return []
+    names = set(zf.namelist())
+    found = [p for p in SO_PATHS if p in names]
+    if not found:
+        log(
+            f"No libopenssllib.so found in {label}."
+            f" Looked in: {', '.join(SO_PATHS)}"
+        )
+        return []
 
-        for so_path in found:
-            log(f"Scanning {so_path} from {apk_path.name}...")
-            data = zf.read(so_path)
-            dump = extract_strings(data)
-            found_keys = find_pem_keys(dump)
-            log(f"  Found {len(found_keys)} key(s) in {Path(so_path).name}")
-            keys.update(found_keys)
+    keys: set[str] = set()
+    for so_path in found:
+        log(f"Scanning {so_path} from {label}...")
+        dump = extract_strings(zf.read(so_path))
+        found_keys = find_pem_keys(dump)
+        log(f"  Found {len(found_keys)} key(s) in {Path(so_path).name}")
+        keys.update(found_keys)
 
     return sorted(keys)
 
